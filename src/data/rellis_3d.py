@@ -51,7 +51,7 @@ def read_poses(path, zero_origin=True):
 
 
 def read_image(path):
-    img = cv2.imread(path)
+    img = Image.open(path)
     img = np.asarray(img, dtype=np.uint8)
     return img
 
@@ -93,7 +93,7 @@ def print_projection_plt(points, color, image):
     for i in range(points.shape[1]):
         cv2.circle(hsv_image, (np.int32(points[0][i]), np.int32(points[1][i])), 4, (int(color[i]), 255, 255), -1)
 
-    return cv2.cvtColor(hsv_image, cv2.COLOR_HSV2RGB)
+    return cv2.cvtColor(hsv_image, cv2.COLOR_HSV2BGR)
 
 
 def depth_color(val, min_d=0, max_d=120):
@@ -170,7 +170,7 @@ def read_semseg(path, label_size=None):
             semseg = np.array(semseg)[:, :, 0]
     semseg = np.array(semseg, dtype=np.uint8)
     semseg = convert_label(semseg, False)
-    return semseg
+    return np.array(semseg, dtype=np.uint8)
 
 
 class Dataset(object):
@@ -318,31 +318,31 @@ class Dataset(object):
 def lidar_map_demo():
     from tqdm import tqdm
 
-    for name in seq_names:
-        ds = Dataset(seq='rellis_3d/%s' % name)
+    name = np.random.choice(seq_names)
+    ds = Dataset(seq='rellis_3d/%s' % name)
 
-        plt.figure()
-        plt.title('Trajectory')
-        plt.axis('equal')
-        plt.plot(ds.poses[:, 0, 3], ds.poses[:, 1, 3], '.')
-        plt.grid()
-        plt.show()
+    plt.figure()
+    plt.title('Trajectory')
+    plt.axis('equal')
+    plt.plot(ds.poses[:, 0, 3], ds.poses[:, 1, 3], '.')
+    plt.grid()
+    plt.show()
 
-        clouds = []
-        for data in tqdm(ds[::100]):
-            cloud, pose, _, _ = data
-            cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
-            cloud = np.matmul(cloud, pose[:3, :3].T) + pose[:3, 3:].T
+    clouds = []
+    for data in tqdm(ds[::100]):
+        cloud, pose, _, _ = data
+        cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
+        cloud = np.matmul(cloud, pose[:3, :3].T) + pose[:3, 3:].T
 
-            clouds.append(cloud)
-        cloud = np.concatenate(clouds)
+        clouds.append(cloud)
+    cloud = np.concatenate(clouds)
 
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(cloud)
-        o3d.visualization.draw_geometries([pcd.voxel_down_sample(voxel_size=0.5)])
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(cloud)
+    o3d.visualization.draw_geometries([pcd.voxel_down_sample(voxel_size=0.5)])
 
 
-def cam2lidar_demo():
+def lidar2cam_demo():
     seq = np.random.choice(seq_names)
     ds = Dataset(seq='rellis_3d/%s' % seq)
 
@@ -350,12 +350,13 @@ def cam2lidar_demo():
     K = ds.calibration['K']
     T_lid2cam = ds.calibration['lid2cam']
 
-    for _ in range(5):
+    for _ in range(1):
         data = ds[int(np.random.choice(range(len(ds))))]
         points, pose, rgb, semseg = data
         points = structured_to_unstructured(points[['x', 'y', 'z']])
 
-        img_height, img_width, channels = rgb.shape
+        img_height, img_width = rgb.shape[:2]
+        assert rgb.shape[:2] == semseg.shape[:2]
 
         R_lidar2cam = T_lid2cam[:3, :3]
         t_lidar2cam = T_lid2cam[:3, 3]
@@ -366,11 +367,15 @@ def cam2lidar_demo():
         imgpoints, _ = cv2.projectPoints(xyz_v[:, :], rvec, tvec, K, dist_coeff)
         imgpoints = np.squeeze(imgpoints, 1)
         imgpoints = imgpoints.T
-        res = print_projection_plt(points=imgpoints, color=color, image=rgb)
 
-        plt.figure(figsize=(20, 20))
-        plt.title("Ouster points to camera image Result")
-        plt.imshow(res)
+        res_rgb = print_projection_plt(points=imgpoints, color=color, image=rgb)
+        res_semseg = print_projection_plt(points=imgpoints, color=color, image=semseg)
+
+        plt.figure(figsize=(20, 10))
+        plt.subplot(1, 2, 1)
+        plt.imshow(res_rgb / 255)
+        plt.subplot(1, 2, 2)
+        plt.imshow(res_semseg / 255)
         plt.show()
 
 
@@ -387,7 +392,7 @@ def semseg_demo():
 
         plt.figure(figsize=(20, 10))
         plt.subplot(1, 2, 1)
-        plt.imshow(rgb[..., (2, 1, 0)] / 255)
+        plt.imshow(rgb / 255)
         plt.subplot(1, 2, 2)
         plt.imshow(semseg / 255)
         plt.show()
@@ -395,7 +400,7 @@ def semseg_demo():
 
 def main():
     lidar_map_demo()
-    cam2lidar_demo()
+    lidar2cam_demo()
     semseg_demo()
 
 
