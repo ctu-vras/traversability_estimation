@@ -1,0 +1,143 @@
+#!/usr/bin/env python
+
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+from data.rellis_3d import Dataset, seq_names
+# ROS
+import rospy
+from sensor_msgs.msg import CameraInfo, PointCloud2
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped, TransformStamped
+from ros_numpy import msgify
+from tf.transformations import quaternion_from_matrix
+import tf2_ros
+
+
+def publish_tf_pose(pose, child_frame_id):
+    assert isinstance(pose, PoseStamped)
+    br = tf2_ros.TransformBroadcaster()
+    t = TransformStamped()
+    t.header.stamp = pose.header.stamp
+    t.header.frame_id = pose.header.frame_id
+    t.child_frame_id = child_frame_id
+    t.transform.translation.x = pose.pose.position.x
+    t.transform.translation.y = pose.pose.position.y
+    t.transform.translation.z = pose.pose.position.z
+    t.transform.rotation.x = pose.pose.orientation.x
+    t.transform.rotation.y = pose.pose.orientation.y
+    t.transform.rotation.z = pose.pose.orientation.z
+    t.transform.rotation.w = pose.pose.orientation.w
+    br.sendTransform(t)
+
+
+def matrix_to_pose_msg(T, frame_id='world'):
+    assert T.shape == (4, 4)
+    pose = PoseStamped()
+    pose.header.frame_id = frame_id
+    pose.header.stamp = rospy.Time.now()
+    pose.pose.position.x = T[0, 3]
+    pose.pose.position.y = T[1, 3]
+    pose.pose.position.z = T[2, 3]
+    q = quaternion_from_matrix(T)
+    pose.pose.orientation.x = q[0]
+    pose.pose.orientation.y = q[1]
+    pose.pose.orientation.z = q[2]
+    pose.pose.orientation.w = q[3]
+    return pose
+
+
+class RobotData:
+    def __init__(self, sequence: str = '00000'):
+        self.current_pose = None
+        self.world_frame = 'world'
+        self.camera_frame = 'camera'
+        self.path = Path()
+        self.path.header.frame_id = self.world_frame
+        self.path_len = 0.0
+        self.path_pub = rospy.Publisher('~path', Path, queue_size=2)
+        self.pc_pub = rospy.Publisher('~cloud', PointCloud2, queue_size=1)
+        self.caminfo_pub = rospy.Publisher('~frustum', CameraInfo, queue_size=1)
+        self.map_step = rospy.get_param('~map_step', 10)
+        self.ds = Dataset(seq=sequence)
+        self.delay_start = rospy.get_param('~delay_start', 1.0)
+        self.period = rospy.get_param('~period', 1.0)
+        self.index = 0
+        self.pose_step = rospy.get_param('~pose_step', 5)
+        self.poses = list(self.ds.poses)
+        self.clouds = list()
+        self.timer = rospy.Timer(rospy.Duration(self.delay_start), self.start_timer, oneshot=True)
+
+    def start_timer(self, evt):
+        self.timer = rospy.Timer(rospy.Duration(self.period), self.run)
+        rospy.loginfo('Publishing robot data.')
+
+    def move(self):
+        if self.index < len(self.ds):
+            self.index += 1
+            rospy.logdebug('Moved to next data sample')
+
+    def step(self):
+        cloud, pose, rgb, semseg = self.ds[self.index * self.pose_step]
+
+        self.current_pose = pose
+        self.poses.append(self.current_pose)
+
+        cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
+        cloud = np.matmul(cloud, pose[:3, :3].T) + pose[:3, 3:].T
+
+        self.clouds.append(cloud)
+
+        rospy.logdebug(f'Point cloud shape: {cloud.shape}')
+
+    def run(self, evt):
+        self.step()
+        self.publish_path()
+        self.publish_cloud()
+        # self.publish_camera_info()
+        self.move()
+
+    def publish_camera_info(self, distortion_model="plumb_bob"):
+        camera_info = CameraInfo()
+        camera_info.header.frame_id = self.camera_frame
+        camera_info.header.stamp = rospy.Time.now()
+        camera_info.width = self.current_pose.rgb_image.shape[-2]
+        camera_info.height = self.current_pose.rgb_image.shape[-3]
+        camera_info.K = self.current_pose.intrinsics.squeeze()[:3, :3].cpu().numpy().flatten().tolist()
+        camera_info.distortion_model = distortion_model
+        self.caminfo_pub.publish(camera_info)
+        return camera_info
+
+    def publish_path(self):
+        assert self.current_pose.shape == (4, 4)
+        pose_msg = matrix_to_pose_msg(self.current_pose)
+        publish_tf_pose(pose_msg, child_frame_id=self.camera_frame)
+        self.path.poses.append(pose_msg)
+        self.path.header.stamp = rospy.Time.now()
+        self.path_pub.publish(self.path)
+        rospy.logdebug('Published path')
+
+    def publish_cloud(self):
+        # publish point cloud
+        points = np.concatenate(self.clouds).squeeze()
+        n_pts = np.ceil(points.shape[0] / self.map_step).astype(int)
+        cloud = np.zeros((n_pts,), dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
+                                          ('r', 'f4'), ('g', 'f4'), ('b', 'f4')])
+        for i, f in enumerate(['x', 'y', 'z']):
+            cloud[f] = points[..., i][::self.map_step]
+
+        pc_msg = msgify(PointCloud2, cloud)
+        pc_msg.header.stamp = rospy.Time.now()
+        pc_msg.header.frame_id = self.world_frame
+        self.pc_pub.publish(pc_msg)
+        rospy.logdebug('Published point cloud')
+
+
+def main():
+    rospy.init_node('robot_data_rellis3d', log_level=rospy.INFO)
+    subseq = rospy.get_param('~data_sequence', seq_names[0])
+    proc = RobotData(subseq)
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()
