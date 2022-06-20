@@ -1,16 +1,20 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import, division, print_function
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
-from data.rellis_3d import Dataset, seq_names
+from traversability_estimation.rellis_3d import Dataset, seq_names
+from traversability_estimation.utils import filter_camera_points, normalize
 # ROS
 import rospy
-from sensor_msgs.msg import CameraInfo, PointCloud2
+from sensor_msgs.msg import CameraInfo, PointCloud2, CompressedImage
 from nav_msgs.msg import Path
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import Transform, PoseStamped, TransformStamped
 from ros_numpy import msgify
 from tf.transformations import quaternion_from_matrix
 import tf2_ros
+from tf2_msgs.msg import TFMessage
+import cv2
 
 
 def publish_tf_pose(pose, child_frame_id):
@@ -30,7 +34,7 @@ def publish_tf_pose(pose, child_frame_id):
     br.sendTransform(t)
 
 
-def matrix_to_pose_msg(T, frame_id='world'):
+def matrix_to_pose_msg(T, frame_id='map'):
     assert T.shape == (4, 4)
     pose = PoseStamped()
     pose.header.frame_id = frame_id
@@ -49,14 +53,13 @@ def matrix_to_pose_msg(T, frame_id='world'):
 class RobotData:
     def __init__(self, sequence: str = '00000'):
         self.current_pose = None
-        self.world_frame = 'world'
-        self.camera_frame = 'camera'
+        self.rgb = None
+        self.semseg = None
+        self.map_frame = 'map'
+        self.pose_frame = 'ouster_lidar'
+        self.camera_frame = 'pylon_camera'
         self.path = Path()
-        self.path.header.frame_id = self.world_frame
-        self.path_len = 0.0
-        self.path_pub = rospy.Publisher('~path', Path, queue_size=2)
-        self.pc_pub = rospy.Publisher('~cloud', PointCloud2, queue_size=1)
-        self.caminfo_pub = rospy.Publisher('~frustum', CameraInfo, queue_size=1)
+        self.path.header.frame_id = self.map_frame
         self.map_step = rospy.get_param('~map_step', 10)
         self.ds = Dataset(seq=sequence)
         self.delay_start = rospy.get_param('~delay_start', 1.0)
@@ -65,6 +68,15 @@ class RobotData:
         self.pose_step = rospy.get_param('~pose_step', 5)
         self.poses = list(self.ds.poses)
         self.clouds = list()
+
+        self.path_pub = rospy.Publisher('~path', Path, queue_size=2)
+        self.map_pc_pub = rospy.Publisher('~map_cloud', PointCloud2, queue_size=1)
+        self.pc_pub = rospy.Publisher('~camera_cloud', PointCloud2, queue_size=1)
+        self.caminfo_pub = rospy.Publisher('~camera_info', CameraInfo, queue_size=1)
+        self.tf_pub = rospy.Publisher('/tf', TFMessage, queue_size=2, latch=True)
+        self.rgb_pub = rospy.Publisher('~rgb/compressed', CompressedImage, queue_size=1)
+        self.semseg_pub = rospy.Publisher('~semseg/compressed', CompressedImage, queue_size=1)
+
         self.timer = rospy.Timer(rospy.Duration(self.delay_start), self.start_timer, oneshot=True)
 
     def start_timer(self, evt):
@@ -82,27 +94,53 @@ class RobotData:
         self.current_pose = pose
         self.poses.append(self.current_pose)
 
-        cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
-        cloud = np.matmul(cloud, pose[:3, :3].T) + pose[:3, 3:].T
+        cloud_lid = structured_to_unstructured(cloud[['x', 'y', 'z']])
+        cloud_map = np.matmul(cloud_lid, pose[:3, :3].T) + pose[:3, 3:].T
+        self.clouds.append(cloud_map)
+        rospy.logdebug(f'Point cloud shape: {cloud_map.shape}')
 
-        self.clouds.append(cloud)
+        self.publish_camera_cloud(cloud_lid)
 
-        rospy.logdebug(f'Point cloud shape: {cloud.shape}')
+        self.rgb = rgb
+        self.semseg = semseg
 
     def run(self, evt):
         self.step()
         self.publish_path()
-        self.publish_cloud()
-        # self.publish_camera_info()
+        self.publish_map_cloud()
+        self.publish_camera_info()
+        self.publish_image(self.rgb, pub=self.rgb_pub)
+        self.publish_image(self.semseg, pub=self.semseg_pub)
         self.move()
+
+    def publish_camera_cloud(self, cloud_lid):
+        img_height, img_width = self.ds.calibration['img_height'], self.ds.calibration['img_width']
+        T_lid2cam = self.ds.calibration['lid2cam']
+        K = self.ds.calibration['K']
+        cloud_cam, _ = filter_camera_points(cloud_lid, img_width, img_height, K, T_lid2cam)
+        cloud_cam = unstructured_to_structured(np.asarray(cloud_cam[::self.map_step], dtype=np.float32),
+                                               names=['x', 'y', 'z'])
+        pc_msg = msgify(PointCloud2, cloud_cam)
+        pc_msg.header.frame_id = self.pose_frame
+        pc_msg.header.stamp = rospy.Time.now()
+        self.pc_pub.publish(pc_msg)
 
     def publish_camera_info(self, distortion_model="plumb_bob"):
         camera_info = CameraInfo()
+        now = rospy.Time.now()
+        tf_lid2cam = TransformStamped()
+        tf_lid2cam.header.stamp = now
+        tf_lid2cam.header.frame_id = self.pose_frame
+        tf_lid2cam.child_frame_id = self.camera_frame
+        tf_lid2cam.transform = msgify(Transform, np.linalg.inv(self.ds.calibration['lid2cam']))
+        self.tf_pub.publish(TFMessage([tf_lid2cam]))
         camera_info.header.frame_id = self.camera_frame
-        camera_info.header.stamp = rospy.Time.now()
-        camera_info.width = self.current_pose.rgb_image.shape[-2]
-        camera_info.height = self.current_pose.rgb_image.shape[-3]
-        camera_info.K = self.current_pose.intrinsics.squeeze()[:3, :3].cpu().numpy().flatten().tolist()
+        camera_info.header.stamp = now
+        camera_info.width = self.ds.calibration['img_width']
+        camera_info.height = self.ds.calibration['img_height']
+        camera_info.K = self.ds.calibration['K'].flatten().tolist()
+        camera_info.D = self.ds.calibration['dist_coeff'].tolist()
+        camera_info.P = self.ds.calibration['P'].flatten().tolist()
         camera_info.distortion_model = distortion_model
         self.caminfo_pub.publish(camera_info)
         return camera_info
@@ -110,26 +148,31 @@ class RobotData:
     def publish_path(self):
         assert self.current_pose.shape == (4, 4)
         pose_msg = matrix_to_pose_msg(self.current_pose)
-        publish_tf_pose(pose_msg, child_frame_id=self.camera_frame)
+        publish_tf_pose(pose_msg, child_frame_id=self.pose_frame)
         self.path.poses.append(pose_msg)
         self.path.header.stamp = rospy.Time.now()
         self.path_pub.publish(self.path)
         rospy.logdebug('Published path')
 
-    def publish_cloud(self):
+    def publish_map_cloud(self):
         # publish point cloud
-        points = np.concatenate(self.clouds).squeeze()
-        n_pts = np.ceil(points.shape[0] / self.map_step).astype(int)
-        cloud = np.zeros((n_pts,), dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'),
-                                          ('r', 'f4'), ('g', 'f4'), ('b', 'f4')])
-        for i, f in enumerate(['x', 'y', 'z']):
-            cloud[f] = points[..., i][::self.map_step]
+        points = np.concatenate(self.clouds)
+        cloud = unstructured_to_structured(np.asarray(points[::self.map_step], dtype=np.float32), names=['x', 'y', 'z'])
 
         pc_msg = msgify(PointCloud2, cloud)
         pc_msg.header.stamp = rospy.Time.now()
-        pc_msg.header.frame_id = self.world_frame
-        self.pc_pub.publish(pc_msg)
+        pc_msg.header.frame_id = self.map_frame
+        self.map_pc_pub.publish(pc_msg)
         rospy.logdebug('Published point cloud')
+
+    @staticmethod
+    def publish_image(img, pub):
+        img = np.uint8(255 * normalize(img))[..., (2, 1, 0)]
+        img_msg = CompressedImage()
+        img_msg.header.stamp = rospy.Time.now()
+        img_msg.format = "jpeg"
+        img_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
+        pub.publish(img_msg)
 
 
 def main():
