@@ -30,4 +30,23 @@ high-precision GPS measurement, and IMU data.
 ```
 
 
-#### See [rellis_3d.py](./src/traversability_estimation/rellis_3d.py) for more details.
+See [rellis_3d.py](./src/traversability_estimation/rellis_3d.py) for more details.
+
+### ROS wrapper
+
+Prerequisite: install [ROS](http://wiki.ros.org/ROS/Installation)
+and build the package in a catkin workspace, for example:
+
+```bash
+mkdir -p ~/catkin_ws/src
+cd ~/catkin_ws/src
+git clone https://github.com/RuslanAgishev/traversability_estimation
+cd ~/catkin_ws/
+catkin_make
+```
+
+Publish the RELLIS-3D data as ROS messages:
+```bash
+source ~/catkin_ws/devel/setup.bash
+roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
+```
