@@ -5,6 +5,7 @@ import cv2
 from scipy.spatial.transform import Rotation
 import yaml
 from PIL import Image
+import matplotlib.pyplot as plt
 
 
 def read_points(path, dtype=np.float32):
@@ -159,3 +160,17 @@ def normalize(x, eps=1e-6):
     x = (x - x_min) / np.max([(x_max - x_min), eps])
     x = x.clip(0, 1)
     return x
+
+
+# helper function for data visualization
+def visualize(**images):
+    """PLot images in one row."""
+    n = len(images)
+    plt.figure(figsize=(16, 5))
+    for i, (name, image) in enumerate(images.items()):
+        plt.subplot(1, n, i + 1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.title(' '.join(name.split('_')).title())
+        plt.imshow(image)
+    plt.show()
