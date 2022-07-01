@@ -10,8 +10,8 @@ from cv_bridge import CvBridge, CvBridgeError
 from hrnet.config import config
 from hrnet.core.function import convert_label, convert_color
 from hrnet import models
-from traversability_estimation.utils import normalize
 import yaml
+from PIL import Image as pil
 
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
@@ -33,7 +33,8 @@ class ImgProcessor:
         self.res_pub = rospy.Publisher("~segmented_result", Image, queue_size=1)
 
         # subscribed Topic
-        self.subscriber = rospy.Subscriber("/robot_data/rgb/compressed", CompressedImage, self.callback_color, queue_size=1)
+        img_topic = rospy.get_param("~input_img_topic", "image_raw/compressed")
+        self.subscriber = rospy.Subscriber(img_topic, CompressedImage, self.callback_color, queue_size=1)
 
     def load_model(self):
         cfg_path = os.path.join(pkg_path,
@@ -74,10 +75,8 @@ class ImgProcessor:
             pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
             result = self.postprocessing(pred)
 
-            print(result.shape)
-
         try:
-            res_msg = self.bridge.cv2_to_imgmsg(result[..., (2, 1, 0)], "bgr8")
+            res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
             self.res_pub.publish(res_msg)
         except CvBridgeError as e:
             rospy.logerr(e)
@@ -100,6 +99,8 @@ class ImgProcessor:
         # pred_arg = convert_label(pred_arg, True)
         # result = np.stack((pred_arg, pred_arg, pred_arg), axis=2)
         result = convert_color(pred_arg, self.id_color_map)
+        # color_img = pil.fromarray(result[..., (2, 1, 0)], 'RGB')
+        # color_img.save('/home/ruslan/Desktop/output.png')
         return result
 
 

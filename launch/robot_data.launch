@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
     <arg name="rviz" default="true" doc="Laucnh RViz for data visualization or not"/>
-    <arg name="device" default="cpu" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
 
-    <!-- GradSLAM step inference on KITTI depth data -->
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
         <rosparam subst_value="true">
             data_sequence: $(arg data_sequence)

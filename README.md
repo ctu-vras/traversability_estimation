@@ -50,3 +50,9 @@ Publish the RELLIS-3D data as ROS messages:
 source ~/catkin_ws/devel/setup.bash
 roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
 ```
+
+Semantic Segmentation with
+[HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
+```bash
+roslaunch traversability_estimation hrnet_inference.launch input_img_topic:=/robot_data/rgb/compressed
+```

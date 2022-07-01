@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<launch>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
+    <arg name="input_img_topic" default="robot_data/rgb/compressed" doc="Device to run tensor operations on: cpu or cuda"/>
+
+    <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            input_img_topic: $(arg input_img_topic)
+        </rosparam>
+    </node>
+</launch>
