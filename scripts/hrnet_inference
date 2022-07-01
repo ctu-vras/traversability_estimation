@@ -1,0 +1,113 @@
+#!/usr/bin/env python
+
+import os
+import torch
+import numpy as np
+import cv2
+import rospy
+from sensor_msgs.msg import Image, CompressedImage
+from cv_bridge import CvBridge, CvBridgeError
+from hrnet.config import config
+from hrnet.core.function import convert_label, convert_color
+from hrnet import models
+from traversability_estimation.utils import normalize
+import yaml
+
+
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+class ImgProcessor:
+    def __init__(self):
+        self.bridge = CvBridge()
+        self.model = self.load_model()
+        self.model.eval().cuda()
+        self.input_size = (512, 1024)
+        self.mean = [0.485, 0.456, 0.406]
+        self.std = [0.229, 0.224, 0.225]
+        rospy.loginfo('Loaded CNN model')
+        data_cfg = yaml.safe_load(open(os.path.join(pkg_path, "config/rellis.yaml"), 'r'))
+        self.id_color_map = data_cfg["color_map"]
+
+        # topic where we publish
+        self.res_pub = rospy.Publisher("~segmented_result", Image, queue_size=1)
+
+        # subscribed Topic
+        self.subscriber = rospy.Subscriber("/robot_data/rgb/compressed", CompressedImage, self.callback_color, queue_size=1)
+
+    def load_model(self):
+        cfg_path = os.path.join(pkg_path,
+                                "config/hrnet_rellis/"
+                                "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-3_wd5e-4_bs_12_epoch484.yaml")
+        model_weights = os.path.join(pkg_path,
+                                     'config/weights/'
+                                     'seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth')
+        model_state_file = "config/weights/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth"
+        model_state_file = os.path.join(pkg_path, model_state_file)
+
+        config.defrost()
+        config.merge_from_file(cfg_path)
+        config.merge_from_list(['TEST.MODEL_FILE',
+                                model_weights])
+        config.freeze()
+        model = eval('models.' + config.MODEL.NAME + '.get_seg_model')(config)
+
+        pretrained_dict = torch.load(model_state_file)
+        if 'state_dict' in pretrained_dict:
+            pretrained_dict = pretrained_dict['state_dict']
+        model_dict = model.state_dict()
+        pretrained_dict = {k[6:]: v for k, v in pretrained_dict.items()
+                           if k[6:] in model_dict.keys()}
+        model_dict.update(pretrained_dict)
+        model.load_state_dict(model_dict)
+        return model
+
+    def callback_color(self, img_msg):
+        try:
+            image = self.bridge.compressed_imgmsg_to_cv2(img_msg, "bgr8")
+        except CvBridgeError as e:
+            rospy.logerr(e)
+
+        image = self.preprocessing(image)
+
+        with torch.no_grad():
+            pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
+            result = self.postprocessing(pred)
+
+            print(result.shape)
+
+        try:
+            res_msg = self.bridge.cv2_to_imgmsg(result[..., (2, 1, 0)], "bgr8")
+            self.res_pub.publish(res_msg)
+        except CvBridgeError as e:
+            rospy.logerr(e)
+
+    def preprocessing(self, image):
+        new_h, new_w = self.input_size
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        image = image.astype(np.float32)[:, :, ::-1]
+        image = image / 255.0
+        image -= self.mean
+        image /= self.std
+        image = image.transpose((2, 0, 1))
+        return image
+
+    def postprocessing(self, pred):
+        pred = pred[config.TEST.OUTPUT_INDEX]
+        pred_np = pred.squeeze(0).cpu().numpy()
+
+        pred_arg = np.argmax(pred_np, axis=0).astype(np.uint8)
+        # pred_arg = convert_label(pred_arg, True)
+        # result = np.stack((pred_arg, pred_arg, pred_arg), axis=2)
+        result = convert_color(pred_arg, self.id_color_map)
+        return result
+
+
+def main():
+    rospy.init_node('hrnet_inference', log_level=rospy.INFO)
+    proc = ImgProcessor()
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()

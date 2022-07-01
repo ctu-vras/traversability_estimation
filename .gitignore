@@ -133,3 +133,7 @@ dmypy.json
 
 # Pytorch weights
 *.pth
+
+output
+*.zip
+*.tar
