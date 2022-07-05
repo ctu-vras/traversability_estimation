@@ -2,12 +2,35 @@
 
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="input_img_topic" default="robot_data/rgb/compressed" doc="Device to run tensor operations on: cpu or cuda"/>
+    <arg name="input_img_topic" default="robot_data/rgb/compressed"
+         doc="Device to run tensor operations on: cpu or cuda"/>
+    <arg name="compressed" default="True"/>
+    <arg name="legend" default="True"/>
+
+    <node name="robot_data" pkg="traversability_estimation" type="robot_data">
+        <rosparam subst_value="true">
+            data_sequence: 00000
+            data_step: 5
+            pose_step: 5
+        </rosparam>
+    </node>
 
     <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
         <rosparam subst_value="true">
             device: $(arg device)
-            input_img_topic: $(arg input_img_topic)
+            num_cameras: 1
+            compressed: $(arg compressed)
+            legend: True
         </rosparam>
+        <remap from="input_0" to="$(arg input_img_topic)"/>
+        <remap from="output_0" to="/robot_data/rgb_segmented"/>
     </node>
+
+    <node name="image_view_front" pkg="image_view" type="image_view">
+        <remap from="image" to="/robot_data/rgb_segmented"/>
+    </node>
+
+    <!-- RVIZ -->
+    <node name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find traversability_estimation)/config/rviz/config.rviz"/>
 </launch>

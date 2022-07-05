@@ -174,3 +174,6 @@ def visualize(**images):
         plt.title(' '.join(name.split('_')).title())
         plt.imshow(image)
     plt.show()
+
+if __name__ == "__main__":
+    print("Hello world!")

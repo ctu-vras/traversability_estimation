@@ -2,102 +2,103 @@ CUDNN:
   BENCHMARK: true
   DETERMINISTIC: false
   ENABLED: true
-GPUS: (0,)
-OUTPUT_DIR: 'output'
-LOG_DIR: 'log'
-WORKERS: 4
-PRINT_FREQ: 10
-
 DATASET:
   DATASET: rellis
-  ROOT: /home/ruslan/data/datasets/RELLIS-3D/Rellis_3D/
-  TEST_SET: 'test.lst'
-  TRAIN_SET: 'train.lst'
   NUM_CLASSES: 19
+  ROOT: /home/ales/catkin_ws/src/traversability_estimation/data/Rellis_3D/
+  TEST_SET: test.lst
+  TRAIN_SET: train.lst
+GPUS: (0,)
+LOG_DIR: log
+LOSS:
+  BALANCE_WEIGHTS:
+  - 0.4
+  - 1
+  OHEMKEEP: 131072
+  OHEMTHRES: 0.9
+  USE_OHEM: false
 MODEL:
-  NAME: seg_hrnet_ocr
-  NUM_OUTPUTS: 2
-  PRETRAINED: "/home/ruslan/workspaces/traversability_ws/src/RELLIS-3D/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR/pretrained_models/hrnetv2_w48_imagenet_pretrained.pth"
   EXTRA:
     FINAL_CONV_KERNEL: 1
     STAGE1:
-      NUM_MODULES: 1
-      NUM_RANCHES: 1
       BLOCK: BOTTLENECK
+      FUSE_METHOD: SUM
       NUM_BLOCKS:
       - 4
       NUM_CHANNELS:
       - 64
-      FUSE_METHOD: SUM
-    STAGE2:
       NUM_MODULES: 1
-      NUM_BRANCHES: 2
+      NUM_RANCHES: 1
+    STAGE2:
       BLOCK: BASIC
+      FUSE_METHOD: SUM
       NUM_BLOCKS:
       - 4
       - 4
+      NUM_BRANCHES: 2
       NUM_CHANNELS:
       - 48
       - 96
-      FUSE_METHOD: SUM
+      NUM_MODULES: 1
     STAGE3:
-      NUM_MODULES: 4
-      NUM_BRANCHES: 3
       BLOCK: BASIC
+      FUSE_METHOD: SUM
       NUM_BLOCKS:
       - 4
       - 4
       - 4
+      NUM_BRANCHES: 3
       NUM_CHANNELS:
       - 48
       - 96
       - 192
-      FUSE_METHOD: SUM
+      NUM_MODULES: 4
     STAGE4:
-      NUM_MODULES: 3
-      NUM_BRANCHES: 4
       BLOCK: BASIC
+      FUSE_METHOD: SUM
       NUM_BLOCKS:
       - 4
       - 4
       - 4
       - 4
+      NUM_BRANCHES: 4
       NUM_CHANNELS:
       - 48
       - 96
       - 192
       - 384
-      FUSE_METHOD: SUM
-LOSS:
-  USE_OHEM: false
-  OHEMTHRES: 0.9
-  OHEMKEEP: 131072
-  BALANCE_WEIGHTS: [0.4, 1]
-TRAIN:
-  IMAGE_SIZE:
-  - 1024
-  - 640
-  BASE_SIZE: 1920
-  BATCH_SIZE_PER_GPU: 4
-  SHUFFLE: true
-  BEGIN_EPOCH: 0
-  END_EPOCH: 484
-  RESUME: true
-  OPTIMIZER: sgd
-  LR: 0.001
-  WD: 0.0005
-  MOMENTUM: 0.9
-  NESTEROV: false
-  FLIP: true
-  MULTI_SCALE: true
-  DOWNSAMPLERATE: 1
-  IGNORE_LABEL: 255
-  SCALE_FACTOR: 16
+      NUM_MODULES: 3
+  NAME: seg_hrnet_ocr
+  NUM_OUTPUTS: 2
+  PRETRAINED: /home/ales/catkin_ws/src/traversability_estimation/config/weights/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth
+OUTPUT_DIR: output
+PRINT_FREQ: 10
 TEST:
-  IMAGE_SIZE:
-  - 1024
-  - 512
   BASE_SIZE: 1024
   BATCH_SIZE_PER_GPU: 1
   FLIP_TEST: false
+  IMAGE_SIZE:
+  - 1024
+  - 512
   MULTI_SCALE: false
+TRAIN:
+  BASE_SIZE: 1920
+  BATCH_SIZE_PER_GPU: 4
+  BEGIN_EPOCH: 0
+  DOWNSAMPLERATE: 1
+  END_EPOCH: 484
+  FLIP: true
+  IGNORE_LABEL: 255
+  IMAGE_SIZE:
+  - 1024
+  - 640
+  LR: 0.001
+  MOMENTUM: 0.9
+  MULTI_SCALE: true
+  NESTEROV: false
+  OPTIMIZER: sgd
+  RESUME: true
+  SCALE_FACTOR: 16
+  SHUFFLE: true
+  WD: 0.0005
+WORKERS: 4
