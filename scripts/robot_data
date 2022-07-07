@@ -55,10 +55,11 @@ class RobotData:
         self.current_pose = None
         self.rgb = None
         self.semseg = None
-        self.cloud_lid = None
+        self.lidar_cloud = None
+        self.global_cloud = None
         self.map_frame = 'map'
-        self.pose_frame = 'ouster_lidar'
-        self.camera_frame = 'pylon_camera'
+        self.lidar_frame = rospy.get_param('~lidar_frame', 'ouster_lidar')
+        self.camera_frame = rospy.get_param('~camera_frame', 'pylon_camera')
         self.path = Path()
         self.path.header.frame_id = self.map_frame
         self.map_step = rospy.get_param('~map_step', 10)
@@ -72,7 +73,8 @@ class RobotData:
 
         self.path_pub = rospy.Publisher('~path', Path, queue_size=2)
         self.map_pc_pub = rospy.Publisher('~map_cloud', PointCloud2, queue_size=1)
-        self.pc_pub = rospy.Publisher('~camera_cloud', PointCloud2, queue_size=1)
+        self.lidar_pc_pub = rospy.Publisher('~lidar_cloud', PointCloud2, queue_size=1)
+        self.cam_pc_pub = rospy.Publisher('~camera_cloud', PointCloud2, queue_size=1)
         self.caminfo_pub = rospy.Publisher('~camera_info', CameraInfo, queue_size=1)
         self.tf_pub = rospy.Publisher('/tf', TFMessage, queue_size=2, latch=True)
         self.rgb_pub = rospy.Publisher('~rgb/compressed', CompressedImage, queue_size=1)
@@ -109,25 +111,31 @@ class RobotData:
         self.clouds.append(cloud_map)
         rospy.logdebug(f'Point cloud shape: {cloud_map.shape}')
 
+        global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
+        global_cloud = unstructured_to_structured(global_cloud[::self.map_step], names=['x', 'y', 'z'])
+
         self.rgb = rgb
         self.semseg = semseg
-        self.cloud_lid = cloud_lid
+        self.lidar_cloud = cloud_lid
+        self.global_cloud = global_cloud
 
     def run(self, evt):
         self.step()
         # get messages
         stamp = rospy.Time.now()
         path_msg = self.get_path_msg(time_stamp=stamp)
-        map_pc_msg = self.get_map_cloud_msg(time_stamp=stamp)
-        lidar_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.cloud_lid, time_stamp=stamp)
+        global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.map_frame)
+        lidar_pc_msg = self.to_cloud_msg(self.lidar_cloud, time_stamp=stamp, frame=self.lidar_frame)
+        cam_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.lidar_cloud, time_stamp=stamp)
         intrins_msg, extrins_msg = self.get_camera_calib_msgs(time_stamp=stamp)
         img_msg = self.get_image_msg(self.rgb, time_stamp=stamp)
         semseg_msg = self.get_image_msg(self.semseg, time_stamp=stamp)
 
         # publish messages
         self.path_pub.publish(path_msg)
-        self.map_pc_pub.publish(map_pc_msg)
-        self.pc_pub.publish(lidar_pc_msg)
+        self.map_pc_pub.publish(global_pc_msg)
+        self.lidar_pc_pub.publish(lidar_pc_msg)
+        self.cam_pc_pub.publish(cam_pc_msg)
         self.tf_pub.publish(extrins_msg)
         self.caminfo_pub.publish(intrins_msg)
         self.rgb_pub.publish(img_msg)
@@ -140,10 +148,10 @@ class RobotData:
         T_lid2cam = self.ds.calibration['lid2cam']
         K = self.ds.calibration['K']
         cloud_cam, _ = filter_camera_points(cloud_lid, img_width, img_height, K, T_lid2cam)
-        cloud_cam = unstructured_to_structured(np.asarray(cloud_cam[::self.map_step], dtype=np.float32),
-                                               names=['x', 'y', 'z'])
+        cloud_cam = np.asarray(cloud_cam[::self.map_step], dtype=np.float32)
+        cloud_cam = unstructured_to_structured(cloud_cam, names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud_cam)
-        pc_msg.header.frame_id = self.pose_frame
+        pc_msg.header.frame_id = self.lidar_frame
         pc_msg.header.stamp = time_stamp
         return pc_msg
 
@@ -152,7 +160,7 @@ class RobotData:
         intrins_msg = CameraInfo()
         tf_lid2cam = TransformStamped()
         tf_lid2cam.header.stamp = time_stamp
-        tf_lid2cam.header.frame_id = self.pose_frame
+        tf_lid2cam.header.frame_id = self.lidar_frame
         tf_lid2cam.child_frame_id = self.camera_frame
         tf_lid2cam.transform = msgify(Transform, np.linalg.inv(self.ds.calibration['lid2cam']))
         extrins_msg = TFMessage([tf_lid2cam])
@@ -171,21 +179,19 @@ class RobotData:
     def get_path_msg(self, time_stamp):
         assert self.current_pose.shape == (4, 4)
         pose_msg = matrix_to_pose_msg(self.current_pose)
-        publish_tf_pose(pose_msg, child_frame_id=self.pose_frame)
+        publish_tf_pose(pose_msg, child_frame_id=self.lidar_frame)
         self.path.poses.append(pose_msg)
         self.path.header.stamp = time_stamp
-        rospy.logdebug('Got path message')
         return self.path
 
     @timing
-    def get_map_cloud_msg(self, time_stamp):
+    def to_cloud_msg(self, cloud, time_stamp, frame):
         # publish point cloud
-        points = np.concatenate(self.clouds)
-        cloud = unstructured_to_structured(np.asarray(points[::self.map_step], dtype=np.float32), names=['x', 'y', 'z'])
+        if cloud.dtype.names is None:
+            cloud = unstructured_to_structured(cloud[:, :3], names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud)
         pc_msg.header.stamp = time_stamp
-        pc_msg.header.frame_id = self.map_frame
-        rospy.logdebug('Got map point cloud')
+        pc_msg.header.frame_id = frame
         return pc_msg
 
     @timing
