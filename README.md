@@ -45,14 +45,22 @@ cd ~/catkin_ws/
 catkin_make
 ```
 
-Publish the RELLIS-3D data as ROS messages:
-```bash
-source ~/catkin_ws/devel/setup.bash
-roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
-```
+- Publish the RELLIS-3D data as ROS messages:
+    ```bash
+    source ~/catkin_ws/devel/setup.bash
+    roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
+    ```
 
-Semantic Segmentation with
+- Semantic Segmentation with
 [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
-```bash
-roslaunch traversability_estimation hrnet_inference.launch input_img_topic:=/robot_data/rgb/compressed
-```
+    ```bash
+    roslaunch traversability_estimation hrnet_inference.launch input_img_topic:=/robot_data/rgb/compressed
+    ```
+
+- Coloring lidar cloud using calibrated cameras and semantic classes:
+    ![](./docs/colored_pc_demo.png)
+    - Clone and build the [point_cloud_color](https://github.com/ctu-vras/point_cloud_color) package.
+    - Run demo:
+        ```bash
+        roslaunch traversability_estimation color_semantic_point_cloud.launch
+        ```
