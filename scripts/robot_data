@@ -199,13 +199,14 @@ class RobotData:
         img = np.uint8(255 * normalize(img))[..., (2, 1, 0)]
         img_msg = CompressedImage()
         img_msg.header.stamp = time_stamp
+        img_msg.header.frame_id = self.camera_frame
         img_msg.format = "jpeg"
         img_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
         return img_msg
 
 
 def main():
-    rospy.init_node('robot_data_rellis3d', log_level=rospy.DEBUG)
+    rospy.init_node('robot_data_rellis3d', log_level=rospy.INFO)
     subseq = rospy.get_param('~data_sequence', seq_names[0])
     proc = RobotData(subseq)
     rospy.spin()
