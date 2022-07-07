@@ -2,12 +2,15 @@
 <launch>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
+    <arg name="lidar_frame" default="ouster_lidar"/>
 
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="log">
         <rosparam subst_value="true">
             data_sequence: $(arg data_sequence)
             data_step: 5
             pose_step: 5
+            lidar_frame: $(arg lidar_frame)
+            camera_frame: 'pylon_camera'
         </rosparam>
     </node>
 
@@ -15,7 +18,7 @@
     <node name="point_cloud_color" pkg="nodelet" type="nodelet"
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
         <param name="image_transport"        value="compressed"/>
-        <param name="fixed_frame"            value="ouster_lidar"/>
+        <param name="fixed_frame"            value="$(arg lidar_frame)"/>
         <param name="num_cameras"            value="1"/>
         <param name="max_image_age"          value="5.0"/>
         <param name="use_first_valid"        value="true"/>
