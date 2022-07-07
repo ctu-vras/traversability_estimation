@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 from traversability_estimation.rellis_3d import Dataset, seq_names
-from traversability_estimation.utils import filter_camera_points, normalize
+from traversability_estimation.utils import filter_camera_points, normalize, timing
 # ROS
 import rospy
 from sensor_msgs.msg import CameraInfo, PointCloud2, CompressedImage
@@ -55,6 +55,7 @@ class RobotData:
         self.current_pose = None
         self.rgb = None
         self.semseg = None
+        self.cloud_lid = None
         self.map_frame = 'map'
         self.pose_frame = 'ouster_lidar'
         self.camera_frame = 'pylon_camera'
@@ -83,13 +84,22 @@ class RobotData:
         self.timer = rospy.Timer(rospy.Duration(self.period), self.run)
         rospy.loginfo('Publishing robot data.')
 
+    def is_valid(self):
+        return not rospy.is_shutdown() and self.index < len(self.ds)
+
+    @timing
     def move(self):
         if self.index < len(self.ds):
-            self.index += 1
+            self.index += self.pose_step
             rospy.logdebug('Moved to next data sample')
 
+    @timing
     def step(self):
-        cloud, pose, rgb, semseg = self.ds[self.index * self.pose_step]
+        if not self.is_valid():
+            rospy.loginfo('No more positions.')
+            rospy.signal_shutdown('No more positions.')
+
+        cloud, pose, rgb, semseg = self.ds[self.index]
 
         self.current_pose = pose
         self.poses.append(self.current_pose)
