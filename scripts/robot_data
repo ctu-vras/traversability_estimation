@@ -109,21 +109,33 @@ class RobotData:
         self.clouds.append(cloud_map)
         rospy.logdebug(f'Point cloud shape: {cloud_map.shape}')
 
-        self.publish_camera_cloud(cloud_lid)
-
         self.rgb = rgb
         self.semseg = semseg
+        self.cloud_lid = cloud_lid
 
     def run(self, evt):
         self.step()
-        self.publish_path()
-        self.publish_map_cloud()
-        self.publish_camera_info()
-        self.publish_image(self.rgb, pub=self.rgb_pub)
-        self.publish_image(self.semseg, pub=self.semseg_pub)
+        # get messages
+        stamp = rospy.Time.now()
+        path_msg = self.get_path_msg(time_stamp=stamp)
+        map_pc_msg = self.get_map_cloud_msg(time_stamp=stamp)
+        lidar_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.cloud_lid, time_stamp=stamp)
+        intrins_msg, extrins_msg = self.get_camera_calib_msgs(time_stamp=stamp)
+        img_msg = self.get_image_msg(self.rgb, time_stamp=stamp)
+        semseg_msg = self.get_image_msg(self.semseg, time_stamp=stamp)
+
+        # publish messages
+        self.path_pub.publish(path_msg)
+        self.map_pc_pub.publish(map_pc_msg)
+        self.pc_pub.publish(lidar_pc_msg)
+        self.tf_pub.publish(extrins_msg)
+        self.caminfo_pub.publish(intrins_msg)
+        self.rgb_pub.publish(img_msg)
+        self.semseg_pub.publish(semseg_msg)
+        # move to next index
         self.move()
 
-    def publish_camera_cloud(self, cloud_lid):
+    def get_camera_cloud_msg(self, cloud_lid, time_stamp):
         img_height, img_width = self.ds.calibration['img_height'], self.ds.calibration['img_width']
         T_lid2cam = self.ds.calibration['lid2cam']
         K = self.ds.calibration['K']
