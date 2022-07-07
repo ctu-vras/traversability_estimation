@@ -144,61 +144,62 @@ class RobotData:
                                                names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud_cam)
         pc_msg.header.frame_id = self.pose_frame
-        pc_msg.header.stamp = rospy.Time.now()
-        self.pc_pub.publish(pc_msg)
+        pc_msg.header.stamp = time_stamp
+        return pc_msg
 
-    def publish_camera_info(self, distortion_model="plumb_bob"):
-        camera_info = CameraInfo()
-        now = rospy.Time.now()
+    @timing
+    def get_camera_calib_msgs(self, time_stamp, distortion_model="plumb_bob"):
+        intrins_msg = CameraInfo()
         tf_lid2cam = TransformStamped()
-        tf_lid2cam.header.stamp = now
+        tf_lid2cam.header.stamp = time_stamp
         tf_lid2cam.header.frame_id = self.pose_frame
         tf_lid2cam.child_frame_id = self.camera_frame
         tf_lid2cam.transform = msgify(Transform, np.linalg.inv(self.ds.calibration['lid2cam']))
-        self.tf_pub.publish(TFMessage([tf_lid2cam]))
-        camera_info.header.frame_id = self.camera_frame
-        camera_info.header.stamp = now
-        camera_info.width = self.ds.calibration['img_width']
-        camera_info.height = self.ds.calibration['img_height']
-        camera_info.K = self.ds.calibration['K'].flatten().tolist()
-        camera_info.D = self.ds.calibration['dist_coeff'].tolist()
-        camera_info.P = self.ds.calibration['P'].flatten().tolist()
-        camera_info.distortion_model = distortion_model
-        self.caminfo_pub.publish(camera_info)
-        return camera_info
+        extrins_msg = TFMessage([tf_lid2cam])
 
-    def publish_path(self):
+        intrins_msg.header.frame_id = self.camera_frame
+        intrins_msg.header.stamp = time_stamp
+        intrins_msg.width = self.ds.calibration['img_width']
+        intrins_msg.height = self.ds.calibration['img_height']
+        intrins_msg.K = self.ds.calibration['K'].flatten().tolist()
+        intrins_msg.D = self.ds.calibration['dist_coeff'].tolist()
+        intrins_msg.P = self.ds.calibration['P'].flatten().tolist()
+        intrins_msg.distortion_model = distortion_model
+        return intrins_msg, extrins_msg
+
+    @timing
+    def get_path_msg(self, time_stamp):
         assert self.current_pose.shape == (4, 4)
         pose_msg = matrix_to_pose_msg(self.current_pose)
         publish_tf_pose(pose_msg, child_frame_id=self.pose_frame)
         self.path.poses.append(pose_msg)
-        self.path.header.stamp = rospy.Time.now()
-        self.path_pub.publish(self.path)
-        rospy.logdebug('Published path')
+        self.path.header.stamp = time_stamp
+        rospy.logdebug('Got path message')
+        return self.path
 
-    def publish_map_cloud(self):
+    @timing
+    def get_map_cloud_msg(self, time_stamp):
         # publish point cloud
         points = np.concatenate(self.clouds)
         cloud = unstructured_to_structured(np.asarray(points[::self.map_step], dtype=np.float32), names=['x', 'y', 'z'])
-
         pc_msg = msgify(PointCloud2, cloud)
-        pc_msg.header.stamp = rospy.Time.now()
+        pc_msg.header.stamp = time_stamp
         pc_msg.header.frame_id = self.map_frame
-        self.map_pc_pub.publish(pc_msg)
-        rospy.logdebug('Published point cloud')
+        rospy.logdebug('Got map point cloud')
+        return pc_msg
 
-    @staticmethod
-    def publish_image(img, pub):
+    @timing
+    def get_image_msg(self, img, time_stamp):
         img = np.uint8(255 * normalize(img))[..., (2, 1, 0)]
         img_msg = CompressedImage()
-        img_msg.header.stamp = rospy.Time.now()
+        img_msg.header.stamp = time_stamp
         img_msg.format = "jpeg"
         img_msg.data = np.array(cv2.imencode('.jpg', img)[1]).tobytes()
-        pub.publish(img_msg)
+        return img_msg
 
 
 def main():
-    rospy.init_node('robot_data_rellis3d', log_level=rospy.INFO)
+    rospy.init_node('robot_data_rellis3d', log_level=rospy.DEBUG)
     subseq = rospy.get_param('~data_sequence', seq_names[0])
     proc = RobotData(subseq)
     rospy.spin()
