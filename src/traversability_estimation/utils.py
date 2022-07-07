@@ -6,6 +6,18 @@ from scipy.spatial.transform import Rotation
 import yaml
 from PIL import Image
 import matplotlib.pyplot as plt
+from timeit import default_timer as timer
+import rospy
+
+
+def timing(f):
+    def timing_wrapper(*args, **kwargs):
+        t0 = timer()
+        ret = f(*args, **kwargs)
+        t1 = timer()
+        rospy.logdebug('%s %.6f s' % (f.__name__, t1 - t0))
+        return ret
+    return timing_wrapper
 
 
 def read_points(path, dtype=np.float32):
