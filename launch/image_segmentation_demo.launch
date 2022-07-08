@@ -3,8 +3,19 @@
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="input_img_topic" default="robot_data/rgb/compressed"/>
+    <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
     <arg name="compressed" default="true"/>
-    <arg name="rviz" default="false"/>
+    <arg name="rviz" default="true"/>
+
+    <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
+        <rosparam subst_value="true">
+            data_sequence: $(arg data_sequence)
+            map_step: 10
+            pose_step: 10
+            lidar_frame: 'ouster_lidar'
+            camera_frame: 'pylon_camera'
+        </rosparam>
+    </node>
 
     <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
         <rosparam subst_value="true">
@@ -16,6 +27,10 @@
         </rosparam>
         <remap from="input_0" to="$(arg input_img_topic)"/>
         <remap from="output_0" to="/robot_data/rgb_segmented"/>
+    </node>
+
+    <node name="image_view_front" pkg="image_view" type="image_view">
+        <remap from="image" to="/robot_data/rgb_segmented"/>
     </node>
 
     <!-- RVIZ -->
