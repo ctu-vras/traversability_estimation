@@ -122,8 +122,8 @@ class ImgProcessor:
         pred_arg = convert_label(pred_arg, True)
         # result = np.stack((pred_arg, pred_arg, pred_arg), axis=2)
         result = convert_color(pred_arg, self.id_color_map)
-        color_img = pil.fromarray(result[..., (2, 1, 0)], 'RGB')
-        color_img.save('/home/ales/Desktop/output.png')
+        # color_img = pil.fromarray(result[..., (2, 1, 0)], 'RGB')
+        # color_img.save('/home/ales/Desktop/output.png')
         return result
 
     def _update_config(self, config_path: str):

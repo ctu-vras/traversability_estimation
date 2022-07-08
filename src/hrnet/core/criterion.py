@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import logging
-from config import config
+from hrnet.config import config
 
 
 class CrossEntropy(nn.Module):
