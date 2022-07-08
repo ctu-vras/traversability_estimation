@@ -7,8 +7,8 @@
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="log">
         <rosparam subst_value="true">
             data_sequence: $(arg data_sequence)
-            data_step: 5
-            pose_step: 5
+            map_step: 5
+            pose_step: 10
             lidar_frame: $(arg lidar_frame)
             camera_frame: 'pylon_camera'
         </rosparam>

@@ -12,13 +12,13 @@ from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage
 from hrnet.core.function import convert_label, convert_color
 from hrnet import models
+from hrnet.utils.utils import draw_legend
 from PIL import Image as pil
 
-# TODO: Find out why model config and pretrained model have different names (lre-3 and lre-2)
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
 MODEL_CONFIG = os.path.join(pkg_path, "config/hrnet_rellis/"
-                                      "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-3_wd5e-4_bs_12_epoch484.yaml")
+                                      "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484.yaml")
 PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/"
                                           "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth")
 DATASET_ROOT = os.path.join(pkg_path, "data/Rellis_3D/")
@@ -48,13 +48,13 @@ class ImgProcessor:
         self.std = [0.229, 0.224, 0.225]
 
         # Draw legend to segmentation
-        data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
-        self.id_color_map = data_cfg["color_map"]
+        self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
 
         # Publisher
         self.res_pub = rospy.Publisher(f"output_{number}", Image, queue_size=1)
 
         # Subscriber
+        self.max_age = rospy.get_param('~max_age', 1.0)
         self.compressed = compressed
         message = CompressedImage if compressed else Image
         self.subscriber = rospy.Subscriber(f"input_{number}", message, self.callback_color, queue_size=1)
@@ -84,6 +84,10 @@ class ImgProcessor:
         return model
 
     def callback_color(self, img_msg):
+        if (rospy.Time.now() - img_msg.header.stamp).to_sec() > self.max_age:
+            rospy.logwarn('Image message is to old for segmentation')
+            return
+
         try:
             if self.compressed:
                 image = self.bridge.compressed_imgmsg_to_cv2(img_msg, "bgr8")
@@ -93,10 +97,10 @@ class ImgProcessor:
             rospy.logerr(e)
 
         image = self.preprocessing(image)
-
         with torch.no_grad():
             pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
             result = self.postprocessing(pred)
+
         try:
             res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
             res_msg.header.stamp, res_msg.header.frame_id = img_msg.header.stamp, img_msg.header.frame_id
@@ -117,13 +121,9 @@ class ImgProcessor:
     def postprocessing(self, pred):
         pred = pred[config.TEST.OUTPUT_INDEX]
         pred_np = pred.squeeze(0).cpu().numpy()
-
         pred_arg = np.argmax(pred_np, axis=0).astype(np.uint8)
         pred_arg = convert_label(pred_arg, True)
-        # result = np.stack((pred_arg, pred_arg, pred_arg), axis=2)
-        result = convert_color(pred_arg, self.id_color_map)
-        # color_img = pil.fromarray(result[..., (2, 1, 0)], 'RGB')
-        # color_img.save('/home/ales/Desktop/output.png')
+        result = convert_color(pred_arg, self.data_cfg["color_map"])
         return result
 
     def _update_config(self, config_path: str):
@@ -133,30 +133,6 @@ class ImgProcessor:
         cfg['MODEL']['PRETRAINED'] = PRETRAINED_MODEL
         with open(config_path, 'w') as f:
             yaml.dump(cfg, f)
-
-
-def draw_legend():
-    # Load Rellis config
-    data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
-    id_color_map = data_cfg["color_map"]
-    labels = data_cfg["labels"]
-
-    # Create image for config file
-    i = 0
-    text_color = (0, 0, 255)
-    legend = np.full(((len(labels) * 25) + 25, 300, 3), 255, dtype="uint8")
-    for key, label in labels.items():
-        color = id_color_map[key]
-        cv2.putText(legend, label, (5, (i * 25) + 17),
-                    cv2.FONT_HERSHEY_TRIPLEX, 0.6, text_color, 1)
-        cv2.rectangle(legend, (100, (i * 25)), (300, (i * 25) + 25),
-                      tuple(color), -1)
-        i += 1
-
-    # Draw image in non-blocking way
-    plt.imshow(legend)
-    plt.draw()
-    plt.pause(0.5)
 
 
 def main():
@@ -174,7 +150,8 @@ def main():
 
     # Draw legend
     if legend:
-        draw_legend()
+        data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
+        draw_legend(data_cfg)
 
     # Create CNNs for image segmentation
     for i in range(num_cameras):
