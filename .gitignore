@@ -140,3 +140,5 @@ dmypy.json
 output
 *.zip
 *.tar
+
+data/
