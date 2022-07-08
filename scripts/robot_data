@@ -79,8 +79,23 @@ class RobotData:
         self.tf_pub = rospy.Publisher('/tf', TFMessage, queue_size=2, latch=True)
         self.rgb_pub = rospy.Publisher('~rgb/compressed', CompressedImage, queue_size=1)
         self.semseg_pub = rospy.Publisher('~semseg/compressed', CompressedImage, queue_size=1)
+        self.time_stamp = rospy.Time.now()
+
+        intrins_msg, tf_lidar2cam = self.get_camera_calib_msgs()
+        self.calibration_msgs = {'intrinsics': intrins_msg, 'tf_lid2cam': tf_lidar2cam}
 
         self.timer = rospy.Timer(rospy.Duration(self.delay_start), self.start_timer, oneshot=True)
+        self.publish_extrinsics()
+
+    def publish_extrinsics(self, rate=100):
+        rate = rospy.Rate(rate)
+        while not rospy.is_shutdown():
+            if not self.is_valid():
+                rospy.loginfo('No more positions.')
+                rospy.signal_shutdown('No more positions.')
+            self.calibration_msgs['tf_lid2cam'].header.stamp = rospy.Time.now()
+            self.tf_pub.publish(TFMessage([self.calibration_msgs['tf_lid2cam']]))
+            rate.sleep()
 
     def start_timer(self, evt):
         self.timer = rospy.Timer(rospy.Duration(self.period), self.run)
@@ -123,23 +138,24 @@ class RobotData:
         self.step()
         # get messages
         stamp = rospy.Time.now()
+        self.time_stamp = stamp
         path_msg = self.get_path_msg(time_stamp=stamp)
         global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.map_frame)
         lidar_pc_msg = self.to_cloud_msg(self.lidar_cloud, time_stamp=stamp, frame=self.lidar_frame)
         cam_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.lidar_cloud, time_stamp=stamp)
-        intrins_msg, extrins_msg = self.get_camera_calib_msgs(time_stamp=stamp)
         img_msg = self.get_image_msg(self.rgb, time_stamp=stamp)
         semseg_msg = self.get_image_msg(self.semseg, time_stamp=stamp)
 
         # publish messages
+        self.calibration_msgs['intrinsics'].header.stamp = self.time_stamp
+        self.caminfo_pub.publish(self.calibration_msgs['intrinsics'])
         self.path_pub.publish(path_msg)
         self.map_pc_pub.publish(global_pc_msg)
         self.lidar_pc_pub.publish(lidar_pc_msg)
         self.cam_pc_pub.publish(cam_pc_msg)
-        self.tf_pub.publish(extrins_msg)
-        self.caminfo_pub.publish(intrins_msg)
         self.rgb_pub.publish(img_msg)
         self.semseg_pub.publish(semseg_msg)
+
         # move to next index
         self.move()
 
@@ -155,25 +171,21 @@ class RobotData:
         pc_msg.header.stamp = time_stamp
         return pc_msg
 
-    @timing
-    def get_camera_calib_msgs(self, time_stamp, distortion_model="plumb_bob"):
+    def get_camera_calib_msgs(self, distortion_model="plumb_bob"):
         intrins_msg = CameraInfo()
         tf_lid2cam = TransformStamped()
-        tf_lid2cam.header.stamp = time_stamp
         tf_lid2cam.header.frame_id = self.lidar_frame
         tf_lid2cam.child_frame_id = self.camera_frame
         tf_lid2cam.transform = msgify(Transform, np.linalg.inv(self.ds.calibration['lid2cam']))
-        extrins_msg = TFMessage([tf_lid2cam])
 
         intrins_msg.header.frame_id = self.camera_frame
-        intrins_msg.header.stamp = time_stamp
         intrins_msg.width = self.ds.calibration['img_width']
         intrins_msg.height = self.ds.calibration['img_height']
         intrins_msg.K = self.ds.calibration['K'].flatten().tolist()
         intrins_msg.D = self.ds.calibration['dist_coeff'].tolist()
         intrins_msg.P = self.ds.calibration['P'].flatten().tolist()
         intrins_msg.distortion_model = distortion_model
-        return intrins_msg, extrins_msg
+        return intrins_msg, tf_lid2cam
 
     @timing
     def get_path_msg(self, time_stamp):
