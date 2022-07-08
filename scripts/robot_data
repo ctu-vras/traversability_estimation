@@ -106,9 +106,11 @@ class RobotData:
 
     @timing
     def move(self):
-        if self.index < len(self.ds):
+        if self.index < len(self.ds) - self.pose_step:
             self.index += self.pose_step
-            rospy.logdebug('Moved to next data sample')
+        else:
+            self.index = len(self.ds) - 1
+        rospy.logdebug('Moved to next data sample')
 
     @timing
     def step(self):
@@ -121,13 +123,13 @@ class RobotData:
         self.current_pose = pose
         self.poses.append(self.current_pose)
 
-        cloud_lid = structured_to_unstructured(cloud[['x', 'y', 'z']])
+        cloud_lid = structured_to_unstructured(cloud[['x', 'y', 'z']])[::self.map_step]
         cloud_map = np.matmul(cloud_lid, pose[:3, :3].T) + pose[:3, 3:].T
         self.clouds.append(cloud_map)
         rospy.logdebug(f'Point cloud shape: {cloud_map.shape}')
 
         global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
-        global_cloud = unstructured_to_structured(global_cloud[::self.map_step], names=['x', 'y', 'z'])
+        global_cloud = unstructured_to_structured(global_cloud, names=['x', 'y', 'z'])
 
         self.rgb = rgb
         self.semseg = semseg
@@ -164,7 +166,7 @@ class RobotData:
         T_lid2cam = self.ds.calibration['lid2cam']
         K = self.ds.calibration['K']
         cloud_cam, _ = filter_camera_points(cloud_lid, img_width, img_height, K, T_lid2cam)
-        cloud_cam = np.asarray(cloud_cam[::self.map_step], dtype=np.float32)
+        cloud_cam = np.asarray(cloud_cam, dtype=np.float32)
         cloud_cam = unstructured_to_structured(cloud_cam, names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud_cam)
         pc_msg.header.frame_id = self.lidar_frame
