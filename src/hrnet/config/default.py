@@ -34,7 +34,7 @@ _C.CUDNN.ENABLED = True
 # common params for NETWORK
 _C.MODEL = CN()
 _C.MODEL.NAME = 'seg_hrnet'
-_C.MODEL.PRETRAINED = '/home/ruslan/workspaces/traversability_ws/src/RELLIS-3D/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR/pretrained_models/hrnetv2_w48_imagenet_pretrained.pth'
+_C.MODEL.PRETRAINED = '/home/ruslan/workspaces/traversability_ws/src/traversability_estimation/config/weights/hrnetv2_w48_imagenet_pretrained.pth'
 _C.MODEL.ALIGN_CORNERS = True
 _C.MODEL.NUM_OUTPUTS = 1
 _C.MODEL.EXTRA = CN(new_allowed=True)
@@ -141,4 +141,3 @@ if __name__ == '__main__':
     import sys
     with open(sys.argv[1], 'w') as f:
         print(_C, file=f)
-

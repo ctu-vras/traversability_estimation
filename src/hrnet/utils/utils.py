@@ -18,22 +18,25 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+
 class FullModel(nn.Module):
-  """
-  Distribute the loss on multi-gpu to reduce 
+    """
+  Distribute the loss on multi-gpu to reduce
   the memory cost in the main gpu.
   You can check the following discussion.
   https://discuss.pytorch.org/t/dataparallel-imbalanced-memory-usage/22551/21
   """
-  def __init__(self, model, loss):
-    super(FullModel, self).__init__()
-    self.model = model
-    self.loss = loss
 
-  def forward(self, inputs, labels, *args, **kwargs):
-    outputs = self.model(inputs, *args, **kwargs)
-    loss = self.loss(outputs, labels)
-    return torch.unsqueeze(loss,0), outputs
+    def __init__(self, model, loss):
+        super(FullModel, self).__init__()
+        self.model = model
+        self.loss = loss
+
+    def forward(self, inputs, labels, *args, **kwargs):
+        outputs = self.model(inputs, *args, **kwargs)
+        loss = self.loss(outputs, labels)
+        return torch.unsqueeze(loss, 0), outputs
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -70,6 +73,7 @@ class AverageMeter(object):
     def average(self):
         return self.avg
 
+
 def create_logger(cfg, cfg_name, phase='train'):
     root_output_dir = Path(cfg.OUTPUT_DIR)
     # set up logger
@@ -98,11 +102,12 @@ def create_logger(cfg, cfg_name, phase='train'):
     logging.getLogger('').addHandler(console)
 
     tensorboard_log_dir = Path(cfg.LOG_DIR) / dataset / model / \
-            (cfg_name + '_' + time_str)
+                          (cfg_name + '_' + time_str)
     print('=> creating {}'.format(tensorboard_log_dir))
     tensorboard_log_dir.mkdir(parents=True, exist_ok=True)
 
     return logger, str(final_output_dir), str(tensorboard_log_dir)
+
 
 def get_confusion_matrix(label, pred, size, num_class, ignore=-1):
     """
@@ -111,7 +116,7 @@ def get_confusion_matrix(label, pred, size, num_class, ignore=-1):
     output = pred.cpu().numpy().transpose(0, 2, 3, 1)
     seg_pred = np.asarray(np.argmax(output, axis=3), dtype=np.uint8)
     seg_gt = np.asarray(
-    label.cpu().numpy()[:, :size[-2], :size[-1]], dtype=np.int)
+        label.cpu().numpy()[:, :size[-2], :size[-1]], dtype=np.int)
 
     ignore_index = seg_gt != ignore
     seg_gt = seg_gt[ignore_index]
@@ -129,9 +134,10 @@ def get_confusion_matrix(label, pred, size, num_class, ignore=-1):
                                  i_pred] = label_count[cur_index]
     return confusion_matrix
 
-def adjust_learning_rate(optimizer, base_lr, max_iters, 
-        cur_iters, power=0.9, nbb_mult=10):
-    lr = base_lr*((1-float(cur_iters)/max_iters)**(power))
+
+def adjust_learning_rate(optimizer, base_lr, max_iters,
+                         cur_iters, power=0.9, nbb_mult=10):
+    lr = base_lr * ((1 - float(cur_iters) / max_iters) ** (power))
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) == 2:
         optimizer.param_groups[1]['lr'] = lr * nbb_mult
