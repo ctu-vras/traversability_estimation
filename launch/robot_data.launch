@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
-    <arg name="rviz" default="true" doc="Laucnh RViz for data visualization or not"/>
+    <arg name="rviz" default="false" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
 
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
@@ -8,6 +8,8 @@
             data_sequence: $(arg data_sequence)
             data_step: 5
             pose_step: 5
+            lidar_frame: 'ouster_lidar'
+            camera_frame: 'pylon_camera'
         </rosparam>
     </node>
 
