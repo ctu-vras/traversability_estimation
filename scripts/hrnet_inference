@@ -67,7 +67,6 @@ class ImgProcessor:
         self._update_config(MODEL_CONFIG)
 
         # Create model
-        # TODO: Find out what next lines of code mean
         config.defrost()
         config.merge_from_file(MODEL_CONFIG)
         config.merge_from_list(['TEST.MODEL_FILE', PRETRAINED_MODEL])
@@ -100,6 +99,7 @@ class ImgProcessor:
             result = self.postprocessing(pred)
         try:
             res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
+            res_msg.header.stamp, res_msg.header.frame_id = img_msg.header.stamp, img_msg.header.frame_id
             self.res_pub.publish(res_msg)
         except CvBridgeError as e:
             rospy.logerr(e)
