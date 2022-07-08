@@ -11,10 +11,10 @@ high-precision GPS measurement, and IMU data.
 
 #### Installation instruction
 
- - Go to the dataset [webpage](https://unmannedlab.github.io/research/RELLIS-3D). 
- - Download the data to the relative path `./data`.
- - Extract the zip files in order to have the following layout on disk:
- 
+- Go to the dataset [webpage](https://unmannedlab.github.io/research/RELLIS-3D).
+- Download the data to the relative path `./data`.
+- Extract the zip files in order to have the following layout on disk:
+
 ```bash
     ├─ Rellis_3D
         ├── 00000
@@ -28,7 +28,6 @@ high-precision GPS measurement, and IMU data.
             ...
             └── raw_data
 ```
-
 
 See [rellis_3d.py](./src/traversability_estimation/rellis_3d.py) for more details.
 
@@ -45,6 +44,36 @@ cd ~/catkin_ws/
 catkin_make
 ```
 
+### RELLIS-3D demo
+
+Publish the RELLIS-3D data as ROS messages:
+
+```bash
+source ~/catkin_ws/devel/setup.bash
+roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
+```
+
+### Semantic Segmentation Node
+
+Model: [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
+
+#### Topics:
+
+- `input_0, ... input_{num_cameras - 1}`
+- `output_0,... output_{num_cameras - 1}`
+
+#### Parameters:
+
+- `num_cameras [int]` - number of image topics for segmentation
+- `device [str]` - cpu/cuda
+- `legend [bool]` - if legend for segmentation is required
+- `compressed [bool]` - if input image topic is compressed
+
+#### Launch demo:
+
+```bash
+roslaunch traversability_estimation hrnet_inference.launch input_img_topic:=/robot_data/rgb/compressed
+```
 - Publish the RELLIS-3D data as ROS messages:
     ```bash
     source ~/catkin_ws/devel/setup.bash

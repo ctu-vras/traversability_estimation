@@ -32,7 +32,6 @@ _C.CUDNN.ENABLED = True
 # common params for NETWORK
 _C.MODEL = CN()
 _C.MODEL.NAME = 'seg_hrnet'
-# '/home/ruslan/workspaces/traversability_ws/src/RELLIS-3D/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR/pretrained_models/hrnetv2_w48_imagenet_pretrained.pth'
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../..'))
 _C.MODEL.PRETRAINED = f"{pkg_path}/models/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth"
 _C.MODEL.ALIGN_CORNERS = True

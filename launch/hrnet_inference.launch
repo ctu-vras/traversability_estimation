@@ -5,15 +5,6 @@
     <arg name="input_img_topic" default="robot_data/rgb/compressed"
          doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="compressed" default="True"/>
-    <arg name="legend" default="True"/>
-
-    <node name="robot_data" pkg="traversability_estimation" type="robot_data">
-        <rosparam subst_value="true">
-            data_sequence: 00000
-            data_step: 5
-            pose_step: 5
-        </rosparam>
-    </node>
 
     <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
         <rosparam subst_value="true">
