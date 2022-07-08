@@ -142,3 +142,4 @@ output
 *.tar
 
 data/
+config/hrnet_rellis/*.yaml

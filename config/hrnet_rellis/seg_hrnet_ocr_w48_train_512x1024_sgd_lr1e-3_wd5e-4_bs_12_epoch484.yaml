@@ -5,7 +5,7 @@ CUDNN:
 DATASET:
   DATASET: rellis
   NUM_CLASSES: 19
-  ROOT: /home/ales/catkin_ws/src/traversability_estimation/data/Rellis_3D/
+  ROOT: /home/ruslan/workspaces/traversability_ws/src/traversability_estimation/data/Rellis_3D/
   TEST_SET: test.lst
   TRAIN_SET: train.lst
 GPUS: (0,)
@@ -70,7 +70,7 @@ MODEL:
       NUM_MODULES: 3
   NAME: seg_hrnet_ocr
   NUM_OUTPUTS: 2
-  PRETRAINED: /home/ales/catkin_ws/src/traversability_estimation/config/weights/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth
+  PRETRAINED: /home/ruslan/workspaces/traversability_ws/src/traversability_estimation/config/weights/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-3_wd5e-4_bs_12_epoch484/best.pth
 OUTPUT_DIR: output
 PRINT_FREQ: 10
 TEST:
