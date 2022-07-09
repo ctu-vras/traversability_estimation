@@ -84,5 +84,5 @@ Model: [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRN
     - Clone and build the [point_cloud_color](https://github.com/ctu-vras/point_cloud_color) package.
     - Run demo:
         ```bash
-        roslaunch traversability_estimation color_semantic_point_cloud.launch
+        roslaunch traversability_estimation color_point_cloud_demo.launch
         ```
