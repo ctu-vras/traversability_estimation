@@ -69,27 +69,20 @@ Model: [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRN
 - `legend [bool]` - if legend for segmentation is required
 - `compressed [bool]` - if input image topic is compressed
 
-#### Launch demo:
+### Demos
 
-```bash
-roslaunch traversability_estimation hrnet_inference.launch input_img_topic:=/robot_data/rgb/compressed
-```
-- Publish the RELLIS-3D data as ROS messages:
-    ```bash
-    source ~/catkin_ws/devel/setup.bash
-    roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
-    ```
+- Semantic segmentation of images from RELLIS-3D dataset with HRNet:
 
-- Semantic Segmentation with
-[HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
     ```bash
-    roslaunch traversability_estimation hrnet_inference.launch input_img_topic:=/robot_data/rgb/compressed
+    roslaunch traversability_estimation image_segmentation_demo.launch 
     ```
 
 - Coloring lidar cloud using calibrated cameras and semantic classes:
+
     ![](./docs/colored_pc_demo.png)
+    
     - Clone and build the [point_cloud_color](https://github.com/ctu-vras/point_cloud_color) package.
     - Run demo:
         ```bash
-        roslaunch traversability_estimation color_semantic_point_cloud.launch
+        roslaunch traversability_estimation color_point_cloud_demo.launch
         ```

@@ -12,11 +12,12 @@ import os
 import logging
 import time
 from pathlib import Path
-
 import numpy as np
-
 import torch
 import torch.nn as nn
+import cv2
+import matplotlib.pyplot as plt
+import yaml
 
 
 class FullModel(nn.Module):
@@ -135,10 +136,32 @@ def get_confusion_matrix(label, pred, size, num_class, ignore=-1):
     return confusion_matrix
 
 
-def adjust_learning_rate(optimizer, base_lr, max_iters,
-                         cur_iters, power=0.9, nbb_mult=10):
+def adjust_learning_rate(optimizer, base_lr, max_iters, cur_iters, power=0.9, nbb_mult=10):
     lr = base_lr * ((1 - float(cur_iters) / max_iters) ** (power))
     optimizer.param_groups[0]['lr'] = lr
     if len(optimizer.param_groups) == 2:
         optimizer.param_groups[1]['lr'] = lr * nbb_mult
     return lr
+
+
+def draw_legend(data_cfg):
+    # Load Rellis config
+    id_color_map = data_cfg["color_map"]
+    labels = data_cfg["labels"]
+
+    # Create image for config file
+    i = 0
+    text_color = (0, 0, 255)
+    legend = np.full(((len(labels) * 25) + 25, 300, 3), 255, dtype="uint8")
+    for key, label in labels.items():
+        color = id_color_map[key]
+        cv2.putText(legend, label, (5, (i * 25) + 17),
+                    cv2.FONT_HERSHEY_TRIPLEX, 0.6, text_color, 1)
+        cv2.rectangle(legend, (100, (i * 25)), (300, (i * 25) + 25),
+                      tuple(color), -1)
+        i += 1
+
+    # Draw image in non-blocking way
+    plt.imshow(legend)
+    plt.draw()
+    plt.pause(0.5)
