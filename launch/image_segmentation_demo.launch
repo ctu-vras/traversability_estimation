@@ -6,6 +6,7 @@
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
     <arg name="compressed" default="true"/>
     <arg name="rviz" default="true"/>
+    <arg name="image_view" default="false"/>
 
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
         <rosparam subst_value="true">
@@ -29,7 +30,7 @@
         <remap from="output_0" to="/robot_data/rgb_segmented"/>
     </node>
 
-    <node name="image_view_front" pkg="image_view" type="image_view">
+    <node if="$(arg image_view)" name="image_view_front" pkg="image_view" type="image_view">
         <remap from="image" to="/robot_data/rgb_segmented"/>
     </node>
 
