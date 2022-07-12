@@ -4,8 +4,8 @@
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="input_img_topic" default="robot_data/rgb/compressed"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
-    <arg name="compressed" default="true"/>
     <arg name="rviz" default="true"/>
+    <arg name="image_view" default="false"/>
 
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
         <rosparam subst_value="true">
@@ -21,15 +21,15 @@
         <rosparam subst_value="true">
             device: $(arg device)
             num_cameras: 1
-            compressed: $(arg compressed)
-            legend: True
+            compressed: true
+            legend: true
             max_age: 0.5
         </rosparam>
         <remap from="input_0" to="$(arg input_img_topic)"/>
         <remap from="output_0" to="/robot_data/rgb_segmented"/>
     </node>
 
-    <node name="image_view_front" pkg="image_view" type="image_view">
+    <node if="$(arg image_view)" name="image_view_front" pkg="image_view" type="image_view">
         <remap from="image" to="/robot_data/rgb_segmented"/>
     </node>
 
