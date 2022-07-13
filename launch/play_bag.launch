@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="robot" default="tradr"/>
+
+    <arg if="$(eval robot == 'spot')"
+         name="bag_path" default="$(dirname)/../data/bags/traversability/spot_2022-06-30-11-39-13.bag"/>
+    <arg if="$(eval robot == 'spot')"
+         name="image_topic" default="/camera_left/image_color"/>
+    <arg if="$(eval robot == 'tradr')"
+         name="bag_path"
+         default="$(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28.bag $(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28_cameras.bag"/>
+    <arg if="$(eval robot == 'tradr')"
+         name="image_topic" default="/viz/camera_0/image/compressed"/>
+    <arg name="output_image_topic" default="/camera_0/image_color"/>
+
+    <!--Bag file player -->
+    <param name="use_sim_time" value="true"/>
+
+    <node name="player" pkg="rosbag" type="play" args="--clock $(arg bag_path)" output="screen"/>
+    <node pkg="topic_tools" type="relay" name="camera_relay" args="$(arg image_topic) $(arg output_image_topic)" />
+
+</launch>

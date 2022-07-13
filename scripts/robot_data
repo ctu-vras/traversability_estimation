@@ -34,7 +34,7 @@ def publish_tf_pose(pose, child_frame_id):
     br.sendTransform(t)
 
 
-def matrix_to_pose_msg(T, frame_id='map'):
+def matrix_to_pose_msg(T, frame_id):
     assert T.shape == (4, 4)
     pose = PoseStamped()
     pose.header.frame_id = frame_id
@@ -57,11 +57,11 @@ class RobotData:
         self.semseg = None
         self.lidar_cloud = None
         self.global_cloud = None
-        self.map_frame = 'map'
+        self.origin_frame = rospy.get_param('~origin_frame', 'odom')
         self.lidar_frame = rospy.get_param('~lidar_frame', 'ouster_lidar')
         self.camera_frame = rospy.get_param('~camera_frame', 'pylon_camera')
         self.path = Path()
-        self.path.header.frame_id = self.map_frame
+        self.path.header.frame_id = self.origin_frame
         self.map_step = rospy.get_param('~map_step', 10)
         self.ds = Dataset(seq=sequence)
         self.delay_start = rospy.get_param('~delay_start', 1.0)
@@ -142,7 +142,7 @@ class RobotData:
         stamp = rospy.Time.now()
         self.time_stamp = stamp
         path_msg = self.get_path_msg(time_stamp=stamp)
-        global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.map_frame)
+        global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.origin_frame)
         lidar_pc_msg = self.to_cloud_msg(self.lidar_cloud, time_stamp=stamp, frame=self.lidar_frame)
         cam_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.lidar_cloud, time_stamp=stamp)
         img_msg = self.get_image_msg(self.rgb, time_stamp=stamp)
@@ -192,7 +192,7 @@ class RobotData:
     @timing
     def get_path_msg(self, time_stamp):
         assert self.current_pose.shape == (4, 4)
-        pose_msg = matrix_to_pose_msg(self.current_pose)
+        pose_msg = matrix_to_pose_msg(self.current_pose, self.origin_frame)
         publish_tf_pose(pose_msg, child_frame_id=self.lidar_frame)
         self.path.poses.append(pose_msg)
         self.path.header.stamp = time_stamp

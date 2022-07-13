@@ -14,6 +14,7 @@ from hrnet.core.function import convert_label, convert_color
 from hrnet import models
 from hrnet.utils.utils import draw_legend
 from PIL import Image as pil
+from time import time
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
@@ -60,7 +61,8 @@ class ImgProcessor:
         self.max_age = rospy.get_param('~max_age', 1.0)
         self.compressed = compressed
         message = CompressedImage if compressed else Image
-        self.subscriber = rospy.Subscriber(f"input_{number}", message, self.callback_color, queue_size=1)
+        input_img_topic = f"input_{number}"
+        self.subscriber = rospy.Subscriber(input_img_topic, message, self.callback_color, queue_size=1)
 
         # Info
         rospy.loginfo(f'Loaded CNN model number {number}')
@@ -87,10 +89,12 @@ class ImgProcessor:
         return model
 
     def callback_color(self, img_msg):
-        if (rospy.Time.now() - img_msg.header.stamp).to_sec() > self.max_age:
-            rospy.logwarn('Image message is to old for segmentation')
+        age = (rospy.Time.now() - img_msg.header.stamp).to_sec()
+        if age > self.max_age:
+            rospy.logwarn('Image message is too old for segmentation: %.3f' % age)
             return
 
+        t0 = time()
         try:
             if self.compressed:
                 image = self.bridge.compressed_imgmsg_to_cv2(img_msg, "bgr8")
@@ -103,6 +107,7 @@ class ImgProcessor:
         with torch.no_grad():
             pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
             result = self.postprocessing(pred)
+            rospy.loginfo('Image processing took: %.3f [sec]' % (time() - t0))
 
         try:
             res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")

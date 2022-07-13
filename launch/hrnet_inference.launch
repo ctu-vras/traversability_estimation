@@ -5,20 +5,17 @@
     <arg name="input_img_topic" default="robot_data/rgb/compressed"/>
     <arg name="compressed" default="true"/>
     <arg name="rviz" default="false"/>
+    <arg name="num_cams" default="1"/>
+    <arg name="legend" default="false" doc="Whether to plot segmentation classses legend"/>
+    <arg name="max_age" default="1.0" doc="Maximum allowed delay of timestamp of input rgb image messages"/>
 
     <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
         <rosparam subst_value="true">
             device: $(arg device)
-            num_cameras: 1
+            num_cameras: $(arg num_cams)
             compressed: $(arg compressed)
-            legend: True
-            max_age: 0.5
+            legend: $(arg legend)
+            max_age: $(arg max_age)
         </rosparam>
-        <remap from="input_0" to="$(arg input_img_topic)"/>
-        <remap from="output_0" to="/robot_data/rgb_segmented"/>
     </node>
-
-    <!-- RVIZ -->
-    <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/config.rviz"/>
 </launch>
