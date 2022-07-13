@@ -15,7 +15,7 @@
         <rosparam subst_value="true">
             device: $(arg device)
             num_cameras: 1
-            compressed: true
+            image_transport: 'compressed'
             legend: true
             max_age: 1.0
         </rosparam>

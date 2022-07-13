@@ -39,13 +39,15 @@ class ImgProcessor:
         output_{number} - output segmented image topic
     """
 
-    def __init__(self, number: int = 1, compressed: bool = True, traversability_labels: bool = True):
+    def __init__(self, number: int = 1, image_transport: str = 'compressed', traversability_labels: bool = True):
+        assert image_transport == 'compressed' or image_transport == 'raw'
         self.bridge = CvBridge()
         self.model = self.load_model()
         self.model.eval().cuda()
 
         # Constants
-        self.input_size = (512, 1024)
+        self.orig_size = None
+        self.input_size = (1024, 512)
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
 
@@ -59,8 +61,8 @@ class ImgProcessor:
 
         # Subscriber
         self.max_age = rospy.get_param('~max_age', 1.0)
-        self.compressed = compressed
-        message = CompressedImage if compressed else Image
+        self.image_transport = image_transport
+        message = CompressedImage if image_transport == 'compressed' else Image
         input_img_topic = f"input_{number}"
         self.subscriber = rospy.Subscriber(input_img_topic, message, self.callback_color, queue_size=1)
 
@@ -96,18 +98,23 @@ class ImgProcessor:
 
         t0 = time()
         try:
-            if self.compressed:
+            if self.image_transport:
                 image = self.bridge.compressed_imgmsg_to_cv2(img_msg, "bgr8")
             else:
                 image = self.bridge.imgmsg_to_cv2(img_msg, "bgr8")
         except CvBridgeError as e:
             rospy.logerr(e)
+            return
+
+        if self.orig_size is None:
+            self.orig_size = (image.shape[1], image.shape[0])
+            rospy.loginfo(f'Original image size: {self.orig_size}')
 
         image = self.preprocessing(image)
         with torch.no_grad():
             pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
             result = self.postprocessing(pred)
-            rospy.loginfo('Image processing took: %.3f [sec]' % (time() - t0))
+            rospy.logdebug(f'Image of size {image.shape} processing took: {"%.3f" % (time() - t0)} sec')
 
         try:
             res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
@@ -117,8 +124,7 @@ class ImgProcessor:
             rospy.logerr(e)
 
     def preprocessing(self, image):
-        new_h, new_w = self.input_size
-        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        image = cv2.resize(image, self.input_size, interpolation=cv2.INTER_LINEAR)
         image = image.astype(np.float32)[:, :, ::-1]
         image = image / 255.0
         image -= self.mean
@@ -132,6 +138,7 @@ class ImgProcessor:
         pred_arg = np.argmax(pred_np, axis=0).astype(np.uint8)
         pred_arg = convert_label(pred_arg, True)
         result = convert_color(pred_arg, self.data_cfg["color_map"])
+        result = cv2.resize(result, self.orig_size, interpolation=cv2.INTER_LINEAR)
         return result
 
     def _update_config(self, config_path: str):
@@ -144,17 +151,17 @@ class ImgProcessor:
 
 
 def main():
-    rospy.init_node('hrnet_inference', log_level=rospy.INFO)
+    rospy.init_node('hrnet_inference', log_level=rospy.DEBUG)
 
     # Load parameters
-    compressed = rospy.get_param("~compressed", True)
+    image_transport = rospy.get_param("~image_transport", 'compressed')
     num_cameras = rospy.get_param("~num_cameras", 1)
     legend = rospy.get_param("~legend", False)
     traversability_labels = rospy.get_param('~traversability_labels', True)
 
     # Info
     rospy.loginfo(f'Legend required: {legend}')
-    rospy.loginfo(f'Compressed input Image topic: {compressed}')
+    rospy.loginfo(f'Image transport: {image_transport}')
     rospy.loginfo(f'Number of cameras for segmentation: {num_cameras}')
 
     # Draw legend
@@ -164,7 +171,7 @@ def main():
 
     # Create CNNs for image segmentation
     for i in range(num_cameras):
-        ImgProcessor(i, compressed, traversability_labels)
+        ImgProcessor(i, image_transport, traversability_labels)
     rospy.spin()
 
 

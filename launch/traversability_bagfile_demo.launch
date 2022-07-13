@@ -3,14 +3,19 @@
 <launch>
     <arg name="robot" default="tradr"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="image_view" default="true"/>
+    <arg name="image_view" default="false"/>
     <arg name="image_topic" default="/camera_0/image_color"/>
+    <arg name="caminfo_topic" default="/camera_0/camera_info"/>
+    <arg name="cloud_topic" default="/cloud"/>
+    <arg if="$(eval robot == 'tradr')" name="image_transport" default="compressed"/>
+    <arg if="$(eval robot == 'spot')" name="image_transport" default="raw"/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
 
     <!--Bag file player -->
     <include file="$(dirname)/play_bag.launch">
         <arg name="robot" value="$(arg robot)"/>
         <arg name="output_image_topic" value="$(arg image_topic)"/>
+        <arg name="output_caminfo_topic" value="$(arg caminfo_topic)"/>
     </include>
 
     <!-- Semantic segmantation of images -->
@@ -18,12 +23,29 @@
         <rosparam subst_value="true">
             device: $(arg device)
             num_cameras: 1
-            compressed: true
+            image_transport: $(arg image_transport)
             legend: false
             max_age: 1.0
         </rosparam>
         <remap from="input_0" to="$(arg image_topic)"/>
         <remap from="output_0" to="/hrnet_inference/semantic_segmentation"/>
+    </node>
+
+    <!-- Point cloud color -->
+    <node name="point_cloud_color" pkg="nodelet" type="nodelet"
+        args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
+        <param name="num_cameras"            value="1"/>
+        <param name="max_image_age"          value="5.0"/>
+        <param name="use_first_valid"        value="true"/>
+        <param name="image_queue_size"       value="1"/>
+        <param name="point_cloud_queue_size" value="50"/>
+        <param name="wait_for_transform"     value="2.0"/>
+        <param name="default_color"          value="0x00000000"/>
+
+        <remap from="/camera_0/camera_info" to="$(arg caminfo_topic)"/>
+        <remap from="/camera_0/image" to="/hrnet_inference/semantic_segmentation"/>
+        <remap from="/cloud_in" to="$(arg cloud_topic)"/>
+        <remap from="/cloud_out" to="$(arg cloud_topic)_traversability"/>
     </node>
 
     <!-- Visualization -->

@@ -6,17 +6,29 @@
          name="bag_path" default="$(dirname)/../data/bags/traversability/spot_2022-06-30-11-39-13.bag"/>
     <arg if="$(eval robot == 'spot')"
          name="image_topic" default="/camera_left/image_color"/>
+    <arg if="$(eval robot == 'spot')"
+         name="caminfo_topic" default="/camera_left/camera_info"/>
+
     <arg if="$(eval robot == 'tradr')"
          name="bag_path"
          default="$(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28.bag $(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28_cameras.bag"/>
     <arg if="$(eval robot == 'tradr')"
          name="image_topic" default="/viz/camera_0/image/compressed"/>
-    <arg name="output_image_topic" default="/camera_0/image_color"/>
+    <arg if="$(eval robot == 'tradr')"
+         name="caminfo_topic" default="/viz/camera_0/camera_info"/>
+    <arg if="$(eval robot == 'tradr')"
+         name="cloud_topic" default="/points_filtered_kontron"/>
 
-    <!--Bag file player -->
+    <arg name="output_image_topic" default="/camera_0/image_color"/>
+    <arg name="output_caminfo_topic" default="/camera_0/camera_info"/>
+    <arg name="output_cloud_topic" default="/cloud"/>
+
     <param name="use_sim_time" value="true"/>
 
-    <node name="player" pkg="rosbag" type="play" args="--clock $(arg bag_path)" output="screen"/>
-    <node pkg="topic_tools" type="relay" name="camera_relay" args="$(arg image_topic) $(arg output_image_topic)" />
+    <node name="player" pkg="rosbag" type="play" args="--clock $(arg bag_path)"/>
+
+    <node pkg="topic_tools" type="relay" name="rgb_relay" args="$(arg image_topic) $(arg output_image_topic)" />
+    <node pkg="topic_tools" type="relay" name="caminfo_relay" args="$(arg caminfo_topic) $(arg output_caminfo_topic)" />
+    <node pkg="topic_tools" type="relay" name="cloud_relay" args="$(arg cloud_topic) $(arg output_cloud_topic)" />
 
 </launch>
