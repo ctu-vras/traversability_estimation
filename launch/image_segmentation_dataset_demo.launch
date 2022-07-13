@@ -4,7 +4,7 @@
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="input_img_topic" default="robot_data/rgb/compressed"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
-    <arg name="image_view" default="true"/>
+    <arg name="image_view" default="false"/>
 
     <include file="$(dirname)/robot_data.launch">
         <arg name="data_sequence" value="$(arg data_sequence)"/>
@@ -21,12 +21,12 @@
         </rosparam>
         <remap from="input_0/rgb" to="/robot_data/rgb/compressed"/>
         <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
-        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
+        <remap from="output_0/semseg/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
     </node>
 
     <group if="$(arg image_view)">
         <node name="image_view_semseg" pkg="image_view" type="image_view">
-            <remap from="image" to="/hrnet_inference/semantic_segmentation"/>
+            <remap from="image" to="/hrnet_inference/semantic_segmentation/compressed"/>
         </node>
     </group>
 

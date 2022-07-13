@@ -13,6 +13,7 @@ from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from hrnet.core.function import convert_label, convert_color
 from hrnet import models
 from hrnet.utils.utils import draw_legend
+from traversability_estimation.utils import normalize
 from PIL import Image as pil
 from time import time
 
@@ -58,7 +59,7 @@ class ImageProcessor:
             self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
 
         # Publishers
-        self.semseg_pub = rospy.Publisher(f"output_{number}/semseg", Image, queue_size=1)
+        self.semseg_pub = rospy.Publisher(f"output_{number}/semseg/compressed", CompressedImage, queue_size=1)
         self.caminfo_pub = rospy.Publisher(f"output_{number}/camera_info", CameraInfo, queue_size=1)
 
         # Subscribers
@@ -127,16 +128,21 @@ class ImageProcessor:
             rospy.logdebug(f'Image of size {image.shape} processing took: {"%.3f" % (time() - t0)} sec')
 
         try:
-            res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
+            res_msg = CompressedImage()
             res_msg.header.stamp = img_msg.header.stamp
             res_msg.header.frame_id = img_msg.header.frame_id
+            res_msg.format = "jpeg"
+            res_msg.data = np.array(cv2.imencode('.jpg', result)[1]).tobytes()
             self.semseg_pub.publish(res_msg)
         except CvBridgeError as e:
             rospy.logerr(e)
         # publish camera info
-        self.caminfo_msg.header.stamp = img_msg.header.stamp
-        self.caminfo_msg.header.frame_id = img_msg.header.frame_id
-        self.caminfo_pub.publish(self.caminfo_msg)
+        if self.caminfo_msg:
+            self.caminfo_msg.header.stamp = img_msg.header.stamp
+            self.caminfo_msg.header.frame_id = img_msg.header.frame_id
+            self.caminfo_pub.publish(self.caminfo_msg)
+        else:
+            rospy.logwarn('Camera info synchronized with semseg predictions is not being published')
 
     def preprocessing(self, image):
         image = cv2.resize(image, self.input_size, interpolation=cv2.INTER_LINEAR)
@@ -154,7 +160,7 @@ class ImageProcessor:
         pred_arg = convert_label(pred_arg, True)
         result = convert_color(pred_arg, self.data_cfg["color_map"])
         result = cv2.resize(result, self.orig_size, interpolation=cv2.INTER_LINEAR)
-        return result
+        return np.asarray(result)[..., (2, 1, 0)]
 
     def _update_config(self, config_path: str):
         with open(config_path, 'r') as f:
