@@ -9,7 +9,7 @@ import numpy as np
 from hrnet.config import config
 import matplotlib.pyplot as plt
 from cv_bridge import CvBridge, CvBridgeError
-from sensor_msgs.msg import Image, CompressedImage
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from hrnet.core.function import convert_label, convert_color
 from hrnet import models
 from hrnet.utils.utils import draw_legend
@@ -26,7 +26,7 @@ PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/"
 DATASET_ROOT = os.path.join(pkg_path, "data/Rellis_3D/")
 
 
-class ImgProcessor:
+class ImageProcessor:
     """
     Class for image segmentations
 
@@ -56,18 +56,28 @@ class ImgProcessor:
             self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG_TRAVERSABILITY, 'r'))
         else:
             self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
-        # Publisher
-        self.res_pub = rospy.Publisher(f"output_{number}", Image, queue_size=1)
 
-        # Subscriber
+        # Publishers
+        self.semseg_pub = rospy.Publisher(f"output_{number}/semseg", Image, queue_size=1)
+        self.caminfo_pub = rospy.Publisher(f"output_{number}/camera_info", CameraInfo, queue_size=1)
+
+        # Subscribers
+        self.caminfo_msg = None
+        self.caminfo_sub = rospy.Subscriber(f"input_{number}/camera_info", CameraInfo, self.get_camera_info, queue_size=1)
         self.max_age = rospy.get_param('~max_age', 1.0)
         self.image_transport = image_transport
         message = CompressedImage if image_transport == 'compressed' else Image
-        input_img_topic = f"input_{number}"
-        self.subscriber = rospy.Subscriber(input_img_topic, message, self.callback_color, queue_size=1)
+        self.image_sub = rospy.Subscriber(f"input_{number}/rgb", message, self.callback_color, queue_size=1)
 
         # Info
         rospy.loginfo(f'Loaded CNN model number {number}')
+
+    def get_camera_info(self, msg):
+        """Store camera calibration for i-th camera."""
+        assert isinstance(msg, CameraInfo)
+        self.caminfo_msg = msg
+        rospy.loginfo('Camera (%s) unsubscribed.' % msg.header.frame_id)
+        self.caminfo_sub.unregister()
 
     def load_model(self):
         # Updates PATHS in model config file
@@ -118,10 +128,15 @@ class ImgProcessor:
 
         try:
             res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
-            res_msg.header.stamp, res_msg.header.frame_id = img_msg.header.stamp, img_msg.header.frame_id
-            self.res_pub.publish(res_msg)
+            res_msg.header.stamp = img_msg.header.stamp
+            res_msg.header.frame_id = img_msg.header.frame_id
+            self.semseg_pub.publish(res_msg)
         except CvBridgeError as e:
             rospy.logerr(e)
+        # publish camera info
+        self.caminfo_msg.header.stamp = img_msg.header.stamp
+        self.caminfo_msg.header.frame_id = img_msg.header.frame_id
+        self.caminfo_pub.publish(self.caminfo_msg)
 
     def preprocessing(self, image):
         image = cv2.resize(image, self.input_size, interpolation=cv2.INTER_LINEAR)
@@ -171,7 +186,7 @@ def main():
 
     # Create CNNs for image segmentation
     for i in range(num_cameras):
-        ImgProcessor(i, image_transport, traversability_labels)
+        ImageProcessor(i, image_transport, traversability_labels)
     rospy.spin()
 
 

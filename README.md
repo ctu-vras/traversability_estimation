@@ -59,15 +59,17 @@ Model: [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRN
 
 #### Topics:
 
-- `input_0, ... input_{num_cameras - 1}`
-- `output_0,... output_{num_cameras - 1}`
+- `input_0/rgb, ... input_{num_cameras - 1}/rgb`
+- `input_0/camera_info, ... input_{num_cameras - 1}/camera_info`
+- `output_0/semseg,... output_{num_cameras - 1}/semseg`
+- `output_0/camera_info,... output_{num_cameras - 1}/camera_info`
 
 #### Parameters:
 
 - `num_cameras [int]` - number of image topics for segmentation
 - `device [str]` - cpu/cuda
 - `legend [bool]` - if legend for segmentation is required
-- `compressed [bool]` - if input image topic is compressed
+- `image_transport [str]` - 'compressed' or 'raw' if input image topic is compressed
 
 ### Demos
 

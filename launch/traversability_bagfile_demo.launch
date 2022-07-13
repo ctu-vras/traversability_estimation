@@ -27,8 +27,10 @@
             legend: false
             max_age: 1.0
         </rosparam>
-        <remap from="input_0" to="$(arg image_topic)"/>
-        <remap from="output_0" to="/hrnet_inference/semantic_segmentation"/>
+        <remap from="input_0/rgb" to="$(arg image_topic)"/>
+        <remap from="input_0/camera_info" to="$(arg caminfo_topic)"/>
+        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
+        <remap from="output_0/camera_info" to="/hrnet_inference/camera_info"/>
     </node>
 
     <!-- Point cloud color -->
