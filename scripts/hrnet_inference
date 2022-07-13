@@ -181,7 +181,8 @@ def main():
 
     # Draw legend
     if legend:
-        data_cfg = yaml.safe_load(open(RELLIS_CONFIG_TRAVERSABILITY, 'r'))
+        f = RELLIS_CONFIG_TRAVERSABILITY if traversability_labels else RELLIS_CONFIG
+        data_cfg = yaml.safe_load(open(f, 'r'))
         draw_legend(data_cfg)
 
     # Create CNNs for image segmentation

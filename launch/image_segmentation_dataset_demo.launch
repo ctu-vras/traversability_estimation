@@ -9,7 +9,6 @@
     <include file="$(dirname)/robot_data.launch">
         <arg name="data_sequence" value="$(arg data_sequence)"/>
     </include>
-    <node pkg="topic_tools" type="relay" name="rgb_topic_relay" args="/robot_data/rgb/compressed /input_rgb_img" />
 
     <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
         <rosparam subst_value="true">
@@ -18,14 +17,16 @@
             image_transport: 'compressed'
             legend: true
             max_age: 1.0
+            traversability_labels: false
         </rosparam>
-        <remap from="input_0" to="/input_rgb_img"/>
-        <remap from="output_0" to="/robot_data/rgb_segmented"/>
+        <remap from="input_0/rgb" to="/robot_data/rgb/compressed"/>
+        <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
+        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
     </node>
 
     <group if="$(arg image_view)">
         <node name="image_view_semseg" pkg="image_view" type="image_view">
-            <remap from="image" to="/robot_data/rgb_segmented"/>
+            <remap from="image" to="/hrnet_inference/semantic_segmentation"/>
         </node>
     </group>
 

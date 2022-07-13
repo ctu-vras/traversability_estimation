@@ -4,7 +4,7 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
     <arg name="lidar_frame" default="ouster_lidar"/>
-    <arg name="run_semseg" default="false"/>
+    <arg name="run_semseg" default="true"/>
 
     <!-- RELLIS-3D data -->
     <node name="robot_data" pkg="traversability_estimation" type="robot_data">
