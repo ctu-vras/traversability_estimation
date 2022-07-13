@@ -78,7 +78,7 @@ class RobotData:
         self.caminfo_pub = rospy.Publisher('~camera_info', CameraInfo, queue_size=1)
         self.tf_pub = rospy.Publisher('/tf', TFMessage, queue_size=2, latch=True)
         self.rgb_pub = rospy.Publisher('~rgb/compressed', CompressedImage, queue_size=1)
-        self.semseg_pub = rospy.Publisher('~semseg/compressed', CompressedImage, queue_size=1)
+        self.semseg_pub = rospy.Publisher('~semantic_segmentation/compressed', CompressedImage, queue_size=1)
         self.time_stamp = rospy.Time.now()
 
         intrins_msg, tf_lidar2cam = self.get_camera_calib_msgs()
