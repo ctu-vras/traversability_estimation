@@ -29,14 +29,14 @@
         </rosparam>
         <remap from="input_0/rgb" to="/robot_data/rgb/compressed"/>
         <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
-        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
+        <remap from="output_0/semseg/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
         <remap from="output_0/camera_info" to="/hrnet_inference/camera_info"/>
     </node>
 
     <!-- Add color to a point cloud from a camera image -->
     <node name="point_cloud_color" pkg="nodelet" type="nodelet"
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
-<!--        <param name="image_transport"        value="compressed"/>-->
+        <param name="image_transport"        value="compressed"/>
         <param name="fixed_frame"            value="$(arg lidar_frame)"/>
         <param name="num_cameras"            value="1"/>
         <param name="max_image_age"          value="5.0"/>
