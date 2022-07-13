@@ -14,11 +14,10 @@ from hrnet.core.function import convert_label, convert_color
 from hrnet import models
 from hrnet.utils.utils import draw_legend
 from PIL import Image as pil
-from time import time
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
-TRAVERSABILITY_CONFIG = os.path.join(pkg_path, "config/traversability.yaml")
+RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_traversability.yaml")
 MODEL_CONFIG = os.path.join(pkg_path, "config/hrnet_rellis/"
                                       "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484.yaml")
 PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/"
@@ -39,21 +38,21 @@ class ImgProcessor:
         output_{number} - output segmented image topic
     """
 
-    def __init__(self, number: int, compressed: bool):
+    def __init__(self, number: int = 1, compressed: bool = True, traversability_labels: bool = True):
         self.bridge = CvBridge()
         self.model = self.load_model()
         self.model.eval().cuda()
 
         # Constants
-        self.orig_size = None
-        self.input_size = (1024, 512)
+        self.input_size = (512, 1024)
         self.mean = [0.485, 0.456, 0.406]
         self.std = [0.229, 0.224, 0.225]
 
         # Draw legend to segmentation
-        self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
-        self.trav_cfg = yaml.safe_load(open(TRAVERSABILITY_CONFIG, 'r'))
-
+        if traversability_labels:
+            self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG_TRAVERSABILITY, 'r'))
+        else:
+            self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
         # Publisher
         self.res_pub = rospy.Publisher(f"output_{number}", Image, queue_size=1)
 
@@ -61,9 +60,7 @@ class ImgProcessor:
         self.max_age = rospy.get_param('~max_age', 1.0)
         self.compressed = compressed
         message = CompressedImage if compressed else Image
-        # input_img_topic = rospy.get_param('~input_img_topic', f"input_{number}")
-        input_img_topic = rospy.get_param('~input_img_topic', "/robot_data/rgb/compressed")
-        self.subscriber = rospy.Subscriber(input_img_topic, message, self.callback_color, queue_size=1)
+        self.subscriber = rospy.Subscriber(f"input_{number}", message, self.callback_color, queue_size=1)
 
         # Info
         rospy.loginfo(f'Loaded CNN model number {number}')
@@ -94,7 +91,6 @@ class ImgProcessor:
             rospy.logwarn('Image message is to old for segmentation')
             return
 
-        t0 = time()
         try:
             if self.compressed:
                 image = self.bridge.compressed_imgmsg_to_cv2(img_msg, "bgr8")
@@ -102,17 +98,11 @@ class ImgProcessor:
                 image = self.bridge.imgmsg_to_cv2(img_msg, "bgr8")
         except CvBridgeError as e:
             rospy.logerr(e)
-            return
-
-        if self.orig_size is None:
-            self.orig_size = (image.shape[1], image.shape[0])
-            rospy.loginfo(f'Original image size: {self.orig_size}')
 
         image = self.preprocessing(image)
         with torch.no_grad():
             pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
             result = self.postprocessing(pred)
-            rospy.loginfo(f'Image of size {image.shape} processing took: {"%.3f" % (time() - t0)} sec')
 
         try:
             res_msg = self.bridge.cv2_to_imgmsg(result, "rgb8")
@@ -122,7 +112,8 @@ class ImgProcessor:
             rospy.logerr(e)
 
     def preprocessing(self, image):
-        image = cv2.resize(image, self.input_size, interpolation=cv2.INTER_LINEAR)
+        new_h, new_w = self.input_size
+        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
         image = image.astype(np.float32)[:, :, ::-1]
         image = image / 255.0
         image -= self.mean
@@ -134,9 +125,8 @@ class ImgProcessor:
         pred = pred[config.TEST.OUTPUT_INDEX]
         pred_np = pred.squeeze(0).cpu().numpy()
         pred_arg = np.argmax(pred_np, axis=0).astype(np.uint8)
-        pred_arg = convert_label(pred_arg, inverse=True)
+        pred_arg = convert_label(pred_arg, True)
         result = convert_color(pred_arg, self.data_cfg["color_map"])
-        result = cv2.resize(result, self.orig_size, interpolation=cv2.INTER_LINEAR)
         return result
 
     def _update_config(self, config_path: str):
@@ -155,6 +145,7 @@ def main():
     compressed = rospy.get_param("~compressed", True)
     num_cameras = rospy.get_param("~num_cameras", 1)
     legend = rospy.get_param("~legend", False)
+    traversability_labels = rospy.get_param('~traversability_labels', True)
 
     # Info
     rospy.loginfo(f'Legend required: {legend}')
@@ -163,12 +154,12 @@ def main():
 
     # Draw legend
     if legend:
-        data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
+        data_cfg = yaml.safe_load(open(RELLIS_CONFIG_TRAVERSABILITY, 'r'))
         draw_legend(data_cfg)
 
     # Create CNNs for image segmentation
     for i in range(num_cameras):
-        ImgProcessor(i, compressed)
+        ImgProcessor(i, compressed, traversability_labels)
     rospy.spin()
 
 
