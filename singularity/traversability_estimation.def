@@ -25,6 +25,7 @@ From: ros:noetic-perception
         python3-pip
         python3-catkin-tools
         ros-noetic-ros-numpy
+        ros-noetic-jsk-rviz-plugins
         ros-noetic-rviz"
 
     apt update
@@ -32,8 +33,5 @@ From: ros:noetic-perception
 
     # Install python packages
     pip install -r ${SINGULARITY_ROOTFS}/requirements.txt
-
-    # Pytorch
-    pip install torch==1.10.0+cu113 torchvision==0.11.1+cu113 torchaudio==0.10.0 -f https://download.pytorch.org/whl/torch_stable.html
 
     ln -s /usr/bin/python3 /usr/bin/python
