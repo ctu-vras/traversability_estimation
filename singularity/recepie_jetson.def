@@ -1,0 +1,37 @@
+Bootstrap: docker
+From: nvcr.io/nvidia/l4t-pytorch:r32.7.1-pth1.10-py3
+
+%files
+    requirements.txt
+
+%post
+    export XDG_CACHE_HOME=/tmp/singularity-cache # pip cache
+
+    # Install Apt packages
+    packages="
+        gcc
+        g++
+        bridge-utils
+        build-essential
+        htop
+        net-tools
+        screen
+        sshpass
+        tmux
+        vim
+        wget
+        curl
+        git
+        python3-pip
+        python3-catkin-tools
+        ros-noetic-ros-numpy
+        ros-noetic-jsk-rviz-plugins
+        ros-noetic-rviz"
+
+    apt update
+    #apt install -y ${packages}
+
+    # Install python packages
+    #pip install -r ${SINGULARITY_ROOTFS}/requirements.txt
+
+    #ln -s /usr/bin/python3 /usr/bin/python
