@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+from __future__ import absolute_import, division, print_function
 import os
 import cv2
 import yaml
@@ -40,8 +40,10 @@ class ImageProcessor:
         output_{number} - output segmented image topic
     """
 
-    def __init__(self, number: int = 1, image_transport: str = 'compressed', traversability_labels: bool = True):
+    def __init__(self, number=1, image_transport='compressed', traversability_labels=True):
+        assert isinstance(number, int)
         assert image_transport == 'compressed' or image_transport == 'raw'
+        assert isinstance(traversability_labels, bool)
         self.bridge = CvBridge()
         self.model = self.load_model()
         self.model.eval().cuda()
@@ -59,19 +61,19 @@ class ImageProcessor:
             self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
 
         # Publishers
-        self.semseg_pub = rospy.Publisher(f"output_{number}/semseg/compressed", CompressedImage, queue_size=1)
-        self.caminfo_pub = rospy.Publisher(f"output_{number}/camera_info", CameraInfo, queue_size=1)
+        self.semseg_pub = rospy.Publisher("output_%i/semseg/compressed" % number, CompressedImage, queue_size=1)
+        self.caminfo_pub = rospy.Publisher("output_%i/camera_info" % number, CameraInfo, queue_size=1)
 
         # Subscribers
         self.caminfo_msg = None
-        self.caminfo_sub = rospy.Subscriber(f"input_{number}/camera_info", CameraInfo, self.get_camera_info, queue_size=1)
+        self.caminfo_sub = rospy.Subscriber("input_%i/camera_info" % number, CameraInfo, self.get_camera_info, queue_size=1)
         self.max_age = rospy.get_param('~max_age', 1.0)
         self.image_transport = image_transport
         message = CompressedImage if image_transport == 'compressed' else Image
-        self.image_sub = rospy.Subscriber(f"input_{number}/rgb", message, self.callback_color, queue_size=1)
+        self.image_sub = rospy.Subscriber("input_%i/rgb" % number, message, self.callback_color, queue_size=1)
 
         # Info
-        rospy.loginfo(f'Loaded CNN model number {number}')
+        rospy.loginfo('Loaded CNN model number %i' % number)
 
     def get_camera_info(self, msg):
         """Store camera calibration for i-th camera."""
@@ -119,13 +121,13 @@ class ImageProcessor:
 
         if self.orig_size is None:
             self.orig_size = (image.shape[1], image.shape[0])
-            rospy.loginfo(f'Original image size: {self.orig_size}')
+            rospy.loginfo('Original image size: %s' % self.orig_size)
 
         image = self.preprocessing(image)
         with torch.no_grad():
             pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
             result = self.postprocessing(pred)
-            rospy.logdebug(f'Image of size {image.shape} processing took: {"%.3f" % (time() - t0)} sec')
+            rospy.logdebug('Image of size %s processing took: %.3f sec' % (image.shape, time() - t0))
 
         try:
             res_msg = CompressedImage()
@@ -162,7 +164,8 @@ class ImageProcessor:
         result = cv2.resize(result, self.orig_size, interpolation=cv2.INTER_LINEAR)
         return np.asarray(result)[..., (2, 1, 0)]
 
-    def _update_config(self, config_path: str):
+    def _update_config(self, config_path):
+        assert isinstance(config_path, str)
         with open(config_path, 'r') as f:
             cfg = yaml.safe_load(f)
         cfg['DATASET']['ROOT'] = DATASET_ROOT
@@ -181,9 +184,9 @@ def main():
     traversability_labels = rospy.get_param('~traversability_labels', True)
 
     # Info
-    rospy.loginfo(f'Legend required: {legend}')
-    rospy.loginfo(f'Image transport: {image_transport}')
-    rospy.loginfo(f'Number of cameras for segmentation: {num_cameras}')
+    rospy.loginfo('Legend required: %s' % legend)
+    rospy.loginfo('Image transport: %s' % image_transport)
+    rospy.loginfo('Number of cameras for segmentation: %i' % num_cameras)
 
     # Draw legend
     if legend:
