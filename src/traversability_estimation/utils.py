@@ -1,6 +1,5 @@
 import numpy as np
 from numpy.lib.recfunctions import unstructured_to_structured
-import open3d as o3d
 import cv2
 from scipy.spatial.transform import Rotation
 import yaml
@@ -24,6 +23,7 @@ def timing(f):
 
 
 def read_points(path, dtype=np.float32):
+    import open3d as o3d
     pcd = o3d.io.read_point_cloud(path)
     points = np.asarray(pcd.points)
     assert points.shape[1] == 3
