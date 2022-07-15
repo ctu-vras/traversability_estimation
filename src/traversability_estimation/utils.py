@@ -1,7 +1,6 @@
 import numpy as np
 from numpy.lib.recfunctions import unstructured_to_structured
 import cv2
-from scipy.spatial.transform import Rotation
 import yaml
 from PIL import Image
 from PIL import ImageFile
@@ -66,6 +65,7 @@ def read_extrinsics(path, key='os1_cloud_node-pylon_camera_node'):
     """
     Transformation between camera and lidar
     """
+    from scipy.spatial.transform import Rotation
     with open(path, 'r') as f:
         data = yaml.load(f, Loader=yaml.Loader)
     q = data[key]['q']
