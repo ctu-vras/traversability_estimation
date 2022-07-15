@@ -40,13 +40,14 @@ class ImageProcessor:
         output_{number} - output segmented image topic
     """
 
-    def __init__(self, number=1, image_transport='compressed', traversability_labels=True):
+    def __init__(self, number=1, image_transport='compressed', traversability_labels=True, device='cpu'):
         assert isinstance(number, int)
         assert image_transport == 'compressed' or image_transport == 'raw'
         assert isinstance(traversability_labels, bool)
+        self.device = device
         self.bridge = CvBridge()
         self.model = self.load_model()
-        self.model.eval().cuda()
+        self.model.eval().to(device=self.device)
 
         # Constants
         self.orig_size = None
@@ -125,7 +126,7 @@ class ImageProcessor:
 
         image = self.preprocessing(image)
         with torch.no_grad():
-            pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
+            pred = self.model(torch.from_numpy(image).unsqueeze(0).to(self.device))
             result = self.postprocessing(pred)
             rospy.logdebug('Image of size %s processing took: %.3f sec' % (image.shape, time() - t0))
 
@@ -178,6 +179,7 @@ def main():
     rospy.init_node('hrnet_inference', log_level=rospy.DEBUG)
 
     # Load parameters
+    device = rospy.get_param("~device", 'cpu')
     image_transport = rospy.get_param("~image_transport", 'compressed')
     num_cameras = rospy.get_param("~num_cameras", 1)
     legend = rospy.get_param("~legend", False)
@@ -196,7 +198,7 @@ def main():
 
     # Create CNNs for image segmentation
     for i in range(num_cameras):
-        ImageProcessor(i, image_transport, traversability_labels)
+        ImageProcessor(i, image_transport, traversability_labels, device=device)
     rospy.spin()
 
 
