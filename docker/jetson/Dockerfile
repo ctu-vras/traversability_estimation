@@ -39,6 +39,6 @@ RUN pip3 install \
     configparser==5.2.0 \
     psutil==5.8.0
 
-COPY ./install_ros_noetic.sh /tmp/install_ros.sh
+COPY ./install_ros_melodic.sh /tmp/install_ros.sh
 RUN /tmp/install_ros.sh
 

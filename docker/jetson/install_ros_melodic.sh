@@ -141,5 +141,5 @@ sudo apt-get install python-rosinstall python-rosinstall-generator python-wstool
 tput setaf 2
 echo "Installation complete!"
 echo "Please setup your Catkin Workspace"
-tput sgr0
+#tput sgr0
 
