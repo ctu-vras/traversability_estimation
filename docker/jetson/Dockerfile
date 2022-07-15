@@ -37,7 +37,9 @@ RUN pip3 install \
     #open3d==0.11.2 \
     gnupg==2.3.1 \
     configparser==5.2.0 \
-    psutil==5.8.0
+    psutil==5.8.0 \
+    rospkg \
+    empy
 
 COPY ./install_ros_melodic.sh /tmp/install_ros.sh
 RUN /tmp/install_ros.sh
