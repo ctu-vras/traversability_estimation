@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
+
+    <!-- Semantic segmantation of images -->
+    <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            num_cameras: 1
+            image_transport: compressed
+            legend: false
+            max_age: 1.0
+            traversability_labels: false
+        </rosparam>
+        <remap from="input_0/rgb" to="/viz/camera_4/image/compressed"/>
+        <remap from="input_0/camera_info" to="/viz/camera_4/camera_info"/>
+        <remap from="output_0/semseg" to="/viz/camera_4/traversability"/>
+        <remap from="output_0/semseg/compressed" to="/viz/camera_4/traversability/compressed"/>
+        <remap from="output_0/camera_info" to="/viz/camera_4/traversability/camera_info"/>
+    </node>
+
+    <!-- Point cloud color -->
+    <node name="point_cloud_color" pkg="nodelet" type="nodelet"
+        args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
+        <rosparam subst_value="true">
+            image_transport: compressed
+            num_cameras: 1
+            max_image_age: 5.0
+            use_first_valid: true
+            image_queue_size: 2
+            cloud_queue_size: 2
+            wait_for_transform: 1.0
+            default_color: "0x00000000"
+        </rosparam>
+        <remap from="camera_0/image" to="/viz/camera_4/traversability"/>
+        <remap from="camera_0/camera_info" to="/viz/camera_4/camera_info"/>
+<!--
+        <remap from="camera_0/camera_info" to="/viz/camera_4/traversability/camera_info"/>
+-->
+        <remap from="cloud_in" to="/points_filtered_jetson"/>
+        <remap from="cloud_out" to="/points_filtered_jetson_traversability"/>
+    </node>
+</launch>
