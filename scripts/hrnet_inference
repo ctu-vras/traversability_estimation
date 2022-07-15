@@ -122,7 +122,7 @@ class ImageProcessor:
 
         if self.orig_size is None:
             self.orig_size = (image.shape[1], image.shape[0])
-            rospy.loginfo('Original image size: %s' % self.orig_size)
+            rospy.loginfo('Original image size: %s', self.orig_size)
 
         image = self.preprocessing(image)
         with torch.no_grad():
