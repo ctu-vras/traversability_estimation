@@ -17,17 +17,26 @@
         <remap from="input_0/image" to="/viz/camera_0/image"/>
         <remap from="input_0/image/compressed" to="/viz/camera_0/image/compressed"/>
         <remap from="input_0/camera_info" to="/viz/camera_0/camera_info"/>
+        <remap from="output_0/semseg" to="/viz/camera_0/traversability"/>
         <remap from="output_0/semseg/compressed" to="/viz/camera_0/traversability/compressed"/>
+        <remap from="output_0/semseg_color" to="/viz/camera_0/traversability_color"/>
+        <remap from="output_0/semseg_color/compressed" to="/viz/camera_0/traversability_color/compressed"/>
 
         <remap from="input_1/image" to="/viz/camera_3/image"/>
         <remap from="input_1/image/compressed" to="/viz/camera_3/image/compressed"/>
         <remap from="input_1/camera_info" to="/viz/camera_3/camera_info"/>
+        <remap from="output_1/semseg" to="/viz/camera_3/traversability"/>
         <remap from="output_1/semseg/compressed" to="/viz/camera_3/traversability/compressed"/>
+        <remap from="output_1/semseg_color" to="/viz/camera_3/traversability_color"/>
+        <remap from="output_1/semseg_color/compressed" to="/viz/camera_3/traversability_color/compressed"/>
 
         <remap from="input_2/image" to="/viz/camera_4/image"/>
         <remap from="input_2/image/compressed" to="/viz/camera_4/image/compressed"/>
         <remap from="input_2/camera_info" to="/viz/camera_4/camera_info"/>
+        <remap from="output_2/semseg" to="/viz/camera_4/traversability"/>
         <remap from="output_2/semseg/compressed" to="/viz/camera_4/traversability/compressed"/>
+        <remap from="output_2/semseg_color" to="/viz/camera_4/traversability_color"/>
+        <remap from="output_2/semseg_color/compressed" to="/viz/camera_4/traversability_color/compressed"/>
     </node>
 
     <!-- Point cloud color -->
@@ -35,12 +44,10 @@
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
         <rosparam subst_value="true">
             fixed_frame: odom
-            field_name: rgb
-            field_type: 7
-            <!--
-            field_name: seg
+<!--            field_name: rgb-->
+<!--            field_type: 7-->
+            field_name: traversability
             field_type: 2
-            -->
             num_cameras: 3
             image_transport: compressed
             max_image_age: 15.0

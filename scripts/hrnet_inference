@@ -82,19 +82,25 @@ class ImageProcessor(object):
         self.images = self.num_cameras * [None]
         self.camera_infos = self.num_cameras * [None]
         # Publishers
+        self.image_color_pubs = self.num_cameras * [None]
+        self.compressed_color_pubs = self.num_cameras * [None]
         self.image_pubs = self.num_cameras * [None]
-        self.compressed_image_pubs = self.num_cameras * [None]
+        self.compressed_pubs = self.num_cameras * [None]
         self.camera_info_pubs = self.num_cameras * [None]
         # Subscribers
         self.image_subs = self.num_cameras * [None]
-        self.compressed_image_subs = self.num_cameras * [None]
+        self.compressed_subs = self.num_cameras * [None]
         self.camera_info_subs = self.num_cameras * [None]
         for i in range(self.num_cameras):
             # Setup publishers.
+            pub = rospy.Publisher('output_%i/semseg_color' % i, Image, queue_size=1)
+            self.image_color_pubs[i] = pub
+            pub = rospy.Publisher('output_%i/semseg_color/compressed' % i, CompressedImage, queue_size=1)
+            self.compressed_color_pubs[i] = pub
             pub = rospy.Publisher('output_%i/semseg' % i, Image, queue_size=1)
             self.image_pubs[i] = pub
             pub = rospy.Publisher('output_%i/semseg/compressed' % i, CompressedImage, queue_size=1)
-            self.compressed_image_pubs[i] = pub
+            self.compressed_pubs[i] = pub
             pub = rospy.Publisher('output_%i/camera_info' % i, CameraInfo, queue_size=1)
             self.camera_info_pubs[i] = pub
             # Setup subscribers.
@@ -205,15 +211,11 @@ class ImageProcessor(object):
 
     def postprocessing(self, pred, size):
         pred = pred[config.TEST.OUTPUT_INDEX]
-        pred_np = pred.squeeze(0).cpu().numpy()
-        pred_arg = np.argmax(pred_np, axis=0).astype(np.uint8)
-        pred_arg = convert_label(pred_arg, True)
-        pred_arg = cv.resize(pred_arg, size, interpolation=cv.INTER_NEAREST)
-        result = convert_color(pred_arg, self.data_cfg["color_map"])
-        # result = cv.resize(result, size, interpolation=cv.INTER_LINEAR)
-        # result = np.asarray(result)[..., (2, 1, 0)]
-        result = result[..., ::-1]  # RGB to BGR
-        return result
+        pred = pred.squeeze(0).cpu().numpy()
+        pred = np.argmax(pred, axis=0).astype(np.uint8)
+        pred = convert_label(pred, True)
+        pred = cv.resize(pred, size, interpolation=cv.INTER_NEAREST)
+        return pred
 
     def _update_config(self, config_path):
         assert isinstance(config_path, str)
@@ -245,16 +247,27 @@ class ImageProcessor(object):
                 raise
 
             pred = self.process(arr)
-
-            res_msg = CompressedImage()
-            res_msg.header = image.header
-            res_msg.format = "jpeg"
-            res_msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
-            self.compressed_image_pubs[i].publish(res_msg)
-            self.camera_info_pubs[i].publish(camera_info)
-
             rospy.loginfo('Image %i (%s) processed (%.3f s).',
                           i, image.header.frame_id, (rospy.Time.now() - t0).to_sec())
+
+            if self.compressed_pubs[i].get_num_connections():
+                msg = CompressedImage()
+                msg.header = image.header
+                # msg.format = "png"
+                # msg.data = np.array(cv.imencode('.png', pred)[1]).tobytes()
+                msg.format = "jpeg"
+                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                self.compressed_pubs[i].publish(msg)
+            self.camera_info_pubs[i].publish(camera_info)
+
+            if self.compressed_color_pubs[i].get_num_connections():
+                pred = convert_color(pred, self.data_cfg["color_map"])
+                pred = pred[..., ::-1]  # RGB to BGR
+                msg = CompressedImage()
+                msg.header = image.header
+                msg.format = "jpeg"
+                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                self.compressed_color_pubs[i].publish(msg)
 
 
 def main():
