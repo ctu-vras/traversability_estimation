@@ -13,7 +13,9 @@
             max_age: 1.0
             input_scale: 0.25
             traversability_labels: false
+            label_config: $(dirname)/../config/obstacles.yaml
         </rosparam>
+        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
         <remap from="input_0/image" to="/viz/camera_0/image"/>
         <remap from="input_0/image/compressed" to="/viz/camera_0/image/compressed"/>
         <remap from="input_0/camera_info" to="/viz/camera_0/camera_info"/>

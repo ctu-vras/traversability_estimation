@@ -1,0 +1,7 @@
+name: "obstacles"
+labels:
+  0: "traversable"
+  1: "obstacle"
+color_map: # bgr
+  0: [0, 255, 0]
+  1: [255, 0, 0]

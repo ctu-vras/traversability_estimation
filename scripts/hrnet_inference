@@ -45,6 +45,21 @@ class ImageProcessor(object):
         self.num_cameras = rospy.get_param('~num_cameras', 1.0)
         self.image_transport = rospy.get_param('~image_transport', 'compressed')
         self.traversability_labels = rospy.get_param('~traversability_labels', True)
+        label_map = rospy.get_param('~label_map', None)
+        print(label_map)
+        assert label_map is None or isinstance(label_map, (dict, list))
+        if isinstance(label_map, dict):
+            label_map = dict((int(k), int(v)) for k, v in label_map.items())
+            n = max(label_map) + 1
+            self.label_map = np.zeros((n,), dtype=np.uint8)
+            for k, v in label_map.items():
+                self.label_map[k] = v
+        elif isinstance(label_map, list):
+            self.label_map = np.asarray(label_map)
+        else:
+            self.label_map = None
+        if self.label_map is not None:
+            rospy.loginfo('Label map: %s', self.label_map)
         self.device = rospy.get_param('~device', 'cpu')
         self.dtype = rospy.get_param('~dtype', 'float32')
         assert self.dtype in ('float', 'half')
@@ -215,6 +230,8 @@ class ImageProcessor(object):
         pred = np.argmax(pred, axis=0).astype(np.uint8)
         pred = convert_label(pred, True)
         pred = cv.resize(pred, size, interpolation=cv.INTER_NEAREST)
+        if self.label_map is not None:
+            pred = self.label_map[pred]
         return pred
 
     def _update_config(self, config_path):
@@ -275,10 +292,12 @@ def main():
 
     # Draw legend
     legend = rospy.get_param("~legend", False)
+    label_config = rospy.get_param('~label_config', None)
     traversability_labels = rospy.get_param('~traversability_labels', True)
     if legend:
-        f = RELLIS_CONFIG_TRAVERSABILITY if traversability_labels else RELLIS_CONFIG
-        data_cfg = yaml.safe_load(open(f, 'r'))
+        if not label_config:
+            label_config = RELLIS_CONFIG_TRAVERSABILITY if traversability_labels else RELLIS_CONFIG
+        data_cfg = yaml.safe_load(open(label_config, 'r'))
         draw_legend(data_cfg)
 
     node = ImageProcessor()
