@@ -171,12 +171,14 @@ class DatasetSemSeg(Dataset):
     """Rellis-3D Image Segmentation Dataset. Read images, apply augmentation and preprocessing transformations.
     """
 
-    CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
-    CLASS_VALUES = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 18, 19, 23, 27, 31, 33, 34]
+    CLASS_VALUES = [1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 18, 19, 23, 27, 31, 33, 34]
 
-    def __init__(self, seq=None, path=None, classes=list(), augmentation=None, preprocessing=None):
+    def __init__(self, seq=None, path=None, classes=None, augmentation=None, preprocessing=None):
         super(DatasetSemSeg, self).__init__(seq=seq, path=path)
+        if not classes:
+            classes = self.CLASSES
         # convert str names to class values on masks
         self.class_values = [self.CLASS_VALUES[self.CLASSES.index(cls.lower())] for cls in classes]
 
@@ -239,6 +241,7 @@ def semseg_test():
 
 def lidar_map_demo():
     from tqdm import tqdm
+    import open3d as o3d
 
     name = np.random.choice(seq_names)
     ds = Dataset(seq='rellis_3d/%s' % name)
