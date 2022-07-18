@@ -80,14 +80,20 @@ def get_preprocessing(preprocessing_fn):
     return albu.Compose(_transform)
 
 
-seq = '00001'
-size = (352, 640)  # src_size // 4
-
+# size = (352, 640)  # src_size // 4
+size = (704, 1280)  # src_size // 2
+BATCH_SIZE = 8
+n_epochs = 100
+LR = 0.0001
 # Create model and train
 ENCODER = 'se_resnext50_32x4d'
 ENCODER_WEIGHTS = 'imagenet'
-CLASSES = ['dirt', 'grass']
-ACTIVATION = 'sigmoid' if len(CLASSES) == 1 else 'softmax2d'  # could be None for logits or 'softmax2d' for multiclass segmentation
+CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water',
+           'sky', 'vehicle', 'object', 'asphalt', 'building',
+           'log', 'person', 'fence', 'bush', 'concrete',
+           'barrier', 'puddle', 'mud', 'rubble']
+# could be None for logits or 'softmax2d' for multiclass segmentation
+ACTIVATION = 'sigmoid' if len(CLASSES) == 1 else 'softmax2d'
 DEVICE = 'cuda'
 
 # create segmentation model with pretrained encoder
@@ -110,7 +116,7 @@ valid_dataset = Dataset(augmentation=get_validation_augmentation(),
                         classes=CLASSES,
                         split='val')
 
-train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=12)
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=12)
 valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
 
 # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
@@ -121,7 +127,7 @@ metrics = [
 ]
 
 optimizer = torch.optim.Adam([ 
-    dict(params=model.parameters(), lr=0.0001),
+    dict(params=model.parameters(), lr=LR),
 ])
 
 # create epoch runners 
@@ -145,7 +151,6 @@ valid_epoch = smp.utils.train.ValidEpoch(
 
 # train model
 max_score = 0
-n_epochs = 100
 for i in range(0, n_epochs):
     print('\nEpoch: {}'.format(i))
     train_logs = train_epoch.run(train_loader)
@@ -154,9 +159,9 @@ for i in range(0, n_epochs):
     # do something (save model, change lr, etc.)
     if max_score < valid_logs['iou_score']:
         max_score = valid_logs['iou_score']
-        torch.save(model, './best_model.pth')
+        torch.save(model, './%s_%dx%d_lr%f.pth' % (ENCODER, size[0], size[1], LR))
         print('Model saved!')
         
     if i == 25:
-        optimizer.param_groups[0]['lr'] = 1e-5
+        optimizer.param_groups[0]['lr'] = LR / 10.0
         print('Decrease decoder learning rate to 1e-5!')

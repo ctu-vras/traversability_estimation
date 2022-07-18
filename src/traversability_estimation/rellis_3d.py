@@ -168,9 +168,9 @@ class DatasetSemSeg(BaseDataset):
     """Rellis-3D Image Segmentation Dataset. Read images, apply augmentation and preprocessing transformations.
     """
 
-    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+    CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
-    CLASS_VALUES = [1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 18, 19, 23, 27, 31, 33, 34]
+    CLASS_VALUES = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 18, 19, 23, 27, 31, 33, 34]
 
     def __init__(self, path=None, classes=None, augmentation=None, preprocessing=None, split='train'):
         assert split in ['test', 'train', 'val']
