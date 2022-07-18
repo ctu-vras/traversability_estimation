@@ -66,7 +66,7 @@ def get_preprocessing(preprocessing_fn):
     """Construct preprocessing transform
     
     Args:
-        preprocessing_fn (callbale): data normalization function 
+        preprocessing_fn (callback): data normalization function
             (can be specific for each pretrained neural network)
     Return:
         transform: albumentations.Compose
@@ -100,15 +100,15 @@ model = smp.FPN(
 
 preprocessing_fn = smp.encoders.get_preprocessing_fn(ENCODER, ENCODER_WEIGHTS)
 
-train_dataset = Dataset(seq='rellis_3d/%s' % seq,
-                        augmentation=get_training_augmentation(),
+train_dataset = Dataset(augmentation=get_training_augmentation(),
                         preprocessing=get_preprocessing(preprocessing_fn),
-                        classes=CLASSES)
+                        classes=CLASSES,
+                        split='train')
 
-valid_dataset = Dataset(seq='rellis_3d/%s' % seq,
-                        augmentation=get_validation_augmentation(),
+valid_dataset = Dataset(augmentation=get_validation_augmentation(),
                         preprocessing=get_preprocessing(preprocessing_fn),
-                        classes=CLASSES)
+                        classes=CLASSES,
+                        split='val')
 
 train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=12)
 valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
@@ -145,7 +145,7 @@ valid_epoch = smp.utils.train.ValidEpoch(
 
 # train model
 max_score = 0
-n_epochs = 2
+n_epochs = 100
 for i in range(0, n_epochs):
     print('\nEpoch: {}'.format(i))
     train_logs = train_epoch.run(train_loader)

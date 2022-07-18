@@ -3,7 +3,7 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
-from traversability_estimation.rellis_3d import Dataset, seq_names
+from traversability_estimation.rellis_3d import Sequence, seq_names
 from traversability_estimation.utils import filter_camera_points, normalize, timing
 # ROS
 import rospy
@@ -63,7 +63,7 @@ class RobotData:
         self.path = Path()
         self.path.header.frame_id = self.origin_frame
         self.map_step = rospy.get_param('~map_step', 10)
-        self.ds = Dataset(seq=sequence)
+        self.ds = Sequence(seq=sequence)
         self.delay_start = rospy.get_param('~delay_start', 1.0)
         self.period = rospy.get_param('~period', 1.0)
         self.index = 0

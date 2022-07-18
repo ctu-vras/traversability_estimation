@@ -3,9 +3,7 @@ from numpy.lib.recfunctions import unstructured_to_structured
 import cv2
 from scipy.spatial.transform import Rotation
 import yaml
-from PIL import Image
-from PIL import ImageFile
-
+from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
@@ -45,7 +43,7 @@ def read_poses(path, zero_origin=True):
     return poses
 
 
-def read_image(path):
+def read_rgb(path):
     img = Image.open(path)
     img = np.asarray(img, dtype=np.uint8)
     return img

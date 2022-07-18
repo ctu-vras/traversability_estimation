@@ -1,7 +1,6 @@
 import os
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
-import matplotlib.pyplot as plt
 from .utils import *
 from copy import copy
 from torch.utils.data import Dataset as BaseDataset
@@ -9,7 +8,7 @@ from torch.utils.data import Dataset as BaseDataset
 __all__ = [
     'data_dir',
     'seq_names',
-    'Dataset',
+    'Sequence',
 ]
 
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
@@ -26,8 +25,8 @@ seq_names = [
 # seq_names = ['%05d' % i for i in range(5)]
 
 
-class Dataset(BaseDataset):
-    def __init__(self, seq=None, path=None, poses_file='poses.txt', poses_path=None):
+class Sequence(BaseDataset):
+    def __init__(self, seq=None, path=None, poses_file='poses.txt', poses_path=None, split=None):
         """Rellis-3D dataset: https://unmannedlab.github.io/research/RELLIS-3D.
         
         Rellis_3D
@@ -74,7 +73,6 @@ class Dataset(BaseDataset):
             'img_width': 1920,
             'img_height': 1200,
         }
-
         if self.poses_path or self.path:
             self.poses = read_poses(self.cloud_poses_path())
             self.ids_lid, self.ts_lid = self.get_ids(sensor='lidar')
@@ -99,7 +97,6 @@ class Dataset(BaseDataset):
         ts = [float('%.3f' % (float(id.split('-')[1].split('_')[0]) + float(id.split('-')[1].split('_')[1]) / 1000.0))
               for id in ids]
         ts = np.sort(ts).tolist()
-        ids = np.sort(ids).tolist()
         return ids, ts
 
     def local_cloud_path(self, id):
@@ -157,7 +154,7 @@ class Dataset(BaseDataset):
         t = float(id.split('-')[1].split('_')[0]) + float(id.split('-')[1].split('_')[1]) / 1000.0
         i = np.searchsorted(self.ts_rgb, t)
         i = np.clip(i, 0, len(self.ids_rgb) - 1)
-        return read_image(self.image_path(self.ids_rgb[i]))
+        return read_rgb(self.image_path(self.ids_rgb[i]))
 
     def camera_semseg(self, id):
         assert id in self.ids  # these are lidar ids
@@ -167,7 +164,7 @@ class Dataset(BaseDataset):
         return read_semseg(self.semseg_path(self.ids_semseg[i]))
 
 
-class DatasetSemSeg(Dataset):
+class DatasetSemSeg(BaseDataset):
     """Rellis-3D Image Segmentation Dataset. Read images, apply augmentation and preprocessing transformations.
     """
 
@@ -175,63 +172,59 @@ class DatasetSemSeg(Dataset):
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
     CLASS_VALUES = [1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 18, 19, 23, 27, 31, 33, 34]
 
-    def __init__(self, seq=None, path=None, classes=None, augmentation=None, preprocessing=None):
-        super(DatasetSemSeg, self).__init__(seq=seq, path=path)
+    def __init__(self, path=None, classes=None, augmentation=None, preprocessing=None, split='train'):
+        assert split in ['test', 'train', 'val']
+        if path is None:
+            path = join(data_dir, 'Rellis_3D')
+        assert os.path.exists(path)
+        self.path = path
         if not classes:
             classes = self.CLASSES
         # convert str names to class values on masks
         self.class_values = [self.CLASS_VALUES[self.CLASSES.index(cls.lower())] for cls in classes]
+        self.split = split
+
+        images_paths = np.loadtxt(os.path.join(self.path, '%s.lst' % self.split), 'str')[:, 0].tolist()
+        self.images_paths = [os.path.join(self.path, p) for p in images_paths]
+
+        masks_paths = np.loadtxt(os.path.join(self.path, '%s.lst' % self.split), 'str')[:, 1].tolist()
+        self.masks_paths = [os.path.join(self.path, p) for p in masks_paths]
 
         self.augmentation = augmentation
         self.preprocessing = preprocessing
 
-    def camera_semseg(self, id):
-        assert id in self.ids  # these are lidar ids
-        t = float(id.split('-')[1].split('_')[0]) + float(id.split('-')[1].split('_')[1]) / 1000.0
-        i = np.searchsorted(self.ts_semseg, t)
-        i = np.clip(i, 0, len(self.ids_semseg) - 1)
-        return cv2.imread(self.semseg_path(self.ids_semseg[i]), 0)
+    def __getitem__(self, i):
+        assert isinstance(i, int)
 
-    def __getitem__(self, item):
-        if isinstance(item, int):
-            id = self.ids[item]
+        # read data
+        image = cv2.imread(self.images_paths[i])
+        mask = cv2.imread(self.masks_paths[i], 0)
 
-            # read data
-            image = self.camera_image(id)
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            mask = self.camera_semseg(id)
+        # extract certain classes from mask (e.g. cars)
+        masks = [(mask == v) for v in self.class_values]
+        mask = np.stack(masks, axis=-1).astype('float')
 
-            # extract certain classes from mask (e.g. cars)
-            masks = [(mask == v) for v in self.class_values]
-            mask = np.stack(masks, axis=-1).astype('float')
+        # apply augmentations
+        if self.augmentation:
+            sample = self.augmentation(image=image, mask=mask)
+            image, mask = sample['image'], sample['mask']
 
-            # apply augmentations
-            if self.augmentation:
-                sample = self.augmentation(image=image, mask=mask)
-                image, mask = sample['image'], sample['mask']
+        # apply preprocessing
+        if self.preprocessing:
+            sample = self.preprocessing(image=image, mask=mask)
+            image, mask = sample['image'], sample['mask']
+        return image, mask
 
-            # apply preprocessing
-            if self.preprocessing:
-                sample = self.preprocessing(image=image, mask=mask)
-                image, mask = sample['image'], sample['mask']
-            return image, mask
-
-        ds = copy(self)
-        if isinstance(item, (list, tuple)):
-            ds.ids = [self.ids[i] for i in item]
-        else:
-            assert isinstance(item, slice)
-            ds.ids = self.ids[item]
-        return ds
+    def __len__(self):
+        return len(self.images_paths)
 
 
 def semseg_test():
     from traversability_estimation.utils import visualize
 
-    # seq = np.random.choice(seq_names)
-    seq = '00000'
-    ds = DatasetSemSeg(seq='rellis_3d/%s' % seq, classes=['grass'])
-    image, mask = ds[0]
+    split = np.random.choice(['test', 'train', 'val'])
+    ds = DatasetSemSeg(classes=['grass'], split=split)
+    image, mask = ds[int(np.random.choice(range(len(ds))))]
 
     visualize(
         image=image[..., (2, 1, 0)],
@@ -244,7 +237,7 @@ def lidar_map_demo():
     import open3d as o3d
 
     name = np.random.choice(seq_names)
-    ds = Dataset(seq='rellis_3d/%s' % name)
+    ds = Sequence(seq='rellis_3d/%s' % name)
 
     plt.figure()
     plt.title('Trajectory')
@@ -269,7 +262,7 @@ def lidar_map_demo():
 
 def lidar2cam_demo():
     seq = np.random.choice(seq_names)
-    ds = Dataset(seq='rellis_3d/%s' % seq)
+    ds = Sequence(seq='rellis_3d/%s' % seq)
 
     dist_coeff = ds.calibration['dist_coeff'].reshape((5, 1))
     K = ds.calibration['K']
@@ -306,7 +299,7 @@ def lidar2cam_demo():
 
 def semseg_demo():
     seq = np.random.choice(seq_names)
-    ds = Dataset(seq='rellis_3d/%s' % seq)
+    ds = Sequence(seq='rellis_3d/%s' % seq)
 
     for _ in range(1):
         id = int(np.random.choice(range(len(ds))))
@@ -324,7 +317,7 @@ def semseg_demo():
 
 
 def main():
-    # semseg_test()
+    semseg_test()
     lidar_map_demo()
     lidar2cam_demo()
     semseg_demo()
