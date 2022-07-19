@@ -26,7 +26,6 @@ MODEL_CONFIG = os.path.join(pkg_path, "config/hrnet_rellis/"
                                       "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484.yaml")
 PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/"
                                           "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth")
-DATASET_ROOT = os.path.join(pkg_path, "data/Rellis_3D/")
 
 
 class ImageProcessor(object):
@@ -239,7 +238,6 @@ class ImageProcessor(object):
         assert isinstance(config_path, str)
         with open(config_path, 'r') as f:
             cfg = yaml.safe_load(f)
-        cfg['DATASET']['ROOT'] = DATASET_ROOT
         cfg['MODEL']['PRETRAINED'] = PRETRAINED_MODEL
         with open(config_path, 'w') as f:
             yaml.dump(cfg, f)
