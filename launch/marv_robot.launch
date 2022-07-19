@@ -25,16 +25,16 @@
         <remap from="output_0/semseg_color" to="/camera_front/traversability_color"/>
         <remap from="output_0/semseg_color/compressed" to="/camera_front/traversability_color/compressed"/>
 
-        <remap from="input_1/image" to="/camera_left/image"/>
-        <remap from="input_1/image/compressed" to="/camera_left/image/compressed"/>
+        <remap from="input_1/image" to="/camera_left/image_color"/>
+        <remap from="input_1/image/compressed" to="/camera_left/image_color/compressed"/>
         <remap from="input_1/camera_info" to="/camera_left/camera_info"/>
         <remap from="output_1/semseg" to="/camera_left/traversability"/>
         <remap from="output_1/semseg/compressed" to="/camera_left/traversability/compressed"/>
         <remap from="output_1/semseg_color" to="/camera_left/traversability_color"/>
         <remap from="output_1/semseg_color/compressed" to="/camera_left/traversability_color/compressed"/>
 
-        <remap from="input_2/image" to="/camera_right/image"/>
-        <remap from="input_2/image/compressed" to="/camera_right/image/compressed"/>
+        <remap from="input_2/image" to="/camera_right/image_color"/>
+        <remap from="input_2/image/compressed" to="/camera_right/image_color/compressed"/>
         <remap from="input_2/camera_info" to="/camera_right/camera_info"/>
         <remap from="output_2/semseg" to="/camera_right/traversability"/>
         <remap from="output_2/semseg/compressed" to="/camera_right/traversability/compressed"/>
