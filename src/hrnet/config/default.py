@@ -33,7 +33,7 @@ _C.CUDNN.ENABLED = True
 _C.MODEL = CN()
 _C.MODEL.NAME = 'seg_hrnet'
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../..'))
-_C.MODEL.PRETRAINED = f"{pkg_path}/models/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth"
+_C.MODEL.PRETRAINED = "%s/models/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth" % pkg_path
 _C.MODEL.ALIGN_CORNERS = True
 _C.MODEL.NUM_OUTPUTS = 1
 _C.MODEL.EXTRA = CN(new_allowed=True)

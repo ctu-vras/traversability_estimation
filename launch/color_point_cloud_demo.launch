@@ -2,9 +2,9 @@
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
-    <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
-    <arg name="lidar_frame" default="ouster_lidar"/>
-    <arg name="run_semseg" default="true"/>
+    <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
+                                                   one of ['00000', '00001', '00002', '00003', '00004']"/>
+    <arg name="run_semseg" default="false"/>
 
     <!-- RELLIS-3D data -->
     <node name="robot_data" pkg="traversability_estimation" type="robot_data">
@@ -12,7 +12,7 @@
             data_sequence: $(arg data_sequence)
             map_step: 1
             pose_step: 10
-            lidar_frame: $(arg lidar_frame)
+            lidar_frame: 'ouster_lidar'
             camera_frame: 'pylon_camera'
         </rosparam>
     </node>
@@ -21,14 +21,20 @@
     <node if="$(arg run_semseg)" name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
         <rosparam subst_value="true">
             device: $(arg device)
+            dtype: float
             num_cameras: 1
             image_transport: compressed
-            traversability_labels: false
             legend: false
             max_age: 1.0
+            input_scale: 0.25
+            traversability_labels: false
+            label_config: $(dirname)/../config/obstacles.yaml
         </rosparam>
-        <remap from="input_0/rgb" to="/robot_data/rgb/compressed"/>
+        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
+        <remap from="input_0/image" to="/robot_data/rgb"/>
+        <remap from="input_0/image/compressed" to="/robot_data/rgb/compressed"/>
         <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
+        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
         <remap from="output_0/semseg/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
         <remap from="output_0/camera_info" to="/hrnet_inference/camera_info"/>
     </node>
@@ -36,22 +42,28 @@
     <!-- Add color to a point cloud from a camera image -->
     <node name="point_cloud_color" pkg="nodelet" type="nodelet"
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
-        <param name="image_transport"        value="compressed"/>
-        <param name="fixed_frame"            value="$(arg lidar_frame)"/>
-        <param name="num_cameras"            value="1"/>
-        <param name="max_image_age"          value="5.0"/>
-        <param name="use_first_valid"        value="true"/>
-        <param name="image_queue_size"       value="1"/>
-        <param name="point_cloud_queue_size" value="50"/>
-        <param name="wait_for_transform"     value="2.0"/>
-        <param name="default_color"          value="0x00000000"/>
+        <rosparam subst_value="true">
+            fixed_frame: odom
+<!--            field_name: rgb-->
+<!--            field_type: 7-->
+            field_name: traversability
+            field_type: 2
+            num_cameras: 1
+            image_transport: compressed
+            max_image_age: 15.0
+            use_first_valid: true
+            image_queue_size: 2
+            cloud_queue_size: 2
+            wait_for_transform: 1.0
+            default_color: "0x00000000"
+        </rosparam>
 
         <remap unless="$(arg run_semseg)" from="/camera_0/camera_info" to="/robot_data/camera_info"/>
         <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>
         <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/hrnet_inference/camera_info"/>
         <remap if="$(arg run_semseg)" from="/camera_0/image" to="/hrnet_inference/semantic_segmentation"/>
-        <remap from="/cloud_in" to="/robot_data/lidar_cloud"/>
-        <remap from="/cloud_out" to="/robot_data/lidar_cloud_semseg"/>
+        <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
+        <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>
     </node>
 
     <!-- RVIZ -->

@@ -1,7 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
+from __future__ import absolute_import, division, print_function
 import os
-import cv2
+import cv2 as cv
 import yaml
 import torch
 import rospy
@@ -16,6 +17,7 @@ from hrnet.utils.utils import draw_legend
 from traversability_estimation.utils import normalize
 from PIL import Image as pil
 from time import time
+from threading import RLock
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
@@ -27,7 +29,7 @@ PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/"
 DATASET_ROOT = os.path.join(pkg_path, "data/Rellis_3D/")
 
 
-class ImageProcessor:
+class ImageProcessor(object):
     """
     Class for image segmentations
 
@@ -39,46 +41,104 @@ class ImageProcessor:
         input_{number} - input image topic
         output_{number} - output segmented image topic
     """
+    def __init__(self):
+        # Read parameters.
+        self.num_cameras = rospy.get_param('~num_cameras', 1.0)
+        self.image_transport = rospy.get_param('~image_transport', 'compressed')
+        self.traversability_labels = rospy.get_param('~traversability_labels', True)
+        label_map = rospy.get_param('~label_map', None)
+        print(label_map)
+        assert label_map is None or isinstance(label_map, (dict, list))
+        if isinstance(label_map, dict):
+            label_map = dict((int(k), int(v)) for k, v in label_map.items())
+            n = max(label_map) + 1
+            self.label_map = np.zeros((n,), dtype=np.uint8)
+            for k, v in label_map.items():
+                self.label_map[k] = v
+        elif isinstance(label_map, list):
+            self.label_map = np.asarray(label_map)
+        else:
+            self.label_map = None
+        if self.label_map is not None:
+            rospy.loginfo('Label map: %s', self.label_map)
+        self.device = rospy.get_param('~device', 'cpu')
+        self.dtype = rospy.get_param('~dtype', 'float')
+        assert self.dtype in ('float', 'half')
+        self.dtype = eval('torch.%s' % self.dtype)
+        self.max_age = rospy.get_param('~max_age', 1.0)
+        self.input_size = rospy.get_param('~input_size', None)
+        self.input_scale = rospy.get_param('~input_scale', 1.0)
+        if self.input_size:
+            self.input_size = tuple(self.input_size)
+            self.input_scale = 0.0
+        else:
+            self.input_size = (0, 0)
+        assert len(self.input_size) == 2
 
-    def __init__(self, number: int = 1, image_transport: str = 'compressed', traversability_labels: bool = True):
-        assert image_transport == 'compressed' or image_transport == 'raw'
         self.bridge = CvBridge()
         self.model = self.load_model()
-        self.model.eval().cuda()
+        rospy.loginfo('Loaded HRNet CNN model.')
 
-        # Constants
-        self.orig_size = None
-        self.input_size = (1024, 512)
-        self.mean = [0.485, 0.456, 0.406]
-        self.std = [0.229, 0.224, 0.225]
+        # Training mean, std
+        self.mean = np.array([0.485, 0.456, 0.406])
+        self.std = np.array([0.229, 0.224, 0.225])
+        # Running test mean
+        self.test_sum = np.zeros((3,))
+        self.test_n = 0
 
         # Draw legend to segmentation
-        if traversability_labels:
+        # TODO: Generic label mapping.
+        if self.traversability_labels:
             self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG_TRAVERSABILITY, 'r'))
         else:
             self.data_cfg = yaml.safe_load(open(RELLIS_CONFIG, 'r'))
 
+        # Processing queue: image with camera info for each camera.
+        self.lock = RLock()
+        self.images = self.num_cameras * [None]
+        self.camera_infos = self.num_cameras * [None]
         # Publishers
-        self.semseg_pub = rospy.Publisher(f"output_{number}/semseg/compressed", CompressedImage, queue_size=1)
-        self.caminfo_pub = rospy.Publisher(f"output_{number}/camera_info", CameraInfo, queue_size=1)
-
+        self.image_color_pubs = self.num_cameras * [None]
+        self.compressed_color_pubs = self.num_cameras * [None]
+        self.image_pubs = self.num_cameras * [None]
+        self.compressed_pubs = self.num_cameras * [None]
+        self.camera_info_pubs = self.num_cameras * [None]
         # Subscribers
-        self.caminfo_msg = None
-        self.caminfo_sub = rospy.Subscriber(f"input_{number}/camera_info", CameraInfo, self.get_camera_info, queue_size=1)
-        self.max_age = rospy.get_param('~max_age', 1.0)
-        self.image_transport = image_transport
-        message = CompressedImage if image_transport == 'compressed' else Image
-        self.image_sub = rospy.Subscriber(f"input_{number}/rgb", message, self.callback_color, queue_size=1)
+        self.image_subs = self.num_cameras * [None]
+        self.compressed_subs = self.num_cameras * [None]
+        self.camera_info_subs = self.num_cameras * [None]
+        for i in range(self.num_cameras):
+            # Setup publishers.
+            pub = rospy.Publisher('output_%i/semseg_color' % i, Image, queue_size=1)
+            self.image_color_pubs[i] = pub
+            pub = rospy.Publisher('output_%i/semseg_color/compressed' % i, CompressedImage, queue_size=1)
+            self.compressed_color_pubs[i] = pub
+            pub = rospy.Publisher('output_%i/semseg' % i, Image, queue_size=1)
+            self.image_pubs[i] = pub
+            pub = rospy.Publisher('output_%i/semseg/compressed' % i, CompressedImage, queue_size=1)
+            self.compressed_pubs[i] = pub
+            pub = rospy.Publisher('output_%i/camera_info' % i, CameraInfo, queue_size=1)
+            self.camera_info_pubs[i] = pub
+            # Setup subscribers.
+            if self.image_transport == 'raw':
+                sub = rospy.Subscriber('input_%i/image' % i, Image,
+                                       lambda msg, i=i: self.callback_color(msg, i), queue_size=1)
+            elif self.image_transport == 'compressed':
+                sub = rospy.Subscriber('input_%i/image/compressed' % i, CompressedImage,
+                                       lambda msg, i=i: self.callback_color(msg, i), queue_size=1)
+            self.image_subs[i] = sub
+            sub = rospy.Subscriber('input_%i/camera_info' % i, CameraInfo,
+                                   lambda msg, i=i: self.get_camera_info(msg, i), queue_size=1)
+            self.camera_info_subs[i] = sub
+            rospy.loginfo('Publishers and subscribers for camera %i ready.', i)
 
-        # Info
-        rospy.loginfo(f'Loaded CNN model number {number}')
-
-    def get_camera_info(self, msg):
+    def get_camera_info(self, msg, i=None):
         """Store camera calibration for i-th camera."""
         assert isinstance(msg, CameraInfo)
-        self.caminfo_msg = msg
-        rospy.loginfo('Camera (%s) unsubscribed.' % msg.header.frame_id)
-        self.caminfo_sub.unregister()
+        with self.lock:
+            self.camera_infos[i] = msg
+        self.camera_info_subs[i].unregister()
+        rospy.loginfo('Camera %i (%s) unsubscribed.', i, msg.header.frame_id)
 
     def load_model(self):
         # Updates PATHS in model config file
@@ -91,7 +151,7 @@ class ImageProcessor:
         config.freeze()
         model = eval('models.' + config.MODEL.NAME + '.get_seg_model')(config)
 
-        pretrained_dict = torch.load(PRETRAINED_MODEL)
+        pretrained_dict = torch.load(PRETRAINED_MODEL, map_location='cpu')
         if 'state_dict' in pretrained_dict:
             pretrained_dict = pretrained_dict['state_dict']
         model_dict = model.state_dict()
@@ -99,70 +159,84 @@ class ImageProcessor:
                            if k[6:] in model_dict.keys()}
         model_dict.update(pretrained_dict)
         model.load_state_dict(model_dict)
+
+        model = model.eval()
+        model = model.to(device=self.device, dtype=self.dtype)
         return model
 
-    def callback_color(self, img_msg):
+    def callback_color(self, img_msg, i=None):
         age = (rospy.Time.now() - img_msg.header.stamp).to_sec()
         if age > self.max_age:
             rospy.logwarn('Image message is too old for segmentation: %.3f' % age)
             return
 
-        t0 = time()
-        try:
-            if self.image_transport:
-                image = self.bridge.compressed_imgmsg_to_cv2(img_msg, "bgr8")
-            else:
-                image = self.bridge.imgmsg_to_cv2(img_msg, "bgr8")
-        except CvBridgeError as e:
-            rospy.logerr(e)
-            return
+        with self.lock:
+            self.images[i] = img_msg
+            rospy.logdebug('Image updated for camera %i (%s).', i, img_msg.header.frame_id)
 
-        if self.orig_size is None:
-            self.orig_size = (image.shape[1], image.shape[0])
-            rospy.loginfo(f'Original image size: {self.orig_size}')
-
-        image = self.preprocessing(image)
-        with torch.no_grad():
-            pred = self.model(torch.from_numpy(image).unsqueeze(0).cuda())
-            result = self.postprocessing(pred)
-            rospy.logdebug(f'Image of size {image.shape} processing took: {"%.3f" % (time() - t0)} sec')
-
-        try:
-            res_msg = CompressedImage()
-            res_msg.header.stamp = img_msg.header.stamp
-            res_msg.header.frame_id = img_msg.header.frame_id
-            res_msg.format = "jpeg"
-            res_msg.data = np.array(cv2.imencode('.jpg', result)[1]).tobytes()
-            self.semseg_pub.publish(res_msg)
-        except CvBridgeError as e:
-            rospy.logerr(e)
-        # publish camera info
-        if self.caminfo_msg:
-            self.caminfo_msg.header.stamp = img_msg.header.stamp
-            self.caminfo_msg.header.frame_id = img_msg.header.frame_id
-            self.caminfo_pub.publish(self.caminfo_msg)
-        else:
-            rospy.logwarn('Camera info synchronized with semseg predictions is not being published')
+        return
 
     def preprocessing(self, image):
-        image = cv2.resize(image, self.input_size, interpolation=cv2.INTER_LINEAR)
-        image = image.astype(np.float32)[:, :, ::-1]
+        image = cv.resize(image, self.input_size, fx=self.input_scale, fy=self.input_scale,
+                          interpolation=cv.INTER_AREA)
+        image = image.astype(np.float32)
+        image = image[..., ::-1]  # BGR to RGB
         image = image / 255.0
-        image -= self.mean
-        image /= self.std
-        image = image.transpose((2, 0, 1))
+
+        # Training data channel-wise mean and std.
+        # mean, std = self.mean, self.std
+
+        # Test data intensity mean, image std.
+        # self.test_sum += image.mean(axis=(0, 1))
+        # self.test_n += 1
+        # test_mean = self.test_sum / self.test_n
+        # rospy.loginfo('Train mean %s, test mean %s.', self.mean, test_mean)
+        # mean = test_mean.mean()
+        # std = image.std()
+
+        # Image channel-wise mean and std.
+        # mean, std = image.mean(axis=(0, 1)), image.std(axis=(0, 1))
+
+        # Image intensity mean and std.
+        # mean, std = image.mean(), image.std()
+
+        # Re-scaled training data mean and std.
+        intensity_ratio = image.mean() / self.mean.mean()
+        # intensity_ratio = test_mean.mean() / self.mean.mean()
+        mean = intensity_ratio * self.mean
+        # std = intensity_ratio * self.std
+        std = image.std()
+
+        image -= mean
+        image /= std
+
+        image = image.transpose((2, 0, 1))  # HxWxC tp CxHxW
         return image
 
-    def postprocessing(self, pred):
-        pred = pred[config.TEST.OUTPUT_INDEX]
-        pred_np = pred.squeeze(0).cpu().numpy()
-        pred_arg = np.argmax(pred_np, axis=0).astype(np.uint8)
-        pred_arg = convert_label(pred_arg, True)
-        result = convert_color(pred_arg, self.data_cfg["color_map"])
-        result = cv2.resize(result, self.orig_size, interpolation=cv2.INTER_LINEAR)
-        return np.asarray(result)[..., (2, 1, 0)]
+    def process(self, image):
+        t0 = time()
+        orig_size = (image.shape[1], image.shape[0])
+        image = self.preprocessing(image)
+        with torch.no_grad():
+            input = torch.as_tensor(image).unsqueeze(0)
+            input = input.to(device=self.device, dtype=self.dtype)
+            pred = self.model(input)
+        pred = self.postprocessing(pred, orig_size)
+        rospy.logdebug('Image %s processed (%.3f s).', image.shape, time() - t0)
+        return pred
 
-    def _update_config(self, config_path: str):
+    def postprocessing(self, pred, size):
+        pred = pred[config.TEST.OUTPUT_INDEX]
+        pred = pred.squeeze(0).cpu().numpy()
+        pred = np.argmax(pred, axis=0).astype(np.uint8)
+        pred = convert_label(pred, True)
+        pred = cv.resize(pred, size, interpolation=cv.INTER_NEAREST)
+        if self.label_map is not None:
+            pred = self.label_map[pred]
+        return pred
+
+    def _update_config(self, config_path):
+        assert isinstance(config_path, str)
         with open(config_path, 'r') as f:
             cfg = yaml.safe_load(f)
         cfg['DATASET']['ROOT'] = DATASET_ROOT
@@ -170,31 +244,65 @@ class ImageProcessor:
         with open(config_path, 'w') as f:
             yaml.dump(cfg, f)
 
+    def spin(self):
+        """Processing loop. Keep processing images in queue until shutdown."""
+        i = -1
+        while not rospy.is_shutdown():
+            t0 = rospy.Time.now()
+            i = (i + 1) % len(self.images)
+            with self.lock:
+                image, camera_info = self.images[i], self.camera_infos[i]
+            if not image or not camera_info:
+                continue
+
+            try:
+                if self.image_transport:
+                    arr = self.bridge.compressed_imgmsg_to_cv2(image, "bgr8")
+                else:
+                    arr = self.bridge.imgmsg_to_cv2(image, "bgr8")
+            except CvBridgeError as e:
+                rospy.logerr(e)
+                raise
+
+            pred = self.process(arr)
+            rospy.loginfo('Image %i (%s) processed (%.3f s).',
+                          i, image.header.frame_id, (rospy.Time.now() - t0).to_sec())
+
+            if self.compressed_pubs[i].get_num_connections():
+                msg = CompressedImage()
+                msg.header = image.header
+                # msg.format = "png"
+                # msg.data = np.array(cv.imencode('.png', pred)[1]).tobytes()
+                msg.format = "jpeg"
+                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                self.compressed_pubs[i].publish(msg)
+            self.camera_info_pubs[i].publish(camera_info)
+
+            if self.compressed_color_pubs[i].get_num_connections():
+                pred = convert_color(pred, self.data_cfg["color_map"])
+                pred = pred[..., ::-1]  # RGB to BGR
+                msg = CompressedImage()
+                msg.header = image.header
+                msg.format = "jpeg"
+                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                self.compressed_color_pubs[i].publish(msg)
+
 
 def main():
-    rospy.init_node('hrnet_inference', log_level=rospy.DEBUG)
-
-    # Load parameters
-    image_transport = rospy.get_param("~image_transport", 'compressed')
-    num_cameras = rospy.get_param("~num_cameras", 1)
-    legend = rospy.get_param("~legend", False)
-    traversability_labels = rospy.get_param('~traversability_labels', True)
-
-    # Info
-    rospy.loginfo(f'Legend required: {legend}')
-    rospy.loginfo(f'Image transport: {image_transport}')
-    rospy.loginfo(f'Number of cameras for segmentation: {num_cameras}')
+    rospy.init_node('hrnet_inference', log_level=rospy.INFO)
 
     # Draw legend
+    legend = rospy.get_param("~legend", False)
+    label_config = rospy.get_param('~label_config', None)
+    traversability_labels = rospy.get_param('~traversability_labels', True)
     if legend:
-        f = RELLIS_CONFIG_TRAVERSABILITY if traversability_labels else RELLIS_CONFIG
-        data_cfg = yaml.safe_load(open(f, 'r'))
+        if not label_config:
+            label_config = RELLIS_CONFIG_TRAVERSABILITY if traversability_labels else RELLIS_CONFIG
+        data_cfg = yaml.safe_load(open(label_config, 'r'))
         draw_legend(data_cfg)
 
-    # Create CNNs for image segmentation
-    for i in range(num_cameras):
-        ImageProcessor(i, image_transport, traversability_labels)
-    rospy.spin()
+    node = ImageProcessor()
+    node.spin()
 
 
 if __name__ == '__main__':
