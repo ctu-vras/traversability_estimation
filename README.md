@@ -55,20 +55,26 @@ roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
 
 ### Semantic Segmentation Node
 
-Model: [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
+- [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
 
-Download HRNet
-[weights](https://drive.google.com/u/0/uc?id=137Lfw6HcDmdEReu_R7Q_I-zmRvvqFys3&export=download) pretrained on RELLIS-3D
-and bakbone [weights](https://onedrive.live.com/?authkey=%21AKvqI6pBZlifgJk&cid=F7FD0B7F26543CEB&id=F7FD0B7F26543CEB%21116&parId=F7FD0B7F26543CEB%21105&action=locate) (pretrained on ImageNet).
+    Download HRNet
+    [weights](https://drive.google.com/drive/folders/1TriTUg2sn3i2SzNgC5CSRuvM3pdt7EU_?usp=sharing) pretrained on RELLIS-3D
+    and bakbone [weights](https://onedrive.live.com/?authkey=%21AKvqI6pBZlifgJk&cid=F7FD0B7F26543CEB&id=F7FD0B7F26543CEB%21116&parId=F7FD0B7F26543CEB%21105&action=locate) (pretrained on ImageNet).
+
+- [SMP](https://github.com/qubvel/segmentation_models.pytorch):
+    [weights](https://drive.google.com/drive/folders/1WDbBEgDVPPBbWUka5zZKFoOfhAm-jTZr?usp=sharing)
 
 Put the weights to `./config/weights` folder:
 
 ```bash
 ./config/weights/
   ├── hrnetv2_w48_imagenet_pretrained.pth
-  └── seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484
-      └── models
-          ├── ...
+  ├── seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/
+  |   └── models
+  |       ├── ...
+  |       ...
+  └── smp/
+      └── se_resnext50_32x4d_352x640_lr1e-4.pth
 ```
 
 #### Topics:
