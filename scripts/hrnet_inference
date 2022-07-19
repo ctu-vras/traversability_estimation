@@ -8,14 +8,11 @@ import torch
 import rospy
 import numpy as np
 from hrnet.config import config
-import matplotlib.pyplot as plt
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from hrnet.core.function import convert_label, convert_color
 from hrnet import models
 from hrnet.utils.utils import draw_legend
-from traversability_estimation.utils import normalize
-from PIL import Image as pil
 from time import time
 from threading import RLock
 
