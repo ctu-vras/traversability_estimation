@@ -15,5 +15,5 @@
 
     <!-- RVIZ -->
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/config.rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/robot_data.rviz"/>
 </launch>

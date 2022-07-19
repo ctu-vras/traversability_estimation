@@ -31,9 +31,11 @@
             label_config: $(dirname)/../config/obstacles.yaml
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
+
         <remap from="input_0/image" to="/robot_data/rgb"/>
         <remap from="input_0/image/compressed" to="/robot_data/rgb/compressed"/>
         <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
+
         <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
         <remap from="output_0/semseg/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
         <remap from="output_0/camera_info" to="/hrnet_inference/camera_info"/>
@@ -44,10 +46,6 @@
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
         <rosparam subst_value="true">
             fixed_frame: odom
-<!--            field_name: rgb-->
-<!--            field_type: 7-->
-            field_name: traversability
-            field_type: 2
             num_cameras: 1
             image_transport: compressed
             max_image_age: 15.0
@@ -57,11 +55,20 @@
             wait_for_transform: 1.0
             default_color: "0x00000000"
         </rosparam>
+        <param unless="$(arg run_semseg)" name="field_name" value="rgb"/>
+        <param unless="$(arg run_semseg)" name="field_type" value="7"/>
+
+        <param if="$(arg run_semseg)" name="field_name" value="traversability"/>
+        <param if="$(arg run_semseg)" name="field_type" value="2"/>
 
         <remap unless="$(arg run_semseg)" from="/camera_0/camera_info" to="/robot_data/camera_info"/>
         <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>
+        <remap unless="$(arg run_semseg)" from="/camera_0/image/compressed" to="/robot_data/semantic_segmentation/compressed"/>
+
         <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/hrnet_inference/camera_info"/>
         <remap if="$(arg run_semseg)" from="/camera_0/image" to="/hrnet_inference/semantic_segmentation"/>
+        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
+
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>
     </node>
