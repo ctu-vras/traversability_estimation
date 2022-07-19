@@ -11,18 +11,15 @@ from hrnet.config import config
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from hrnet.core.function import convert_label, convert_color
-from hrnet import models
 from hrnet.utils.utils import draw_legend
 from time import time
 from threading import RLock
 
+
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
 RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_traversability.yaml")
-MODEL_CONFIG = os.path.join(pkg_path, "config/hrnet_rellis/"
-                                      "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484.yaml")
-PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/"
-                                          "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth")
+PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/se_resnext50_32x4d_352x640_lr1e-4.pth")
 
 
 class ImageProcessor(object):
@@ -73,7 +70,7 @@ class ImageProcessor(object):
 
         self.bridge = CvBridge()
         self.model = self.load_model()
-        rospy.loginfo('Loaded HRNet CNN model.')
+        rospy.loginfo('Loaded CNN model.')
 
         # Training mean, std
         self.mean = np.array([0.485, 0.456, 0.406])
@@ -137,25 +134,7 @@ class ImageProcessor(object):
         rospy.loginfo('Camera %i (%s) unsubscribed.', i, msg.header.frame_id)
 
     def load_model(self):
-        # Updates PATHS in model config file
-        self._update_config(MODEL_CONFIG)
-
-        # Create model
-        config.defrost()
-        config.merge_from_file(MODEL_CONFIG)
-        config.merge_from_list(['TEST.MODEL_FILE', PRETRAINED_MODEL])
-        config.freeze()
-        model = eval('models.' + config.MODEL.NAME + '.get_seg_model')(config)
-
-        pretrained_dict = torch.load(PRETRAINED_MODEL, map_location='cpu')
-        if 'state_dict' in pretrained_dict:
-            pretrained_dict = pretrained_dict['state_dict']
-        model_dict = model.state_dict()
-        pretrained_dict = {k[6:]: v for k, v in pretrained_dict.items()
-                           if k[6:] in model_dict.keys()}
-        model_dict.update(pretrained_dict)
-        model.load_state_dict(model_dict)
-
+        model = torch.load(PRETRAINED_MODEL)
         model = model.eval()
         model = model.to(device=self.device, dtype=self.dtype)
         return model
@@ -174,6 +153,10 @@ class ImageProcessor(object):
 
     def preprocessing(self, image):
         image = cv.resize(image, self.input_size, fx=self.input_scale, fy=self.input_scale,
+                          interpolation=cv.INTER_AREA)
+        # image shape should be divisible by 32
+        h, w = image.shape[:2]
+        image = cv.resize(image, (32 * (w // 32), 32 * (h // 32)),
                           interpolation=cv.INTER_AREA)
         image = image.astype(np.float32)
         image = image[..., ::-1]  # BGR to RGB
@@ -225,19 +208,11 @@ class ImageProcessor(object):
         pred = pred[config.TEST.OUTPUT_INDEX]
         pred = pred.squeeze(0).cpu().numpy()
         pred = np.argmax(pred, axis=0).astype(np.uint8)
-        pred = convert_label(pred, True)
+        pred = convert_label(pred, inverse=True)
         pred = cv.resize(pred, size, interpolation=cv.INTER_NEAREST)
         if self.label_map is not None:
             pred = self.label_map[pred]
         return pred
-
-    def _update_config(self, config_path):
-        assert isinstance(config_path, str)
-        with open(config_path, 'r') as f:
-            cfg = yaml.safe_load(f)
-        cfg['MODEL']['PRETRAINED'] = PRETRAINED_MODEL
-        with open(config_path, 'w') as f:
-            yaml.dump(cfg, f)
 
     def spin(self):
         """Processing loop. Keep processing images in queue until shutdown."""
@@ -284,7 +259,7 @@ class ImageProcessor(object):
 
 
 def main():
-    rospy.init_node('hrnet_inference', log_level=rospy.INFO)
+    rospy.init_node('smp_inference', log_level=rospy.INFO)
 
     # Draw legend
     legend = rospy.get_param("~legend", False)
