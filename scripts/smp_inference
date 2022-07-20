@@ -7,7 +7,6 @@ import yaml
 import torch
 import rospy
 import numpy as np
-from hrnet.config import config
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 from hrnet.core.function import convert_label, convert_color
@@ -20,6 +19,7 @@ pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
 RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_traversability.yaml")
 PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/se_resnext50_32x4d_352x640_lr1e-4.pth")
+# PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth")
 
 
 class ImageProcessor(object):
@@ -205,9 +205,8 @@ class ImageProcessor(object):
         return pred
 
     def postprocessing(self, pred, size):
-        pred = pred[config.TEST.OUTPUT_INDEX]
         pred = pred.squeeze(0).cpu().numpy()
-        pred = np.argmax(pred, axis=0).astype(np.uint8)
+        pred = np.argmax(pred, axis=0).astype(np.uint8) - 1
         pred = convert_label(pred, inverse=True)
         pred = cv.resize(pred, size, interpolation=cv.INTER_NEAREST)
         if self.label_map is not None:
