@@ -3,7 +3,10 @@ from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from .utils import *
 from copy import copy
+import torch
 from torch.utils.data import Dataset as BaseDataset
+from PIL import Image
+import random
 
 __all__ = [
     'data_dir',
@@ -165,70 +168,247 @@ class Sequence(BaseDataset):
 
 
 class DatasetSemSeg(BaseDataset):
-    """Rellis-3D Image Segmentation Dataset. Read images, apply augmentation and preprocessing transformations.
-    """
-
     CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
-    CLASS_VALUES = [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 17, 18, 19, 23, 27, 31, 33, 34]
+    LABEL_MAPPING = {0: 0,
+                     1: 0,
+                     3: 1,
+                     4: 2,
+                     5: 3,
+                     6: 4,
+                     7: 5,
+                     8: 6,
+                     9: 7,
+                     10: 8,
+                     12: 9,
+                     15: 10,
+                     17: 11,
+                     18: 12,
+                     19: 13,
+                     23: 14,
+                     27: 15,
+                     29: 1,
+                     30: 1,
+                     31: 16,
+                     32: 4,
+                     33: 17,
+                     34: 18}
 
-    def __init__(self, path=None, classes=None, augmentation=None, preprocessing=None, split='train'):
-        assert split in ['test', 'train', 'val']
+    def __init__(self,
+                 path=None,
+                 split='train',
+                 num_samples=None,
+                 classes=None,
+                 multi_scale=True,
+                 flip=True,
+                 ignore_label=-1,
+                 base_size=2048,
+                 crop_size=(1200, 1920),
+                 downsample_rate=1,
+                 scale_factor=16,
+                 mean=np.asarray([0.54218053, 0.64250553, 0.56620195]),
+                 std=np.asarray([0.54218052, 0.64250552, 0.56620194])):
         if path is None:
             path = join(data_dir, 'Rellis_3D')
         assert os.path.exists(path)
+        assert split in ['train', 'val', 'test']
         self.path = path
+        self.split = split
         if not classes:
             classes = self.CLASSES
         # convert str names to class values on masks
-        self.class_values = [self.CLASS_VALUES[self.CLASSES.index(cls.lower())] for cls in classes]
-        self.split = split
+        self.class_values = [list(self.LABEL_MAPPING.values())[self.CLASSES.index(cls.lower())] for cls in classes]
 
-        images_paths = np.loadtxt(os.path.join(self.path, '%s.lst' % self.split), 'str')[:, 0].tolist()
-        self.images_paths = [os.path.join(self.path, p) for p in images_paths]
+        self.base_size = base_size
+        self.crop_size = crop_size
+        self.ignore_label = ignore_label
 
-        masks_paths = np.loadtxt(os.path.join(self.path, '%s.lst' % self.split), 'str')[:, 1].tolist()
-        self.masks_paths = [os.path.join(self.path, p) for p in masks_paths]
+        self.mean = mean
+        self.std = std
+        self.scale_factor = scale_factor
+        self.downsample_rate = 1. / downsample_rate
 
-        self.augmentation = augmentation
-        self.preprocessing = preprocessing
+        self.multi_scale = multi_scale
+        self.flip = flip
 
-    def __getitem__(self, i):
-        assert isinstance(i, int)
+        self.img_list = [line.strip().split() for line in open(os.path.join(path, '%s.lst' % split))]
 
-        # read data
-        image = cv2.imread(self.images_paths[i])
-        mask = cv2.imread(self.masks_paths[i], 0)
+        self.files = self.read_files()
+        if num_samples:
+            self.files = self.files[:num_samples]
 
-        # extract certain classes from mask (e.g. cars)
+        self.class_weights = torch.FloatTensor( [1.999999271012097, 1.664128991557095, 1.8496996235972305,
+                                                 1.9998671743556093, 1.9985603836216685, 1.6997860667619373,
+                                                 1.9996238518374807, 1.999762456018869, 1.9993409160693856,
+                                                 1.9997133730241352, 1.999513379675197, 1.9993347608141532,
+                                                 1.9996433543012653, 1.8417302013930952, 1.9900446258633235,
+                                                 1.9956819252010565, 1.9949043721923583, 1.9714094933783817,
+                                                 1.9972557793256613]).cuda()
+
+    def read_files(self):
+        files = []
+        for item in self.img_list:
+            image_path, label_path = item
+            name = os.path.splitext(os.path.basename(label_path))[0]
+            files.append({
+                "img": image_path,
+                "label": label_path,
+                "name": name,
+                "weight": 1
+            })
+        return files
+
+    def input_transform(self, image):
+        image = image.astype(np.float32)[:, :, ::-1]
+        image = image / 255.0
+        image -= self.mean
+        image /= self.std
+        return image
+
+    @staticmethod
+    def pad_image(image, h, w, size, padvalue):
+        pad_image = image.copy()
+        pad_h = max(size[0] - h, 0)
+        pad_w = max(size[1] - w, 0)
+        if pad_h > 0 or pad_w > 0:
+            pad_image = cv2.copyMakeBorder(image, 0, pad_h, 0,
+                                           pad_w, cv2.BORDER_CONSTANT,
+                                           value=padvalue)
+        return pad_image
+
+    def rand_crop(self, image, label):
+        h, w = image.shape[:-1]
+        image = self.pad_image(image, h, w, self.crop_size,
+                               (0.0, 0.0, 0.0))
+        label = self.pad_image(label, h, w, self.crop_size,
+                               (self.ignore_label,))
+
+        new_h, new_w = label.shape
+        x = random.randint(0, new_w - self.crop_size[1])
+        y = random.randint(0, new_h - self.crop_size[0])
+        image = image[y:y+self.crop_size[0], x:x+self.crop_size[1]]
+        label = label[y:y+self.crop_size[0], x:x+self.crop_size[1]]
+
+        return image, label
+
+    def multi_scale_aug(self, image, label=None, rand_scale=1, rand_crop=True):
+        long_size = int(self.base_size * rand_scale + 0.5)
+        h, w = image.shape[:2]
+        if h > w:
+            new_h = long_size
+            new_w = int(w * long_size / h + 0.5)
+        else:
+            new_w = long_size
+            new_h = int(h * long_size / w + 0.5)
+
+        image = cv2.resize(image, (new_w, new_h),
+                           interpolation=cv2.INTER_LINEAR)
+        if label is not None:
+            label = cv2.resize(label, (new_w, new_h),
+                               interpolation=cv2.INTER_NEAREST)
+        else:
+            return image
+
+        if rand_crop:
+            image, label = self.rand_crop(image, label)
+
+        return image, label
+
+    @staticmethod
+    def random_brightness(img, shift_value=10):
+        if not shift_value:
+            return img
+        if random.random() < 0.5:
+            return img
+        img = img.astype(np.float32)
+        shift = random.randint(-shift_value, shift_value)
+        img[:, :, :] += shift
+        img = np.around(img)
+        img = np.clip(img, 0, 255).astype(np.uint8)
+        return img
+
+    @staticmethod
+    def label_transform(label):
+        return np.array(label).astype('int32')
+
+    def gen_sample(self, image, label,
+                   multi_scale=True, is_flip=True):
+        if multi_scale:
+            rand_scale = 0.5 + random.randint(0, self.scale_factor) / 10.0
+            image, label = self.multi_scale_aug(image, label, rand_scale=rand_scale)
+
+        image = self.random_brightness(image)
+        image = self.input_transform(image)
+        label = self.label_transform(label)
+
+        image = image.transpose((2, 0, 1))
+
+        if is_flip:
+            flip = np.random.choice(2) * 2 - 1
+            image = image[:, :, ::flip]
+            label = label[:, ::flip]
+
+        if self.downsample_rate != 1:
+            label = cv2.resize(
+                label,
+                None,
+                fx=self.downsample_rate,
+                fy=self.downsample_rate,
+                interpolation=cv2.INTER_NEAREST
+            )
+
+        return image, label
+
+    def convert_label(self, label, inverse=False):
+        temp = label.copy()
+        if inverse:
+            for v, k in self.LABEL_MAPPING.items():
+                label[temp == k] = v
+        else:
+            for k, v in self.LABEL_MAPPING.items():
+                label[temp == k] = v
+        return label
+
+    def __getitem__(self, index):
+        item = self.files[index]
+        image = cv2.imread(os.path.join(self.path, item["img"]), cv2.IMREAD_COLOR)
+
+        mask = np.array(Image.open(os.path.join(self.path, item["label"])))
+        mask = mask[:, :]
+        mask = self.convert_label(mask)
+
+        if 'test' in self.split:
+            new_h, new_w = self.crop_size
+            image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            image = self.input_transform(image)
+        else:
+            # add augmentations
+            image, mask = self.gen_sample(image, mask, self.multi_scale, self.flip)
+        # extract certain classes from mask
         masks = [(mask == v) for v in self.class_values]
-        mask = np.stack(masks, axis=-1).astype('float')
-
-        # apply augmentations
-        if self.augmentation:
-            sample = self.augmentation(image=image, mask=mask)
-            image, mask = sample['image'], sample['mask']
-
-        # apply preprocessing
-        if self.preprocessing:
-            sample = self.preprocessing(image=image, mask=mask)
-            image, mask = sample['image'], sample['mask']
-        return image, mask
+        mask = np.stack(masks, axis=0).astype('float')
+        return image.copy(), mask.copy()
 
     def __len__(self):
-        return len(self.images_paths)
+        return len(self.files)
 
 
 def semseg_test():
     from traversability_estimation.utils import visualize
 
     split = np.random.choice(['test', 'train', 'val'])
-    ds = DatasetSemSeg(classes=['grass'], split=split)
+    ds = DatasetSemSeg(classes=['grass', 'tree'], split=split)
     image, mask = ds[int(np.random.choice(range(len(ds))))]
 
+    if split in ['val', 'train']:
+        image = image.transpose([1, 2, 0])
+    print(image.shape, mask.shape)
+
+    image_vis = image * ds.std + ds.mean
     visualize(
-        image=image[..., (2, 1, 0)],
-        grass_mask=mask.squeeze(),
+        image=np.uint8(255 * image_vis),
+        grass_mask=mask[0, ...],
+        tree_mask=mask[1, ...]
     )
 
 
