@@ -1,0 +1,101 @@
+#!/usr/bin/env python
+
+import os
+import torch
+from torch import nn
+from hrnet.config import config
+from hrnet.config import update_config
+from hrnet.core.function import testval, test
+from hrnet.utils.modelsummary import get_model_summary
+from hrnet.utils.utils import create_logger, FullModel
+from hrnet import models
+from hrnet import datasets
+import yaml
+from tqdm import tqdm
+from hrnet.core.function import convert_label, convert_color
+from PIL import Image
+import numpy as np
+import matplotlib.pyplot as plt
+
+
+cfg_path = "../config/hrnet_rellis/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484.yaml"
+config.defrost()
+config.merge_from_file(cfg_path)
+config.merge_from_list(['TEST.MODEL_FILE',
+                        '../config/weights/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth'])
+config.freeze()
+
+
+def load_hrnet():
+    model = eval('models.' + config.MODEL.NAME + '.get_seg_model')(config)
+    model_state_file = "../config/weights/seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth"
+
+    pretrained_dict = torch.load(model_state_file)
+    if 'state_dict' in pretrained_dict:
+        pretrained_dict = pretrained_dict['state_dict']
+    model_dict = model.state_dict()
+    pretrained_dict = {k[6:]: v for k, v in pretrained_dict.items()
+                       if k[6:] in model_dict.keys()}
+    model_dict.update(pretrained_dict)
+    model.load_state_dict(model_dict)
+    return model
+
+
+def load_smp():
+    model = torch.load('../config/weights/smp/se_resnext50_32x4d_352x640_lr1e-4.pth')
+    return model
+
+
+MODEL = 'hrnet'
+# MODEL = 'smp'
+model = load_hrnet() if MODEL == 'hrnet' else load_smp()
+
+# gpus = list(config.GPUS)
+gpus = [0]
+model = nn.DataParallel(model, device_ids=gpus).cuda()
+
+# prepare data
+test_dataset = eval('datasets.' + config.DATASET.DATASET)(
+    root=config.DATASET.ROOT,
+    list_path='test.lst',
+    num_samples=None,
+    # num_classes=config.DATASET.NUM_CLASSES,
+    num_classes=20,
+    multi_scale=False,
+    flip=False,
+    ignore_label=config.TRAIN.IGNORE_LABEL,
+    base_size=1920,
+    crop_size=(704, 1280),
+    downsample_rate=1)
+
+testloader = torch.utils.data.DataLoader(test_dataset,
+                                         batch_size=1,
+                                         shuffle=False,
+                                         num_workers=config.WORKERS,
+                                         pin_memory=True)
+
+data_cfg = "../config/rellis.yaml"
+CFG = yaml.safe_load(open(data_cfg, 'r'))
+id_color_map = CFG["color_map"]
+
+model.eval()
+with torch.no_grad():
+
+    image = test_dataset[0][0]
+
+    pred = model(image)
+    if MODEL == 'hrnet':
+        pred = pred[config.TEST.OUTPUT_INDEX]
+    pred_np = pred.cpu().numpy()
+    b = pred.shape[0]
+
+    for i in range(b):
+        pred_arg = np.argmax(pred_np[i], axis=0).astype(np.uint8)
+        print(pred_arg)
+        # pred_arg = convert_label(pred_arg, True)
+        color_label = convert_color(pred_arg, id_color_map)
+
+        if it % 10 == 0:
+            plt.figure()
+            plt.imshow(color_label)
+            plt.show()
