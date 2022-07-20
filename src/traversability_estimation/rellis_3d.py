@@ -187,10 +187,10 @@ class DatasetSemSeg(BaseDataset):
                      19: 13,
                      23: 14,
                      27: 15,
-                     29: 1,
-                     30: 1,
+                     # 29: 1,
+                     # 30: 1,
                      31: 16,
-                     32: 4,
+                     # 32: 4,
                      33: 17,
                      34: 18}
 
@@ -331,8 +331,7 @@ class DatasetSemSeg(BaseDataset):
     def label_transform(label):
         return np.array(label).astype('int32')
 
-    def gen_sample(self, image, label,
-                   multi_scale=True, is_flip=True):
+    def apply_augmentations(self, image, label, multi_scale=True, is_flip=True):
         if multi_scale:
             rand_scale = 0.5 + random.randint(0, self.scale_factor) / 10.0
             image, label = self.multi_scale_aug(image, label, rand_scale=rand_scale)
@@ -356,7 +355,6 @@ class DatasetSemSeg(BaseDataset):
                 fy=self.downsample_rate,
                 interpolation=cv2.INTER_NEAREST
             )
-
         return image, label
 
     def convert_label(self, label, inverse=False):
@@ -374,8 +372,7 @@ class DatasetSemSeg(BaseDataset):
         image = cv2.imread(os.path.join(self.path, item["img"]), cv2.IMREAD_COLOR)
 
         mask = np.array(Image.open(os.path.join(self.path, item["label"])))
-        mask = mask[:, :]
-        mask = self.convert_label(mask)
+        mask = self.convert_label(mask, inverse=False)
 
         if 'test' in self.split:
             new_h, new_w = self.crop_size
@@ -383,7 +380,7 @@ class DatasetSemSeg(BaseDataset):
             image = self.input_transform(image)
         else:
             # add augmentations
-            image, mask = self.gen_sample(image, mask, self.multi_scale, self.flip)
+            image, mask = self.apply_augmentations(image, mask, self.multi_scale, self.flip)
         # extract certain classes from mask
         masks = [(mask == v) for v in self.class_values]
         mask = np.stack(masks, axis=0).astype('float')
@@ -395,20 +392,28 @@ class DatasetSemSeg(BaseDataset):
 
 def semseg_test():
     from traversability_estimation.utils import visualize
+    from hrnet.core.function import convert_label, convert_color
+    import yaml
 
     split = np.random.choice(['test', 'train', 'val'])
-    ds = DatasetSemSeg(classes=['grass', 'tree'], split=split)
-    image, mask = ds[int(np.random.choice(range(len(ds))))]
+    # split = 'test'
+    ds = DatasetSemSeg(split=split)
+    image, gt_mask = ds[int(np.random.choice(range(len(ds))))]
 
     if split in ['val', 'train']:
         image = image.transpose([1, 2, 0])
-    print(image.shape, mask.shape)
 
-    image_vis = image * ds.std + ds.mean
+    image_vis = np.uint8(255 * (image * ds.std + ds.mean))
+
+    CFG = yaml.safe_load(open(os.path.join(data_dir,  "../config/rellis.yaml"), 'r'))
+    color_map = CFG["color_map"]
+    gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8) - 1
+    gt_arg = convert_label(gt_arg, inverse=True)
+    gt_color = convert_color(gt_arg, color_map)
+
     visualize(
-        image=np.uint8(255 * image_vis),
-        grass_mask=mask[0, ...],
-        tree_mask=mask[1, ...]
+        image=image_vis,
+        label=gt_color,
     )
 
 
