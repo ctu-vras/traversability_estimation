@@ -4,39 +4,40 @@ from traversability_estimation.rellis_3d import DatasetSemSeg as Dataset
 from torch.utils.data import DataLoader
 import torch
 import segmentation_models_pytorch as smp
+from argparse import ArgumentParser
 
 
-IMG_SIZE = (352, 640)  # src_size // 4
-# size = (704, 1280)  # src_size // 2
-BATCH_SIZE = 5
-n_epochs = 100
-LR = 1e-4
-# Create model and train
-ENCODER = 'mobilenet_v2'
-ENCODER_WEIGHTS = 'imagenet'
-CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water',
-           'sky', 'vehicle', 'object', 'asphalt', 'building',
-           'log', 'person', 'fence', 'bush', 'concrete',
-           'barrier', 'puddle', 'mud', 'rubble']
-# could be None for logits or 'softmax2d' for multiclass segmentation
-ACTIVATION = 'sigmoid' if len(CLASSES) == 1 else 'softmax2d'
-DEVICE = 'cuda'
+parser = ArgumentParser()
+parser.add_argument('--lr', type=float, default=1e-4)
+parser.add_argument('--model', type=str, default='Unet')
+parser.add_argument('--encoder', type=str, default='resnet34')
+parser.add_argument('--encoder_weights', type=str, default='imagenet')
+parser.add_argument('--batch_size', type=int, default=1)
+parser.add_argument('--img_size', type=tuple, default=(704, 960))
+parser.add_argument('--classes', type=list, default=['void', 'dirt', 'grass', 'tree', 'pole', 'water',
+                                                     'sky', 'vehicle', 'object', 'asphalt', 'building',
+                                                     'log', 'person', 'fence', 'bush', 'concrete',
+                                                     'barrier', 'puddle', 'mud', 'rubble'])
+parser.add_argument('--n_epochs', type=int, default=100)
+parser.add_argument('--device', type=str, default='cuda')
+args = parser.parse_args()
 
 # create segmentation model with pretrained encoder
-model = smp.Linknet(
-    encoder_name=ENCODER,
-    encoder_weights=ENCODER_WEIGHTS,
+architecture = eval('smp.%s' % args.model)
+model = architecture(
+    encoder_name=args.encoder,
+    encoder_weights=args.encoder_weights,
     in_channels=3,
-    classes=len(CLASSES),
-    activation=ACTIVATION,
+    classes=len(args.classes),
+    activation='sigmoid' if len(args.classes) == 1 else 'softmax2d',
 )
 # model = torch.load('../config/weights/smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth')
 model = model.train()
 
-train_dataset = Dataset(classes=CLASSES, crop_size=IMG_SIZE, split='train')
-valid_dataset = Dataset(classes=CLASSES, crop_size=IMG_SIZE, split='val')
+train_dataset = Dataset(classes=args.classes, crop_size=args.img_size, split='train')
+valid_dataset = Dataset(classes=args.classes, crop_size=args.img_size, split='val')
 
-train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=12)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=12)
 valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
 
 # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
@@ -47,7 +48,7 @@ metrics = [
 ]
 
 optimizer = torch.optim.Adam([ 
-    dict(params=model.parameters(), lr=LR),
+    dict(params=model.parameters(), lr=args.lr),
 ])
 
 # create epoch runners 
@@ -57,7 +58,7 @@ train_epoch = smp.utils.train.TrainEpoch(
     loss=loss, 
     metrics=metrics, 
     optimizer=optimizer,
-    device=DEVICE,
+    device=args.device,
     verbose=True,
 )
 
@@ -65,13 +66,13 @@ valid_epoch = smp.utils.train.ValidEpoch(
     model, 
     loss=loss, 
     metrics=metrics, 
-    device=DEVICE,
+    device=args.device,
     verbose=True,
 )
 
 # train model
 max_score = 0
-for i in range(0, n_epochs):
+for i in range(0, args.n_epochs):
     print('\nEpoch: {}'.format(i))
     train_logs = train_epoch.run(train_loader)
     valid_logs = valid_epoch.run(valid_loader)
@@ -79,9 +80,10 @@ for i in range(0, n_epochs):
     # do something (save model, change lr, etc.)
     if max_score < valid_logs['iou_score']:
         max_score = valid_logs['iou_score']
-        torch.save(model, './%s_%dx%d_lr%g_iou_%.2f.pth' % (ENCODER, IMG_SIZE[0], IMG_SIZE[1], LR, max_score))
+        torch.save(model, './%s_%s_%dx%d_lr%g_bs%d_epoch%d_iou_%.2f.pth' %
+                   (args.model, args.encoder, args.img_size[0], args.img_size[1], args.lr, args.batch_size, i, max_score))
         print('Model saved!')
         
     if i == 25:
-        optimizer.param_groups[0]['lr'] = LR / 10.0
+        optimizer.param_groups[0]['lr'] = args.lr / 10.0
         print('Decrease decoder learning rate!')
