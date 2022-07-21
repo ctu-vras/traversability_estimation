@@ -391,7 +391,7 @@ class DatasetSemSeg(BaseDataset):
 
 
 def semseg_test():
-    from traversability_estimation.utils import visualize
+    from datasets.utils import visualize
     from hrnet.core.function import convert_label, convert_color
     import yaml
 

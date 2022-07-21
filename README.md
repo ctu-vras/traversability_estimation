@@ -29,7 +29,7 @@ high-precision GPS measurement, and IMU data.
             └── raw_data
 ```
 
-See [rellis_3d.py](./src/traversability_estimation/rellis_3d.py) for more details.
+See [rellis_3d.py](src/datasets/rellis_3d.py) for more details.
 
 ### ROS wrapper
 

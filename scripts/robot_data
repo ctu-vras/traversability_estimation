@@ -3,8 +3,8 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
-from traversability_estimation.rellis_3d import Sequence, seq_names
-from traversability_estimation.utils import filter_camera_points, normalize, timing
+from datasets.rellis_3d import Sequence, seq_names
+from datasets.utils import filter_camera_points, normalize, timing
 # ROS
 import rospy
 from sensor_msgs.msg import CameraInfo, PointCloud2, CompressedImage
