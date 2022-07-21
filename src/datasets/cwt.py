@@ -40,7 +40,10 @@ class CWT(BaseDataset):
         if path is None:
             path = join(data_dir, 'CWT')
         assert os.path.exists(path)
-        assert split in ['train', 'test']
+        assert split in ['train', 'test', 'val']
+        # validation dataset is called 'test'
+        if split == 'val':
+            split = 'test'
         self.path = path
         self.split = split
         if not classes:
@@ -86,13 +89,9 @@ class CWT(BaseDataset):
 
         mask = np.array(Image.open(item["label"]))
 
-        if 'test' in self.split:
-            new_h, new_w = self.crop_size
-            image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-            image = self.input_transform(image)
-        else:
-            # add augmentations
-            image, mask = self.apply_augmentations(image, mask, self.multi_scale, self.flip)
+        # add augmentations
+        # TODO: fix padding, background must be black (0)
+        image, mask = self.apply_augmentations(image, mask, self.multi_scale, self.flip)
 
         # extract certain classes from mask
         masks = [(mask == v) for v in self.class_values]
@@ -104,8 +103,7 @@ class CWT(BaseDataset):
 def demo():
     from datasets.utils import visualize, convert_color
 
-    split = np.random.choice(['test', 'train'])
-    # split = 'test'
+    split = np.random.choice(['test', 'train', 'val'])
     ds = CWT(split=split)
 
     for _ in range(5):
