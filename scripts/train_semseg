@@ -80,9 +80,11 @@ for i in range(0, args.n_epochs):
     # do something (save model, change lr, etc.)
     if max_score < valid_logs['iou_score']:
         max_score = valid_logs['iou_score']
-        torch.save(model, './%s_%s_%dx%d_lr%g_bs%d_epoch%d_iou_%.2f.pth' %
-                   (args.model, args.encoder, args.img_size[0], args.img_size[1], args.lr, args.batch_size, i, max_score))
-        print('Model saved!')
+        best_model_name = './%s_%s_%dx%d_lr%g_bs%d_epoch%d_%s_iou_%.2f.pth' %\
+                          (args.model, args.encoder, args.img_size[0], args.img_size[1],
+                           args.lr, args.batch_size, i, args.dataset, max_score)
+        torch.save(model, best_model_name)
+        print('Model %s saved!' % best_model_name)
         
     if i == 25:
         optimizer.param_groups[0]['lr'] = args.lr / 10.0

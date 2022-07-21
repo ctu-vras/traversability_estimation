@@ -1,17 +1,12 @@
 import os
-from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from .utils import *
 from .base_dataset import BaseDataset
-from copy import copy
-import torch
 from PIL import Image
-import random
 
 __all__ = [
     'data_dir',
-    'seq_names',
-    'Sequence',
+    'CWT',
 ]
 
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
