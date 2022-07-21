@@ -2,9 +2,9 @@ import os
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from .utils import *
+from .base_dataset import BaseDataset
 from copy import copy
 import torch
-from torch.utils.data import Dataset as BaseDataset
 from PIL import Image
 import random
 
@@ -28,7 +28,7 @@ seq_names = [
 # seq_names = ['%05d' % i for i in range(5)]
 
 
-class Sequence(BaseDataset):
+class Sequence(torch.utils.data.Dataset):
     def __init__(self, seq=None, path=None, poses_file='poses.txt', poses_path=None, split=None):
         """Rellis-3D dataset: https://unmannedlab.github.io/research/RELLIS-3D.
         
@@ -167,7 +167,7 @@ class Sequence(BaseDataset):
         return read_semseg(self.semseg_path(self.ids_semseg[i]))
 
 
-class DatasetSemSeg(BaseDataset):
+class Rellis3D(BaseDataset):
     CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
     LABEL_MAPPING = {0: 0,
@@ -208,6 +208,9 @@ class DatasetSemSeg(BaseDataset):
                  scale_factor=16,
                  mean=np.asarray([0.54218053, 0.64250553, 0.56620195]),
                  std=np.asarray([0.54218052, 0.64250552, 0.56620194])):
+        super(Rellis3D, self).__init__(ignore_label, base_size,
+                                       crop_size, downsample_rate, scale_factor, mean, std, )
+
         if path is None:
             path = join(data_dir, 'Rellis_3D')
         assert os.path.exists(path)
@@ -258,105 +261,6 @@ class DatasetSemSeg(BaseDataset):
             })
         return files
 
-    def input_transform(self, image):
-        image = image.astype(np.float32)[:, :, ::-1]
-        image = image / 255.0
-        image -= self.mean
-        image /= self.std
-        return image
-
-    @staticmethod
-    def pad_image(image, h, w, size, padvalue):
-        pad_image = image.copy()
-        pad_h = max(size[0] - h, 0)
-        pad_w = max(size[1] - w, 0)
-        if pad_h > 0 or pad_w > 0:
-            pad_image = cv2.copyMakeBorder(image, 0, pad_h, 0,
-                                           pad_w, cv2.BORDER_CONSTANT,
-                                           value=padvalue)
-        return pad_image
-
-    def rand_crop(self, image, label):
-        h, w = image.shape[:-1]
-        image = self.pad_image(image, h, w, self.crop_size,
-                               (0.0, 0.0, 0.0))
-        label = self.pad_image(label, h, w, self.crop_size,
-                               (self.ignore_label,))
-
-        new_h, new_w = label.shape
-        x = random.randint(0, new_w - self.crop_size[1])
-        y = random.randint(0, new_h - self.crop_size[0])
-        image = image[y:y+self.crop_size[0], x:x+self.crop_size[1]]
-        label = label[y:y+self.crop_size[0], x:x+self.crop_size[1]]
-
-        return image, label
-
-    def multi_scale_aug(self, image, label=None, rand_scale=1, rand_crop=True):
-        long_size = int(self.base_size * rand_scale + 0.5)
-        h, w = image.shape[:2]
-        if h > w:
-            new_h = long_size
-            new_w = int(w * long_size / h + 0.5)
-        else:
-            new_w = long_size
-            new_h = int(h * long_size / w + 0.5)
-
-        image = cv2.resize(image, (new_w, new_h),
-                           interpolation=cv2.INTER_LINEAR)
-        if label is not None:
-            label = cv2.resize(label, (new_w, new_h),
-                               interpolation=cv2.INTER_NEAREST)
-        else:
-            return image
-
-        if rand_crop:
-            image, label = self.rand_crop(image, label)
-
-        return image, label
-
-    @staticmethod
-    def random_brightness(img, shift_value=10):
-        if not shift_value:
-            return img
-        if random.random() < 0.5:
-            return img
-        img = img.astype(np.float32)
-        shift = random.randint(-shift_value, shift_value)
-        img[:, :, :] += shift
-        img = np.around(img)
-        img = np.clip(img, 0, 255).astype(np.uint8)
-        return img
-
-    @staticmethod
-    def label_transform(label):
-        return np.array(label).astype('int32')
-
-    def apply_augmentations(self, image, label, multi_scale=True, is_flip=True):
-        if multi_scale:
-            rand_scale = 0.5 + random.randint(0, self.scale_factor) / 10.0
-            image, label = self.multi_scale_aug(image, label, rand_scale=rand_scale)
-
-        image = self.random_brightness(image)
-        image = self.input_transform(image)
-        label = self.label_transform(label)
-
-        image = image.transpose((2, 0, 1))
-
-        if is_flip:
-            flip = np.random.choice(2) * 2 - 1
-            image = image[:, :, ::flip]
-            label = label[:, ::flip]
-
-        if self.downsample_rate != 1:
-            label = cv2.resize(
-                label,
-                None,
-                fx=self.downsample_rate,
-                fy=self.downsample_rate,
-                interpolation=cv2.INTER_NEAREST
-            )
-        return image, label
-
     def convert_label(self, label, inverse=False):
         temp = label.copy()
         if inverse:
@@ -386,9 +290,6 @@ class DatasetSemSeg(BaseDataset):
         mask = np.stack(masks, axis=0).astype('float')
         return image.copy(), mask.copy()
 
-    def __len__(self):
-        return len(self.files)
-
 
 def semseg_test():
     from datasets.utils import visualize
@@ -397,7 +298,7 @@ def semseg_test():
 
     split = np.random.choice(['test', 'train', 'val'])
     # split = 'test'
-    ds = DatasetSemSeg(split=split)
+    ds = Rellis3D(split=split)
     image, gt_mask = ds[int(np.random.choice(range(len(ds))))]
 
     if split in ['val', 'train']:

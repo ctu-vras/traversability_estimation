@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from datasets.rellis_3d import DatasetSemSeg as Dataset
+from datasets.rellis_3d import Rellis3D as Dataset
 from torch.utils.data import DataLoader
 import torch
 import segmentation_models_pytorch as smp

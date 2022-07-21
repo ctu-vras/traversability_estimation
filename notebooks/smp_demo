@@ -5,7 +5,7 @@ import yaml
 from hrnet.core.function import convert_label, convert_color
 import numpy as np
 from datasets.utils import visualize
-from datasets.rellis_3d import DatasetSemSeg as Dataset
+from datasets.rellis_3d import Rellis3D as Dataset
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
