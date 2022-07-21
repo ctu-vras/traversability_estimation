@@ -292,8 +292,8 @@ class Rellis3D(BaseDataset):
 
 
 def semseg_test():
-    from datasets.utils import visualize
-    from hrnet.core.function import convert_label, convert_color
+    from datasets.utils import visualize, convert_color
+    from hrnet.core.function import convert_label
     import yaml
 
     split = np.random.choice(['test', 'train', 'val'])

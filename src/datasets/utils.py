@@ -187,3 +187,10 @@ def visualize(**images):
         plt.title(' '.join(name.split('_')).title())
         plt.imshow(image)
     plt.show()
+
+
+def convert_color(label, color_map):
+    temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    for k, v in color_map.items():
+        temp[label == k] = v
+    return temp
