@@ -13,14 +13,16 @@ parser.add_argument('--model', type=str, default='Unet')
 parser.add_argument('--encoder', type=str, default='resnet34')
 parser.add_argument('--encoder_weights', type=str, default='imagenet')
 parser.add_argument('--batch_size', type=int, default=1)
-parser.add_argument('--img_size', type=tuple, default=(704, 960))
+parser.add_argument('--img_size', type=int, nargs='+', default='704 960')
 parser.add_argument('--classes', type=list, default=['void', 'dirt', 'grass', 'tree', 'pole', 'water',
                                                      'sky', 'vehicle', 'object', 'asphalt', 'building',
                                                      'log', 'person', 'fence', 'bush', 'concrete',
                                                      'barrier', 'puddle', 'mud', 'rubble'])
 parser.add_argument('--n_epochs', type=int, default=100)
 parser.add_argument('--device', type=str, default='cuda')
+parser.add_argument('--n_workers', type=int, default=12)
 args = parser.parse_args()
+img_size = tuple(args.img_size)
 
 # create segmentation model with pretrained encoder
 architecture = eval('smp.%s' % args.model)
@@ -34,11 +36,11 @@ model = architecture(
 # model = torch.load('../config/weights/smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth')
 model = model.train()
 
-train_dataset = Dataset(classes=args.classes, crop_size=args.img_size, split='train')
-valid_dataset = Dataset(classes=args.classes, crop_size=args.img_size, split='val')
+train_dataset = Dataset(classes=args.classes, crop_size=img_size, split='train')
+valid_dataset = Dataset(classes=args.classes, crop_size=img_size, split='val')
 
-train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=12)
-valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 3)
 
 # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
 loss = smp.utils.losses.DiceLoss()
