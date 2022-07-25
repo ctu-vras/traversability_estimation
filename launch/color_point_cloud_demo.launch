@@ -18,8 +18,9 @@
     </node>
 
     <!-- Semantic segmantation of images -->
-    <node if="$(arg run_semseg)" name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
+    <node if="$(arg run_semseg)" name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference" output="screen">
         <rosparam subst_value="true">
+            model_name: hrnet
             device: $(arg device)
             dtype: float
             num_cameras: 1
@@ -36,9 +37,9 @@
         <remap from="input_0/image/compressed" to="/robot_data/rgb/compressed"/>
         <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
 
-        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
-        <remap from="output_0/semseg/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
-        <remap from="output_0/camera_info" to="/hrnet_inference/camera_info"/>
+        <remap from="output_0/semseg" to="/segmentation_inference/semantic_segmentation"/>
+        <remap from="output_0/semseg/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
+        <remap from="output_0/camera_info" to="/segmentation_inference/camera_info"/>
     </node>
 
     <!-- Add color to a point cloud from a camera image -->
@@ -65,9 +66,9 @@
         <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>
         <remap unless="$(arg run_semseg)" from="/camera_0/image/compressed" to="/robot_data/semantic_segmentation/compressed"/>
 
-        <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/hrnet_inference/camera_info"/>
-        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/hrnet_inference/semantic_segmentation"/>
-        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
+        <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>
+        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/semantic_segmentation"/>
+        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
 
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>

@@ -19,8 +19,9 @@
     </include>
 
     <!-- Semantic segmantation of images -->
-    <node name="hrnet_inference" pkg="traversability_estimation" type="hrnet_inference" output="screen">
+    <node name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference" output="screen">
         <rosparam subst_value="true">
+            model_name: hrnet
             device: $(arg device)
             num_cameras: 1
             image_transport: $(arg image_transport)
