@@ -48,7 +48,12 @@ def convert_label(label, inverse=False):
                      #  32: 4,
                      33: 17,
                      34: 18}
-    temp = label.copy()
+    if isinstance(label, np.ndarray):
+        temp = label.copy()
+    elif isinstance(label, torch.Tensor):
+        temp = label.clone()
+    else:
+        raise ValueError('Supported types: np.ndarray, torch.Tensor')
     if inverse:
         for v, k in label_mapping.items():
             temp[label == k] = v
@@ -59,7 +64,12 @@ def convert_label(label, inverse=False):
 
 
 def convert_color(label, color_map):
-    temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    if isinstance(label, np.ndarray):
+        temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    elif isinstance(label, torch.Tensor):
+        temp = torch.zeros(label.shape + (3,), dtype=torch.uint8)
+    else:
+        raise ValueError('Supported types: np.ndarray, torch.Tensor')
     for k, v in color_map.items():
         temp[label == k] = v
     return temp

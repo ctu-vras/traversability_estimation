@@ -5,6 +5,7 @@ import os
 import cv2 as cv
 import yaml
 import torch
+import torchvision
 import rospy
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
@@ -15,11 +16,12 @@ from time import time
 from threading import RLock
 
 
+rospy.init_node('smp_inference', log_level=rospy.DEBUG)
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
 RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_traversability.yaml")
-PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/se_resnext50_32x4d_352x640_lr1e-4.pth")
-# PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth")
+model_weights = rospy.get_param('~model_weights', "FPN_se_resnext50_32x4d_352x640_lr1e-4_Rellis3D.pth")
+PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/%s" % model_weights)
 
 
 class ImageProcessor(object):
@@ -194,21 +196,24 @@ class ImageProcessor(object):
 
     def process(self, image):
         t0 = time()
-        orig_size = (image.shape[1], image.shape[0])
+        orig_size = image.shape[:2]
         image = self.preprocessing(image)
+        t1 = time()
+        rospy.logdebug('Preprocessing took (%.3f s).', t1 - t0)
         with torch.no_grad():
             input = torch.as_tensor(image).unsqueeze(0)
             input = input.to(device=self.device, dtype=self.dtype)
             pred = self.model(input)
+        t2 = time()
+        rospy.logdebug('Model inference took (%.3f s).', t2 - t1)
         pred = self.postprocessing(pred, orig_size)
-        rospy.logdebug('Image %s processed (%.3f s).', image.shape, time() - t0)
+        rospy.logdebug('Postprocessing took (%.3f s).', time() - t2)
         return pred
 
     def postprocessing(self, pred, size):
-        pred = pred.squeeze(0).cpu().numpy()
-        pred = np.argmax(pred, axis=0).astype(np.uint8) - 1
+        pred = torch.argmax(pred, dim=1) - 1
         pred = convert_label(pred, inverse=True)
-        pred = cv.resize(pred, size, interpolation=cv.INTER_NEAREST)
+        pred = torchvision.transforms.Resize(size)(pred)
         if self.label_map is not None:
             pred = self.label_map[pred]
         return pred
@@ -237,12 +242,15 @@ class ImageProcessor(object):
             rospy.loginfo('Image %i (%s) processed (%.3f s).',
                           i, image.header.frame_id, (rospy.Time.now() - t0).to_sec())
 
+            t1 = rospy.Time.now()
+            pred = pred.squeeze(0).cpu().numpy()
             if self.compressed_pubs[i].get_num_connections():
                 msg = CompressedImage()
                 msg.header = image.header
                 # msg.format = "png"
                 # msg.data = np.array(cv.imencode('.png', pred)[1]).tobytes()
                 msg.format = "jpeg"
+                # msg.data = torchvision.io.encode_jpeg(pred).squeeze(0).numpy().tobytes()
                 msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_pubs[i].publish(msg)
             self.camera_info_pubs[i].publish(camera_info)
@@ -253,13 +261,14 @@ class ImageProcessor(object):
                 msg = CompressedImage()
                 msg.header = image.header
                 msg.format = "jpeg"
+                # msg.data = torchvision.io.encode_jpeg(pred).squeeze(0).numpy().tobytes()
                 msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_color_pubs[i].publish(msg)
+            rospy.loginfo('Image %i (%s) publishing (%.3f s).',
+                          i, image.header.frame_id, (rospy.Time.now() - t1).to_sec())
 
 
 def main():
-    rospy.init_node('smp_inference', log_level=rospy.INFO)
-
     # Draw legend
     legend = rospy.get_param("~legend", False)
     label_config = rospy.get_param('~label_config', None)

@@ -6,6 +6,8 @@
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
     <arg name="rviz" default="true"/>
     <arg name="model" default="hrnet" doc="Currently supported options: ['hrnet', 'smp']"/>
+    <arg name="model_weights" default="PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth"
+         doc="SMP model weights (file name stored in 'config/weights/smp/' folder)"/>
 
     <include file="$(dirname)/robot_data.launch">
         <arg name="data_sequence" value="$(arg data_sequence)"/>
@@ -13,10 +15,11 @@
 
     <node name="$(arg model)_inference" pkg="traversability_estimation" type="$(arg model)_inference" output="screen">
         <rosparam subst_value="true">
+            model_weights: $(arg model_weights)
             device: $(arg device)
             num_cameras: 1
             image_transport: 'compressed'
-            legend: false
+            legend: true
             max_age: 1.0
             input_scale: 0.5
             traversability_labels: false
