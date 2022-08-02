@@ -249,7 +249,8 @@ class ImageProcessor(object):
             input = input.to(device=self.device, dtype=self.dtype)
             pred = self.model(input)
         t2 = time()
-        rospy.logdebug('Model inference took (%.3f s).', t2 - t1)
+        rospy.logdebug('Model inference of image shape (%i, %i) took (%.3f s).',
+                       input.shape[2], input.shape[3], t2 - t1)
         pred = self.postprocessing(pred, orig_size)
         rospy.logdebug('Postprocessing took (%.3f s).', time() - t2)
         return pred
