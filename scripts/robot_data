@@ -51,7 +51,7 @@ def matrix_to_pose_msg(T, frame_id):
 
 
 class RobotData:
-    def __init__(self, sequence: str = '00000'):
+    def __init__(self, sequence='00000'):
         self.current_pose = None
         self.rgb = None
         self.semseg = None
@@ -126,7 +126,7 @@ class RobotData:
         cloud_lid = structured_to_unstructured(cloud[['x', 'y', 'z']])[::self.map_step]
         cloud_map = np.matmul(cloud_lid, pose[:3, :3].T) + pose[:3, 3:].T
         self.clouds.append(cloud_map)
-        rospy.logdebug(f'Point cloud shape: {cloud_map.shape}')
+        rospy.logdebug('Point cloud shape:', cloud_map.shape)
 
         global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
         global_cloud = unstructured_to_structured(global_cloud, names=['x', 'y', 'z'])
