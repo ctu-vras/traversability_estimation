@@ -262,7 +262,9 @@ class ImageProcessor(object):
         else:
             pred = torch.argmax(pred, dim=1) - 1
         pred = convert_label(pred, inverse=True)
-        pred = torchvision.transforms.Resize(size)(pred)
+        # pred = torchvision.transforms.Resize(size)(pred)
+        pred = pred.squeeze(0).cpu().numpy()
+        pred = cv.resize(pred.astype('float32'), (size[1], size[0]), interpolation=cv.INTER_LINEAR).astype('int8')
         if self.label_map is not None:
             pred = self.label_map[pred]
         return pred
@@ -292,7 +294,6 @@ class ImageProcessor(object):
                           i, image.header.frame_id, (rospy.Time.now() - t0).to_sec())
 
             t1 = rospy.Time.now()
-            pred = pred.squeeze(0).cpu().numpy()
             if self.compressed_pubs[i].get_num_connections():
                 msg = CompressedImage()
                 msg.header = image.header
