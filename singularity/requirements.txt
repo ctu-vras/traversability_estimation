@@ -20,5 +20,5 @@ scikit-learn==1.0
 six==1.15.0
 segmentation_models_pytorch==0.2.1
 albumentations==1.2.1
-opencv-python
-open3d
+opencv-python==4.2.0.32
+open3d==0.10.0.0
