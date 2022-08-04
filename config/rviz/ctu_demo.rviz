@@ -130,7 +130,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: t
+          Channel Name: obstacle
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity
@@ -148,7 +148,7 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.02500000037252903
           Style: Flat Squares
-          Topic: /points_filtered_kontron
+          Topic: /points_filtered_kontron_traversability
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: false

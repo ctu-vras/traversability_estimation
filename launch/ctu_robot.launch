@@ -5,7 +5,7 @@
     <env name="ROSCONSOLE_FORMAT" value="[${severity} ${walltime} ${node}] ${message}"/>
 
     <!-- Semantic segmantation of images -->
-    <node name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference" output="screen">
+    <node name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference">
         <rosparam subst_value="true">
             model_name: hrnet
             device: $(arg device)
@@ -72,11 +72,10 @@
         <remap from="camera_2/image" to="/viz/camera_4/traversability"/>
         <remap from="camera_2/camera_info" to="/viz/camera_4/camera_info"/>
 
-        <remap from="cloud_in" to="/points_filtered_jetson"/>
-        <remap from="cloud_out" to="/points_filtered_jetson_traversability"/>
-        <!--
+<!--        <remap from="cloud_in" to="/points_filtered_jetson"/>-->
+<!--        <remap from="cloud_out" to="/points_filtered_jetson_traversability"/>-->
+
         <remap from="cloud_in" to="/points_filtered_kontron"/>
         <remap from="cloud_out" to="/points_filtered_kontron_traversability"/>
-        -->
     </node>
 </launch>

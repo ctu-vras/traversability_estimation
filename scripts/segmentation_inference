@@ -5,7 +5,6 @@ import os
 import cv2 as cv
 import yaml
 import torch
-import torchvision
 import rospy
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
@@ -255,18 +254,28 @@ class ImageProcessor(object):
         rospy.logdebug('Postprocessing took (%.3f s).', time() - t2)
         return pred
 
-    def postprocessing(self, pred, size):
+    def postprocessing(self, pred_raw, size):
         if self.model_name == 'hrnet':
-            pred = pred[config.TEST.OUTPUT_INDEX]
-            pred = torch.argmax(pred, dim=1)
+            pred_raw = pred_raw[config.TEST.OUTPUT_INDEX]
+            pred_raw = pred_raw.squeeze(0).cpu().numpy()
+            pred = np.argmax(pred_raw.copy(), axis=0)
         else:
-            pred = torch.argmax(pred, dim=1) - 1
+            pred_raw = pred_raw.squeeze(0).cpu().numpy()
+            pred = np.argmax(pred_raw.copy(), axis=0) - 1
+        C, H, W = pred_raw.shape
+        assert pred.shape == (H, W)
+        pred = pred.astype('float32')
+        pred = cv.resize(pred, (size[1], size[0]), interpolation=cv.INTER_LINEAR).astype('int8')
         pred = convert_label(pred, inverse=True)
-        # pred = torchvision.transforms.Resize(size)(pred)
-        pred = pred.squeeze(0).cpu().numpy()
-        pred = cv.resize(pred.astype('float32'), (size[1], size[0]), interpolation=cv.INTER_LINEAR).astype('int8')
         if self.label_map is not None:
             pred = self.label_map[pred]
+            # tmp = 1 / (1 + np.exp(-pred_raw))
+            # assert tmp.shape == (C, H, W)
+            # tmp = np.asarray(tmp[1], dtype='float')
+            # # tmp = np.asarray(tmp[2] > 0.8, dtype='float')
+            # # tmp = cv.resize(tmp, (600, 400), interpolation=cv.INTER_AREA)
+            # cv.imshow('pred', tmp)
+            # cv.waitKey(3)
         return pred
 
     def spin(self):
@@ -300,7 +309,6 @@ class ImageProcessor(object):
                 # msg.format = "png"
                 # msg.data = np.array(cv.imencode('.png', pred)[1]).tobytes()
                 msg.format = "jpeg"
-                # msg.data = torchvision.io.encode_jpeg(pred).squeeze(0).numpy().tobytes()
                 msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_pubs[i].publish(msg)
             self.camera_info_pubs[i].publish(camera_info)
@@ -311,7 +319,6 @@ class ImageProcessor(object):
                 msg = CompressedImage()
                 msg.header = image.header
                 msg.format = "jpeg"
-                # msg.data = torchvision.io.encode_jpeg(pred).squeeze(0).numpy().tobytes()
                 msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_color_pubs[i].publish(msg)
             rospy.loginfo('Image %i (%s) publishing (%.3f s).',

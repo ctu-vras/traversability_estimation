@@ -72,7 +72,6 @@ class RobotData:
         self.clouds = list()
 
         self.path_pub = rospy.Publisher('~path', Path, queue_size=2)
-        self.map_pc_pub = rospy.Publisher('~map_cloud', PointCloud2, queue_size=1)
         self.lidar_pc_pub = rospy.Publisher('~lidar_cloud', PointCloud2, queue_size=1)
         self.cam_pc_pub = rospy.Publisher('~camera_cloud', PointCloud2, queue_size=1)
         self.caminfo_pub = rospy.Publisher('~camera_info', CameraInfo, queue_size=1)
@@ -124,17 +123,10 @@ class RobotData:
         self.poses.append(self.current_pose)
 
         cloud_lid = structured_to_unstructured(cloud[['x', 'y', 'z']])[::self.map_step]
-        cloud_map = np.matmul(cloud_lid, pose[:3, :3].T) + pose[:3, 3:].T
-        self.clouds.append(cloud_map)
-        rospy.logdebug('Point cloud shape:', cloud_map.shape)
-
-        global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
-        global_cloud = unstructured_to_structured(global_cloud, names=['x', 'y', 'z'])
 
         self.rgb = rgb
         self.semseg = semseg
         self.lidar_cloud = cloud_lid
-        self.global_cloud = global_cloud
 
     def run(self, evt):
         self.step()
@@ -142,7 +134,6 @@ class RobotData:
         stamp = rospy.Time.now()
         self.time_stamp = stamp
         path_msg = self.get_path_msg(time_stamp=stamp)
-        global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.origin_frame)
         lidar_pc_msg = self.to_cloud_msg(self.lidar_cloud, time_stamp=stamp, frame=self.lidar_frame)
         cam_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.lidar_cloud, time_stamp=stamp)
         img_msg = self.get_image_msg(self.rgb, time_stamp=stamp)
@@ -152,7 +143,6 @@ class RobotData:
         self.calibration_msgs['intrinsics'].header.stamp = self.time_stamp
         self.caminfo_pub.publish(self.calibration_msgs['intrinsics'])
         self.path_pub.publish(path_msg)
-        self.map_pc_pub.publish(global_pc_msg)
         self.lidar_pc_pub.publish(lidar_pc_msg)
         self.cam_pc_pub.publish(cam_pc_msg)
         self.rgb_pub.publish(img_msg)

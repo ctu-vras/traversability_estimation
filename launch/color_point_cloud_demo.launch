@@ -4,7 +4,7 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
                                                    one of ['00000', '00001', '00002', '00003', '00004']"/>
-    <arg name="run_semseg" default="false"/>
+    <arg name="run_semseg" default="true"/>
 
     <!-- RELLIS-3D data -->
     <node name="robot_data" pkg="traversability_estimation" type="robot_data">
@@ -47,6 +47,9 @@
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
         <rosparam subst_value="true">
             fixed_frame: odom
+            field_name: obstacle
+            field_type: 2
+            default_color: 1.0
             num_cameras: 1
             image_transport: compressed
             max_image_age: 15.0
@@ -54,7 +57,6 @@
             image_queue_size: 2
             cloud_queue_size: 2
             wait_for_transform: 1.0
-            default_color: "0x00000000"
         </rosparam>
         <param unless="$(arg run_semseg)" name="field_name" value="rgb"/>
         <param unless="$(arg run_semseg)" name="field_type" value="7"/>
