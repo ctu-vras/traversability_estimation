@@ -4,10 +4,10 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
                                                    one of ['00000', '00001', '00002', '00003', '00004']"/>
-    <arg name="run_semseg" default="false"/>
+    <arg name="run_semseg" default="true"/>
 
     <!-- RELLIS-3D data -->
-    <node name="robot_data" pkg="traversability_estimation" type="robot_data">
+    <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
         <rosparam subst_value="true">
             data_sequence: $(arg data_sequence)
             map_step: 1
@@ -21,9 +21,9 @@
     <node if="$(arg run_semseg)"
           name="segmentation_inference"
           pkg="traversability_estimation"
-          type="segmentation_inference" output="screen">
+          type="segmentation_inference">
         <rosparam subst_value="true">
-            model_name: hrnet
+            model_name: smp
             device: $(arg device)
             dtype: float
             num_cameras: 1
@@ -42,6 +42,8 @@
 
         <remap from="output_0/semseg" to="/segmentation_inference/semantic_segmentation"/>
         <remap from="output_0/semseg/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
+        <remap from="output_0/traversability" to="/segmentation_inference/traversability"/>
+        <remap from="output_0/traversability/compressed" to="/segmentation_inference/traversability/compressed"/>
         <remap from="output_0/camera_info" to="/segmentation_inference/camera_info"/>
     </node>
 
@@ -69,9 +71,12 @@
         <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>
         <remap unless="$(arg run_semseg)" from="/camera_0/image/compressed" to="/robot_data/semantic_segmentation/compressed"/>
 
+<!--        <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>-->
+<!--        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/semantic_segmentation"/>-->
+<!--        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>-->
         <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>
-        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/semantic_segmentation"/>
-        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
+        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/traversability"/>
+        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/traversability/compressed"/>
 
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>
