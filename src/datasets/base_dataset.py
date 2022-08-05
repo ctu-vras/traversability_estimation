@@ -52,7 +52,6 @@ class BaseDataset(data.Dataset):
             pad_image = cv2.copyMakeBorder(image, 0, pad_h, 0,
                                            pad_w, cv2.BORDER_CONSTANT,
                                            value=padvalue)
-
         return pad_image
 
     def rand_crop(self, image, label):
@@ -70,8 +69,7 @@ class BaseDataset(data.Dataset):
 
         return image, label
 
-    def multi_scale_aug(self, image, label=None,
-                        rand_scale=1, rand_crop=True):
+    def multi_scale_aug(self, image, label=None, rand_scale=1, rand_crop=True):
         long_size = np.int(self.base_size * rand_scale + 0.5)
         h, w = image.shape[:2]
         if h > w:
@@ -142,8 +140,7 @@ class BaseDataset(data.Dataset):
         img = np.clip(img, 0, 255).astype(np.uint8)
         return img
 
-    def apply_augmentations(self, image, label,
-                   multi_scale=True, is_flip=True):
+    def apply_augmentations(self, image, label, multi_scale=True, is_flip=True):
         if multi_scale:
             rand_scale = 0.5 + random.randint(0, self.scale_factor) / 10.0
             image, label = self.multi_scale_aug(image, label, rand_scale=rand_scale)

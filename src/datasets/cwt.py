@@ -21,9 +21,9 @@ class CWT(BaseDataset):
                  split='train',
                  num_samples=None,
                  classes=None,
-                 multi_scale=True,
+                 multi_scale=True,   # TODO: fix padding, background must be black for masks (0)
                  flip=True,
-                 ignore_label=0,
+                 ignore_label=-1,
                  base_size=2048,
                  crop_size=(1200, 1920),
                  downsample_rate=1,
@@ -45,9 +45,10 @@ class CWT(BaseDataset):
             classes = self.CLASSES
         # convert str names to class values on masks
         self.class_values = [self.CLASSES.index(cls.lower()) for cls in classes]
+        self.palette_values = [self.PALETTE[c] for c in self.class_values]
         self.color_map = {}
-        for k in self.class_values:
-            self.color_map[k] = self.PALETTE[k]
+        for k, v in zip(self.class_values, self.palette_values):
+            self.color_map[k] = v
 
         self.base_size = base_size
         self.crop_size = crop_size
@@ -82,10 +83,9 @@ class CWT(BaseDataset):
         item = self.files[index]
         image = cv2.imread(item["img"], cv2.IMREAD_COLOR)
 
-        mask = np.array(Image.open(item["label"]))
+        mask = np.array(cv2.imread(item["label"], 0))
 
         # add augmentations
-        # TODO: fix padding, background must be black (0)
         image, mask = self.apply_augmentations(image, mask, self.multi_scale, self.flip)
 
         # extract certain classes from mask
@@ -98,20 +98,20 @@ class CWT(BaseDataset):
 def demo():
     from datasets.utils import visualize, convert_color
 
-    split = np.random.choice(['test', 'train', 'val'])
+    # split = np.random.choice(['test', 'train', 'val'])
+    split = 'train'
     ds = CWT(split=split)
 
     for _ in range(5):
         image, gt_mask = ds[int(np.random.choice(range(len(ds))))]
-
-        if split in ['val', 'train']:
-            image = image.transpose([1, 2, 0])
+        image = image.transpose([1, 2, 0])
+        image_vis = np.uint8(255 * (image * ds.std + ds.mean))
 
         gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
         gt_color = convert_color(gt_arg, ds.color_map)
 
         visualize(
-            image=image,
+            image=image_vis,
             label=gt_color,
         )
 
