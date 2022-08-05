@@ -71,9 +71,6 @@
         <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>
         <remap unless="$(arg run_semseg)" from="/camera_0/image/compressed" to="/robot_data/semantic_segmentation/compressed"/>
 
-<!--        <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>-->
-<!--        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/semantic_segmentation"/>-->
-<!--        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>-->
         <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>
         <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/traversability"/>
         <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/traversability/compressed"/>
@@ -82,7 +79,16 @@
         <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>
     </node>
 
+    <!-- Add color to a point cloud from a camera image -->
+    <node name="traversability_fusion" pkg="traversability_estimation" type="traversability_fusion" output="screen">
+        <rosparam subst_value="true">
+            map_frmae: odom
+        </rosparam>
+        <remap from="cloud_in" to="/robot_data/lidar_cloud_semseg"/>
+        <remap from="cloud_out" to="/traversability_estimation/traversability_map"/>
+    </node>
+
     <!-- RVIZ -->
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/segmented_cloud.rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/trav_fusion.rviz"/>
 </launch>

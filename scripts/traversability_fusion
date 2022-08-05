@@ -10,17 +10,17 @@ from timeit import default_timer as timer
 import scipy.spatial
 
 
-def reduce_rewards(rewards, eps=1e-6):
-    assert isinstance(rewards, np.ndarray)
-    assert len(rewards.shape) >= 2
-    n_pts = rewards.shape[0]  # (n, >=2)
-    rewards = rewards.reshape([n_pts, -1])
-    rewards = np.clip(rewards, eps, 1 - eps)
-    lo = np.log(1. - rewards)
+def fuse_traversability(trav, eps=1e-6):
+    assert isinstance(trav, np.ndarray)
+    assert len(trav.shape) >= 2
+    n_pts = trav.shape[0]  # (n, >=2)
+    trav = trav.reshape([n_pts, -1])
+    trav = np.clip(trav, eps, 1 - eps)
+    lo = np.log(1. - trav)
     lo = lo.sum(axis=1)
-    rewards = 1. - np.exp(lo)
-    assert rewards.shape == (n_pts,)
-    return rewards
+    trav = 1. - np.exp(lo)
+    assert trav.shape == (n_pts,)
+    return trav
 
 
 def msgify_cloud(cloud, frame, stamp, names=None):
@@ -36,12 +36,10 @@ def msgify_cloud(cloud, frame, stamp, names=None):
 
 class TraversabilityMapping:
     """
-    This ROS node subscribes to local map rewards cloud with PointCloud2 msgs
-    and concatenates the observations in one global PointCloud2 map.
+    This ROS node subscribes to local map traversability cloud with PointCloud2 msgs
+    and concatenates them in one global PointCloud2 map.
     Merging the points is done by determining firstly the new points by
     proximity threshold to the points in existing map.
-    The observations are firstly transformed to robot's ground truth frame
-    before being concatenated.
     """
     def __init__(self, cloud_topic='cloud'):
         # Set the device
@@ -50,15 +48,13 @@ class TraversabilityMapping:
         self.new_map = None
         self.map_frame = rospy.get_param('~map_frame', 'odom')
         self.map_step = rospy.get_param('~map_step', 10)
-        self.clouds = []
 
         # any point that is farer than this threshold from points in existing pcl is considered as new
-        self.dist_th = rospy.get_param('~pts_proximity_th', 0.5)
-        self.max_age = rospy.get_param('~max_age', 100.0)
+        self.dist_th = rospy.get_param('~pts_proximity_th', 0.2)
+        self.max_age = rospy.get_param('~max_age', 10.0)
 
-        self.rate = rospy.get_param('~reward_cloud_rate', 1.0)
-        self.trav_cloud_pub = rospy.Publisher('~traversability_map', PointCloud2, queue_size=1)
-        self.new_cloud_pub = rospy.Publisher('~new_traversability_map', PointCloud2, queue_size=1)
+        self.rate = rospy.get_param('~rate', 1.0)
+        self.trav_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
 
         self.tf = tf2_ros.Buffer(cache_time=rospy.Duration(100))
         self.tl = tf2_ros.TransformListener(self.tf)
@@ -73,7 +69,7 @@ class TraversabilityMapping:
         msg_stamp = rospy.Time.now()
         age = (msg_stamp - pc_msg.header.stamp).to_sec()
         if age > self.max_age:
-            rospy.logwarn('Rewards accumulator: Discarding points %.1f s > %.1f s old.', age, self.max_age)
+            rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
         try:
@@ -99,43 +95,38 @@ class TraversabilityMapping:
         assert local_map.shape[1] == 4
         n_pts = local_map.shape[0]
 
-        self.clouds.append(local_map)
-        global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
-        self.global_map = global_cloud
+        if self.global_map is None:
+            self.global_map = local_map
+            self.local_map = local_map
+        assert len(self.global_map.shape) == 2
+        assert self.global_map.shape[1] == 4  # (N, 4)
+        rospy.logdebug('Global map shape %s', self.global_map.shape)
 
-        # if self.global_map is None:
-        #     self.global_map = local_map
-        #     self.local_map = local_map
-        # assert len(self.global_map.shape) == 2
-        # assert self.global_map.shape[1] == 3  # (N, 3)
-        #
-        # rospy.logdebug('Global map shape %s', self.global_map.shape)
-        #
-        # tree = scipy.spatial.cKDTree(self.global_map[..., :3])
-        # dists, idxs = tree.query(local_map[..., :3], k=1)
-        # common_pts_mask = dists <= self.dist_th
-        #
-        # assert len(dists) == local_map.shape[0]
-        # assert len(idxs) == local_map.shape[0]
-        # self.new_map = local_map[~common_pts_mask, :]
-        # self.local_map = local_map
-        #
-        # rospy.logdebug('Adding %i new points', self.new_map.shape[1])
-        # assert len(self.new_map.shape) == 2
-        # assert self.new_map.shape[1] == 3  # (n, 4)
-        #
-        # # and accumulate new points to global map
-        # self.global_map = np.concatenate([self.global_map, self.new_map], axis=0)
-        # assert len(self.global_map.shape) == 2
-        # assert self.global_map.shape[1] == 3  # (N, 4)
+        tree = scipy.spatial.cKDTree(self.global_map[..., :3])
+        dists, idxs = tree.query(local_map[..., :3], k=1)
+        common_pts_mask = dists <= self.dist_th
 
-        # # accumulate rewards
-        # rewards_prev = self.global_map[idxs, 3:4]
-        # rewards = self.local_map[..., 3:4]
-        # rewards = np.concatenate([rewards_prev, rewards], axis=1)
-        # assert rewards.shape[1] == 2
-        # assert rewards.shape[0] == n_pts  # (n x 2)
-        # self.global_map[idxs, 3] = reduce_rewards(rewards)
+        assert len(dists) == local_map.shape[0]
+        assert len(idxs) == local_map.shape[0]
+        self.new_map = local_map[~common_pts_mask, :]
+        self.local_map = local_map
+
+        rospy.logdebug('Adding %i new points', self.new_map.shape[0])
+        assert len(self.new_map.shape) == 2
+        assert self.new_map.shape[1] == 4  # (n, 4)
+
+        # and accumulate new points to global map
+        self.global_map = np.concatenate([self.global_map, self.new_map], axis=0)
+        assert len(self.global_map.shape) == 2
+        assert self.global_map.shape[1] == 4  # (N, 4)
+
+        # fuse traversability values
+        trav_prev = self.global_map[idxs, 3:4]
+        trav = self.local_map[..., 3:4]
+        trav = np.concatenate([trav_prev, trav], axis=1)
+        assert trav.shape[1] == 2
+        assert trav.shape[0] == n_pts  # (n x 2)
+        self.global_map[idxs, 3] = fuse_traversability(trav)
 
         rospy.loginfo('Point cloud accumulation took: %.3f s', timer() - t0)
 
@@ -153,5 +144,5 @@ class TraversabilityMapping:
 
 if __name__ == '__main__':
     rospy.init_node('traversability_mapping', log_level=rospy.DEBUG)
-    proc = TraversabilityMapping(cloud_topic=rospy.get_param('~in_cloud', '/robot_data/lidar_cloud_semseg'))
+    proc = TraversabilityMapping(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
     proc.spin()
