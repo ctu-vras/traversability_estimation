@@ -249,7 +249,8 @@ class ImageProcessor(object):
             input = input.to(device=self.device, dtype=self.dtype)
             pred = self.model(input)
         t2 = time()
-        rospy.logdebug('Model inference took (%.3f s).', t2 - t1)
+        rospy.logdebug('Model inference of image shape (%i, %i) took (%.3f s).',
+                       input.shape[2], input.shape[3], t2 - t1)
         pred = self.postprocessing(pred, orig_size)
         rospy.logdebug('Postprocessing took (%.3f s).', time() - t2)
         return pred
@@ -261,7 +262,9 @@ class ImageProcessor(object):
         else:
             pred = torch.argmax(pred, dim=1) - 1
         pred = convert_label(pred, inverse=True)
-        pred = torchvision.transforms.Resize(size)(pred)
+        # pred = torchvision.transforms.Resize(size)(pred)
+        pred = pred.squeeze(0).cpu().numpy()
+        pred = cv.resize(pred.astype('float32'), (size[1], size[0]), interpolation=cv.INTER_LINEAR).astype('int8')
         if self.label_map is not None:
             pred = self.label_map[pred]
         return pred
@@ -291,7 +294,6 @@ class ImageProcessor(object):
                           i, image.header.frame_id, (rospy.Time.now() - t0).to_sec())
 
             t1 = rospy.Time.now()
-            pred = pred.squeeze(0).cpu().numpy()
             if self.compressed_pubs[i].get_num_connections():
                 msg = CompressedImage()
                 msg.header = image.header

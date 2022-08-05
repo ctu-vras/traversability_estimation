@@ -144,7 +144,7 @@ Visualization Manager:
           Channel Name: rgb
           Class: rviz/PointCloud2
           Color: 255; 255; 255
-          Color Transformer: Intensity
+          Color Transformer: RGB8
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false

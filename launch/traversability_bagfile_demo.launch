@@ -4,8 +4,8 @@
     <arg name="robot" default="tradr"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="image_view" default="false"/>
-    <arg name="image_topic" default="/camera_0/image_color"/>
-    <arg name="caminfo_topic" default="/camera_0/camera_info"/>
+    <arg name="image_topic" default="/viz/camera_4/image/compressed"/>
+    <arg name="caminfo_topic" default="/viz/camera_4/camera_info"/>
     <arg name="cloud_topic" default="/cloud"/>
     <arg if="$(eval robot == 'tradr')" name="image_transport" default="compressed"/>
     <arg if="$(eval robot == 'spot')" name="image_transport" default="raw"/>
@@ -24,15 +24,18 @@
             model_name: hrnet
             device: $(arg device)
             num_cameras: 1
-            image_transport: $(arg image_transport)
+            image_transport: 'compressed'
             legend: false
             max_age: 1.0
+            input_scale: 0.5
+            traversability_labels: false
         </rosparam>
-        <remap from="input_0/rgb" to="$(arg image_topic)"/>
+        <remap from="input_0/image/compressed" to="$(arg image_topic)"/>
         <remap from="input_0/camera_info" to="$(arg caminfo_topic)"/>
-        <remap from="output_0/semseg" to="/hrnet_inference/semantic_segmentation"/>
-        <remap from="output_0/semseg/compressed" to="/hrnet_inference/semantic_segmentation/compressed"/>
-        <remap from="output_0/camera_info" to="/hrnet_inference/camera_info"/>
+
+        <remap from="output_0/semseg" to="/segmentation_inference/semantic_segmentation"/>
+        <remap from="output_0/semseg/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
+        <remap from="output_0/camera_info" to="/segmentation_inference/camera_info"/>
     </node>
 
     <!-- Point cloud color -->

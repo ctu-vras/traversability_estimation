@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
+
+    <env name="ROSCONSOLE_FORMAT" value="[${severity} ${walltime} ${node}] ${message}"/>
+
+    <!-- Decompress images from husky cameras -->
+    <node name="image_transport_front" pkg="image_transport" type="republish"
+          args="compressed in:=/camera_front/image_raw raw out:=/camera_front/image_raw">
+    </node>
+    <node name="image_transport_left" pkg="image_transport" type="republish"
+          args="compressed in:=/camera_left/image_raw raw out:=/camera_left/image_raw">
+    </node>
+    <node name="image_transport_right" pkg="image_transport" type="republish"
+          args="compressed in:=/camera_right/image_raw raw out:=/camera_right/image_raw">
+    </node>
+    <node name="image_transport_rear" pkg="image_transport" type="republish"
+          args="compressed in:=/camera_rear/image_raw raw out:=/camera_rear/image_raw">
+    </node>
+    <!-- Debayer images from husky cameras -->
+    <group ns="camera_front">
+        <node name="nodelet_manager" pkg="nodelet" type="nodelet" args="manager"/>
+        <node name="debayer" pkg="nodelet" type="nodelet" args="load image_proc/debayer nodelet_manager"/>
+    </group>
+    <group ns="camera_left">
+        <node name="nodelet_manager" pkg="nodelet" type="nodelet" args="manager"/>
+        <node name="debayer" pkg="nodelet" type="nodelet" args="load image_proc/debayer nodelet_manager"/>
+    </group>
+    <group ns="camera_right">
+        <node name="nodelet_manager" pkg="nodelet" type="nodelet" args="manager"/>
+        <node name="debayer" pkg="nodelet" type="nodelet" args="load image_proc/debayer nodelet_manager"/>
+    </group>
+    <group ns="camera_rear">
+        <node name="nodelet_manager" pkg="nodelet" type="nodelet" args="manager"/>
+        <node name="debayer" pkg="nodelet" type="nodelet" args="load image_proc/debayer nodelet_manager"/>
+    </group>
+
+    <!-- Semantic segmantation of images -->
+    <node name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference" output="screen">
+        <rosparam subst_value="true">
+            model_name: hrnet
+            device: $(arg device)
+            dtype: float
+            num_cameras: 3
+            image_transport: compressed
+            legend: false
+            max_age: 1.0
+            input_scale: 0.25
+            traversability_labels: false
+            label_config: $(dirname)/../config/obstacles.yaml
+        </rosparam>
+        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
+
+        <remap from="input_0/image" to="/camera_front/image_color"/>
+        <remap from="input_0/image/compressed" to="/camera_front/image_color/compressed"/>
+        <remap from="input_0/camera_info" to="/camera_front/camera_info"/>
+        <remap from="output_0/semseg" to="/camera_front/traversability"/>
+        <remap from="output_0/semseg/compressed" to="/camera_front/traversability/compressed"/>
+        <remap from="output_0/semseg_color" to="/camera_front/traversability_color"/>
+        <remap from="output_0/semseg_color/compressed" to="/camera_front/traversability_color/compressed"/>
+
+        <remap from="input_1/image" to="/camera_left/image_color"/>
+        <remap from="input_1/image/compressed" to="/camera_left/image_color/compressed"/>
+        <remap from="input_1/camera_info" to="/camera_left/camera_info"/>
+        <remap from="output_1/semseg" to="/camera_left/traversability"/>
+        <remap from="output_1/semseg/compressed" to="/camera_left/traversability/compressed"/>
+        <remap from="output_1/semseg_color" to="/camera_left/traversability_color"/>
+        <remap from="output_1/semseg_color/compressed" to="/camera_left/traversability_color/compressed"/>
+
+        <remap from="input_2/image" to="/camera_right/image_color"/>
+        <remap from="input_2/image/compressed" to="/camera_right/image_color/compressed"/>
+        <remap from="input_2/camera_info" to="/camera_right/camera_info"/>
+        <remap from="output_2/semseg" to="/camera_right/traversability"/>
+        <remap from="output_2/semseg/compressed" to="/camera_right/traversability/compressed"/>
+        <remap from="output_2/semseg_color" to="/camera_right/traversability_color"/>
+        <remap from="output_2/semseg_color/compressed" to="/camera_right/traversability_color/compressed"/>
+
+        <remap from="input_3/image" to="/camera_rear/image_color"/>
+        <remap from="input_3/image/compressed" to="/camera_rear/image_color/compressed"/>
+        <remap from="input_3/camera_info" to="/camera_rear/camera_info"/>
+        <remap from="output_3/semseg" to="/camera_rear/traversability"/>
+        <remap from="output_3/semseg/compressed" to="/camera_rear/traversability/compressed"/>
+        <remap from="output_3/semseg_color" to="/camera_rear/traversability_color"/>
+        <remap from="output_3/semseg_color/compressed" to="/camera_rear/traversability_color/compressed"/>
+    </node>
+
+    <!-- Point cloud color -->
+    <node name="point_cloud_color" pkg="nodelet" type="nodelet"
+        args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
+        <rosparam subst_value="true">
+            fixed_frame: odom
+<!--            field_name: rgb-->
+<!--            field_type: 7-->
+<!--            default_color: "0x00000000"-->
+            field_name: obstacle
+            field_type: 2
+            default_color: 1.0
+            num_cameras: 3
+            image_transport: compressed
+            max_image_age: 15.0
+            use_first_valid: true
+            image_queue_size: 2
+            cloud_queue_size: 2
+            wait_for_transform: 1.0
+        </rosparam>
+
+        <remap from="camera_0/image" to="/camera_front/traversability"/>
+        <remap from="camera_0/camera_info" to="/camera_front/camera_info"/>
+        <remap from="camera_1/image" to="/camera_left/traversability"/>
+        <remap from="camera_1/camera_info" to="/camera_left/camera_info"/>
+        <remap from="camera_2/image" to="/camera_right/traversability"/>
+        <remap from="camera_2/camera_info" to="/camera_right/camera_info"/>
+
+        <remap from="cloud_in" to="/points"/>
+        <remap from="cloud_out" to="/points_traversability"/>
+    </node>
+</launch>

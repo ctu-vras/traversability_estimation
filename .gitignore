@@ -136,10 +136,9 @@ dmypy.json
 
 # Pytorch weights
 *.pth
-
-output
 *.zip
 *.tar
+weights
 
 data/
 config/hrnet_rellis/*.yaml

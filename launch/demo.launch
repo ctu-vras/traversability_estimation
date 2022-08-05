@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
+    <arg name="robot" default="ctu"/>
     <arg name="bag" default="$(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28.bag $(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28_cameras.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
@@ -10,8 +12,8 @@
     <rosparam command="load" file="$(arg params)"/>
     <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 3.0 --rate 1.0 $(arg bag)"/>
 
-    <include file="$(dirname)/ctu_robot.launch" pass_all_args="true"/>
+    <include file="$(dirname)/$(arg robot)_robot.launch" pass_all_args="true"/>
 
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/demo.rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/$(arg robot)_demo.rviz"/>
 </launch>
