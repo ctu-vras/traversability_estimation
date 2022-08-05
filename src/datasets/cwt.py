@@ -2,7 +2,6 @@ import os
 from os.path import dirname, join, realpath
 from .utils import *
 from .base_dataset import BaseDataset
-from PIL import Image
 
 __all__ = [
     'data_dir',
