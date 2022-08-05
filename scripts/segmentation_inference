@@ -271,8 +271,8 @@ class ImageProcessor(object):
         traverable_classes = [1, 8, 14, 16, 17, 18]  # grass, asphalt, concrete, puddle, mud, rubble
         grass_prob = pred_raw[traverable_classes]
         trav = np.max(grass_prob, axis=0).astype('float')
-        cv.imshow('Traversability', trav)
-        cv.waitKey(1)
+        # cv.imshow('Traversability', trav)
+        # cv.waitKey(1)
 
         pred = convert_label(pred, inverse=True)
         pred = cv.resize(pred.astype('float32'), (size[1], size[0]), interpolation=cv.INTER_LINEAR).astype('int8')
@@ -316,7 +316,7 @@ class ImageProcessor(object):
                 msg = CompressedImage()
                 msg.header = image.header
                 msg.format = "jpeg"
-                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                msg.data = np.asarray(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_pubs[i].publish(msg)
 
             if self.compressed_color_pubs[i].get_num_connections():
@@ -325,14 +325,12 @@ class ImageProcessor(object):
                 msg = CompressedImage()
                 msg.header = image.header
                 msg.format = "jpeg"
-                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                msg.data = np.asarray(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_color_pubs[i].publish(msg)
 
             if self.traversability_pubs[i].get_num_connections():
-                msg = CompressedImage()
+                msg = self.bridge.cv2_to_compressed_imgmsg(np.uint8(255 * trav))
                 msg.header = image.header
-                msg.format = "jpeg"
-                msg.data = np.array(cv.imencode('.jpg', trav)[1]).tobytes()
                 self.traversability_pubs[i].publish(msg)
 
             self.camera_info_pubs[i].publish(camera_info)
