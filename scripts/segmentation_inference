@@ -96,6 +96,7 @@ class ImageProcessor(object):
         self.image_pubs = self.num_cameras * [None]
         self.compressed_pubs = self.num_cameras * [None]
         self.camera_info_pubs = self.num_cameras * [None]
+        self.traversability_pubs = self.num_cameras * [None]
         # Subscribers
         self.image_subs = self.num_cameras * [None]
         self.compressed_subs = self.num_cameras * [None]
@@ -112,6 +113,8 @@ class ImageProcessor(object):
             self.compressed_pubs[i] = pub
             pub = rospy.Publisher('output_%i/camera_info' % i, CameraInfo, queue_size=1)
             self.camera_info_pubs[i] = pub
+            pub = rospy.Publisher('output_%i/traversability/compressed' % i, CompressedImage, queue_size=1)
+            self.traversability_pubs[i] = pub
             # Setup subscribers.
             if self.image_transport == 'raw':
                 sub = rospy.Subscriber('input_%i/image' % i, Image,
@@ -251,23 +254,31 @@ class ImageProcessor(object):
         t2 = time()
         rospy.logdebug('Model inference of image shape (%i, %i) took (%.3f s).',
                        input.shape[2], input.shape[3], t2 - t1)
-        pred = self.postprocessing(pred, orig_size)
+        pred, trav = self.postprocessing(pred, orig_size)
         rospy.logdebug('Postprocessing took (%.3f s).', time() - t2)
-        return pred
+        return pred, trav
 
-    def postprocessing(self, pred, size):
+    def postprocessing(self, pred_raw, size):
         if self.model_name == 'hrnet':
-            pred = pred[config.TEST.OUTPUT_INDEX]
-            pred = torch.argmax(pred, dim=1)
+            pred_raw = pred_raw[config.TEST.OUTPUT_INDEX]
+            pred_raw = torch.softmax(pred_raw, dim=1)  # TODO: not sure about this step: normalize to 0..1 distribution
         else:
-            pred = torch.argmax(pred, dim=1) - 1
+            pred_raw = pred_raw[:, 1:, ...]  # background mask (0) is not needed
+        pred_raw = pred_raw.squeeze(0).cpu().numpy()
+        pred = np.argmax(pred_raw, axis=0)
+
+        # create traversability map here from predicted classes
+        traverable_classes = [1, 8, 14, 16, 17, 18]  # grass, asphalt, concrete, puddle, mud, rubble
+        grass_prob = pred_raw[traverable_classes]
+        trav = np.max(grass_prob, axis=0).astype('float')
+        cv.imshow('Traversability', trav)
+        cv.waitKey(1)
+
         pred = convert_label(pred, inverse=True)
-        # pred = torchvision.transforms.Resize(size)(pred)
-        pred = pred.squeeze(0).cpu().numpy()
         pred = cv.resize(pred.astype('float32'), (size[1], size[0]), interpolation=cv.INTER_LINEAR).astype('int8')
         if self.label_map is not None:
             pred = self.label_map[pred]
-        return pred
+        return pred, trav
 
     def spin(self):
         """Processing loop. Keep processing images in queue until shutdown."""
@@ -289,7 +300,7 @@ class ImageProcessor(object):
                 rospy.logerr(e)
                 raise
 
-            pred = self.process(arr)
+            pred, trav = self.process(arr)
             rospy.loginfo('Image %i (%s) processed (%.3f s).',
                           i, image.header.frame_id, (rospy.Time.now() - t0).to_sec())
 
@@ -297,13 +308,16 @@ class ImageProcessor(object):
             if self.compressed_pubs[i].get_num_connections():
                 msg = CompressedImage()
                 msg.header = image.header
-                # msg.format = "png"
-                # msg.data = np.array(cv.imencode('.png', pred)[1]).tobytes()
                 msg.format = "jpeg"
-                # msg.data = torchvision.io.encode_jpeg(pred).squeeze(0).numpy().tobytes()
                 msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_pubs[i].publish(msg)
-            self.camera_info_pubs[i].publish(camera_info)
+
+            if self.compressed_pubs[i].get_num_connections():
+                msg = CompressedImage()
+                msg.header = image.header
+                msg.format = "jpeg"
+                msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
+                self.compressed_pubs[i].publish(msg)
 
             if self.compressed_color_pubs[i].get_num_connections():
                 pred = convert_color(pred, self.data_cfg["color_map"])
@@ -311,9 +325,17 @@ class ImageProcessor(object):
                 msg = CompressedImage()
                 msg.header = image.header
                 msg.format = "jpeg"
-                # msg.data = torchvision.io.encode_jpeg(pred).squeeze(0).numpy().tobytes()
                 msg.data = np.array(cv.imencode('.jpg', pred)[1]).tobytes()
                 self.compressed_color_pubs[i].publish(msg)
+
+            if self.traversability_pubs[i].get_num_connections():
+                msg = CompressedImage()
+                msg.header = image.header
+                msg.format = "jpeg"
+                msg.data = np.array(cv.imencode('.jpg', trav)[1]).tobytes()
+                self.traversability_pubs[i].publish(msg)
+
+            self.camera_info_pubs[i].publish(camera_info)
             rospy.loginfo('Image %i (%s) publishing (%.3f s).',
                           i, image.header.frame_id, (rospy.Time.now() - t1).to_sec())
 

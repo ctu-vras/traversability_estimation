@@ -18,7 +18,10 @@
     </node>
 
     <!-- Semantic segmantation of images -->
-    <node if="$(arg run_semseg)" name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference" output="screen">
+    <node if="$(arg run_semseg)"
+          name="segmentation_inference"
+          pkg="traversability_estimation"
+          type="segmentation_inference" output="screen">
         <rosparam subst_value="true">
             model_name: hrnet
             device: $(arg device)
