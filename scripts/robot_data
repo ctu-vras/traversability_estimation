@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 from datasets.rellis_3d import Sequence, seq_names
-from datasets.utils import filter_camera_points, normalize, timing
+from datasets.utils import filter_camera_points, normalize
 # ROS
 import rospy
 from sensor_msgs.msg import CameraInfo, PointCloud2, CompressedImage
@@ -104,7 +104,6 @@ class RobotData:
     def is_valid(self):
         return not rospy.is_shutdown() and self.index < len(self.ds)
 
-    @timing
     def move(self):
         if self.index < len(self.ds) - self.pose_step:
             self.index += self.pose_step
@@ -112,7 +111,6 @@ class RobotData:
             self.index = len(self.ds) - 1
         rospy.logdebug('Moved to next data sample')
 
-    @timing
     def step(self):
         if not self.is_valid():
             rospy.loginfo('No more positions.')
@@ -189,7 +187,6 @@ class RobotData:
         intrins_msg.distortion_model = distortion_model
         return intrins_msg, tf_lid2cam
 
-    @timing
     def get_path_msg(self, time_stamp):
         assert self.current_pose.shape == (4, 4)
         pose_msg = matrix_to_pose_msg(self.current_pose, self.origin_frame)
@@ -198,7 +195,6 @@ class RobotData:
         self.path.header.stamp = time_stamp
         return self.path
 
-    @timing
     def to_cloud_msg(self, cloud, time_stamp, frame):
         # publish point cloud
         if cloud.dtype.names is None:
@@ -208,7 +204,6 @@ class RobotData:
         pc_msg.header.frame_id = frame
         return pc_msg
 
-    @timing
     def get_image_msg(self, img, time_stamp):
         img = np.uint8(255 * normalize(img))[..., (2, 1, 0)]
         img_msg = CompressedImage()
