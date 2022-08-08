@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+import os.path
+
+import numpy as np
+import torchvision.models.segmentation
+import torch
+from torch.utils.data import DataLoader
+from argparse import ArgumentParser
+import datasets
+
+
+parser = ArgumentParser()
+parser.add_argument('--lr', type=float, default=1e-5)
+parser.add_argument('--dataset', type=str, default='Rellis3D')
+parser.add_argument('--model', type=str, default='fcn')
+parser.add_argument('--encoder', type=str, default='resnet50')
+parser.add_argument('--batch_size', type=int, default=4)
+parser.add_argument('--img_size', nargs='+', default=(512, 512))
+parser.add_argument('--n_epochs', type=int, default=100)
+parser.add_argument('--n_workers', type=int, default=12)
+args = parser.parse_args()
+args.img_size = tuple(args.img_size)
+
+Dataset = eval('datasets.%s' % args.dataset)
+train_dataset = Dataset(crop_size=args.img_size, split='train')
+valid_dataset = Dataset(crop_size=args.img_size, split='val')
+
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 3)
+
+# --------------Load and set model and optimizer-------------------------------------
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+architecture = eval('torchvision.models.segmentation.%s_%s' % (args.model, args.encoder))
+model = architecture(pretrained=False)  # Load net
+n_classes = len(train_dataset.class_values)
+model.classifier[-1] = torch.nn.Conv2d(512, n_classes,
+                                       kernel_size=(1, 1), stride=(1, 1))  # Change final layer to 3 classes
+model = model.to(device)
+model = model.train()
+
+optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create adam optimizer
+
+# ----------------Train--------------------------------------------------------------------------
+criterion = torch.nn.CrossEntropyLoss()  # Set loss function
+min_loss = np.Inf
+for e in range(args.n_epochs):
+    for itr, sample in enumerate(train_loader):
+        images, labels = sample
+        if torch.cuda.is_available():
+            images, labels = images.cuda(), labels.cuda()
+
+        pred = model(images)['out']  # make prediction
+        model.zero_grad()
+
+        loss = criterion(pred, labels)  # Calculate cross entropy loss
+        loss.backward()  # Backpropagate loss
+        optimizer.step()  # Apply gradient descent change to weight
+
+        print(itr, ") Loss=", loss.data.cpu().numpy())
+        if min_loss > loss.data.cpu().numpy():  # Save model weight once every 60k steps permanent file
+            min_loss = loss.data.cpu().numpy()
+            name = "%s_%s.pth" % (args.model, args.encoder)
+            print("Saving Model:", name)
+            torch.save(model, os.path.join(os.path.dirname(__file__), name))

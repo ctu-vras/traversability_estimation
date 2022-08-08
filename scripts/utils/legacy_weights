@@ -1,0 +1,19 @@
+#!/usr/bin/env python
+"""Convert model weights to legacy format supported by older PyTorch versions."""
+from __future__ import absolute_import, division, print_function
+from argparse import ArgumentParser
+import torch
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument('input', type=str)
+    parser.add_argument('output', type=str)
+    args = parser.parse_args()
+    obj = torch.load(args.input, map_location='cpu')
+    torch.save(obj, args.output, _use_new_zipfile_serialization=False)
+    print('Model %s converted to %s in legacy format.' % (args.input, args.output))
+
+
+if __name__ == '__main__':
+    main()
