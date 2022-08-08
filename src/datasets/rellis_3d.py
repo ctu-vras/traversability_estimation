@@ -30,19 +30,6 @@ seq_names = [
 class Sequence(torch.utils.data.Dataset):
     def __init__(self, seq=None, path=None, poses_file='poses.txt', poses_path=None, split=None):
         """Rellis-3D dataset: https://unmannedlab.github.io/research/RELLIS-3D.
-        
-        Rellis_3D
-        ├── 00000
-        │   ├── os1_cloud_node_color_ply
-        │   ├── pylon_camera_node
-        │   ├── pylon_camera_node_label_color
-        │   └── pylon_camera_node_label_id
-        ...
-        ├── bags
-        └── calibration
-            ├── 00000
-            ...
-            └── raw_data
 
         :param seq: Sequence number (from 0 to 4).
         :param path: Dataset path, takes precedence over name.
@@ -238,14 +225,6 @@ class Rellis3D(BaseDataset):
         self.files = self.read_files()
         if num_samples:
             self.files = self.files[:num_samples]
-
-        self.class_weights = torch.FloatTensor( [1.999999271012097, 1.664128991557095, 1.8496996235972305,
-                                                 1.9998671743556093, 1.9985603836216685, 1.6997860667619373,
-                                                 1.9996238518374807, 1.999762456018869, 1.9993409160693856,
-                                                 1.9997133730241352, 1.999513379675197, 1.9993347608141532,
-                                                 1.9996433543012653, 1.8417302013930952, 1.9900446258633235,
-                                                 1.9956819252010565, 1.9949043721923583, 1.9714094933783817,
-                                                 1.9972557793256613]).cuda()
 
     def read_files(self):
         files = []
