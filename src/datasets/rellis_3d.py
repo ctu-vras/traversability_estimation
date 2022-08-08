@@ -6,7 +6,6 @@ from .base_dataset import BaseDataset
 from copy import copy
 import torch
 from PIL import Image
-import random
 
 __all__ = [
     'data_dir',
@@ -252,6 +251,8 @@ class Rellis3D(BaseDataset):
         files = []
         for item in self.img_list:
             image_path, label_path = item
+            image_path = os.path.join(self.path, image_path)
+            label_path = os.path.join(self.path, label_path)
             name = os.path.splitext(os.path.basename(label_path))[0]
             files.append({
                 "img": image_path,
@@ -273,9 +274,9 @@ class Rellis3D(BaseDataset):
 
     def __getitem__(self, index):
         item = self.files[index]
-        image = cv2.imread(os.path.join(self.path, item["img"]), cv2.IMREAD_COLOR)
+        image = cv2.imread(item["img"], cv2.IMREAD_COLOR)
 
-        mask = np.array(Image.open(os.path.join(self.path, item["label"])))
+        mask = np.array(Image.open(item["label"]))
         mask = self.convert_label(mask, inverse=False)
 
         if 'test' in self.split:

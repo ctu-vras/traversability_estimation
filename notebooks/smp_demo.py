@@ -9,8 +9,7 @@ from datasets.rellis_3d import Rellis3D as Dataset
 
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = torch.load('../config/weights/smp/se_resnext50_32x4d_352x640_lr1e-4.pth')
-# model = torch.load('../config/weights/smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth')
+model = torch.load('../config/weights/smp/PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth')
 model = model.to(DEVICE)
 model = model.eval()
 
