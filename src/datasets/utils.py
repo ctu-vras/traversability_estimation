@@ -6,6 +6,7 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
+import torch
 
 
 def read_points(path, dtype=np.float32):
@@ -132,19 +133,18 @@ color_palette = {
 }
 
 
-def convert_label(label, inverse=False):
-    temp = label.copy()
-    if inverse:
-        for v, k in color_palette.items():
-            label[temp == k["color"]] = v
-    else:
-        label = np.zeros(temp.shape+(3,))
-        for k, v in color_palette.items():
-            label[temp == k, :] = v["color"]
-    return label
-
-
 def read_semseg(path, label_size=None):
+    def convert_label(label, inverse=False):
+        temp = label.copy()
+        if inverse:
+            for v, k in color_palette.items():
+                label[temp == k["color"]] = v
+        else:
+            label = np.zeros(temp.shape + (3,))
+            for k, v in color_palette.items():
+                label[temp == k, :] = v["color"]
+        return label
+
     semseg = Image.open(path)
     if label_size is not None:
         if label_size[0] != semseg.size[0] or label_size[1] != semseg.size[1]:
@@ -178,8 +178,52 @@ def visualize(**images):
     plt.show()
 
 
+def convert_label(label, inverse=False):
+    label_mapping = {0: 0,
+                     1: 0,
+                     3: 1,
+                     4: 2,
+                     5: 3,
+                     6: 4,
+                     7: 5,
+                     8: 6,
+                     9: 7,
+                     10: 8,
+                     12: 9,
+                     15: 10,
+                     17: 11,
+                     18: 12,
+                     19: 13,
+                     23: 14,
+                     27: 15,
+                     #  29: 1,
+                     #  30: 1,
+                     31: 16,
+                     #  32: 4,
+                     33: 17,
+                     34: 18}
+    if isinstance(label, np.ndarray):
+        temp = label.copy()
+    elif isinstance(label, torch.Tensor):
+        temp = label.clone()
+    else:
+        raise ValueError('Supported types: np.ndarray, torch.Tensor')
+    if inverse:
+        for v, k in label_mapping.items():
+            temp[label == k] = v
+    else:
+        for k, v in label_mapping.items():
+            temp[label == k] = v
+    return temp
+
+
 def convert_color(label, color_map):
-    temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    if isinstance(label, np.ndarray):
+        temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    elif isinstance(label, torch.Tensor):
+        temp = torch.zeros(label.shape + (3,), dtype=torch.uint8)
+    else:
+        raise ValueError('Supported types: np.ndarray, torch.Tensor')
     for k, v in color_map.items():
         temp[label == k] = v
     return temp
