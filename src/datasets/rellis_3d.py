@@ -278,7 +278,7 @@ class LaserScan:
     """
     EXTENSIONS_SCAN = ['.bin']
 
-    def __init__(self, project=False, H=64, W=1024, fov_up=3.0, fov_down=-25.0):
+    def __init__(self, project=False, H=64, W=2048, fov_up=22.5, fov_down=-22.5):
         self.project = project
         self.proj_H = H
         self.proj_W = W
@@ -442,7 +442,7 @@ class SemLaserScan(LaserScan):
     """Class that contains LaserScan with x,y,z,r,sem_label,sem_color_label,inst_label,inst_color_label"""
     EXTENSIONS_LABEL = ['.label']
 
-    def __init__(self, nclasses, sem_color_dict=None, project=False, H=64, W=1024, fov_up=3.0, fov_down=-25.0):
+    def __init__(self, nclasses, sem_color_dict=None, project=False, H=64, W=2048, fov_up=22.5, fov_down=-22.5):
         super(SemLaserScan, self).__init__(project, H, W, fov_up, fov_down)
         self.reset()
         self.nclasses = nclasses         # number of classes
@@ -551,81 +551,33 @@ class SemLaserScan(LaserScan):
         self.proj_inst_color[mask] = self.inst_color_lut[self.inst_label[self.proj_idx[mask]]]
 
 
-def laser_scan_demo():
-    import vispy
-    from vispy.scene import visuals, SceneCanvas
-    from matplotlib import pyplot as plt
+def semantic_laser_scan_demo():
+    # from hrnet.core.function import convert_label
+    CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+    color_map = CFG["color_map"]
+    n_classes = len(color_map)
+    scan = SemLaserScan(n_classes, color_map, project=True)
+    scan_path = os.path.join(data_dir, 'Rellis_3D', '00000', 'os1_cloud_node_kitti_bin')
+    scan_file = np.random.choice(os.listdir(scan_path))
+    scan.open_scan(os.path.join(scan_path, scan_file))
+    scan.open_label(os.path.join(data_dir, 'Rellis_3D', '00000', 'os1_cloud_node_semantickitti_label_id',
+                                 scan_file.replace('.bin', '.label')))
+    # scan.set_label(convert_label(scan.sem_label, inverse=False))
+    scan.colorize()
 
-    scan = LaserScan(project=True)
-    scan_path = os.path.join(data_dir, 'Rellis_3D', '00000', 'os1_cloud_node_kitti_bin', '002218.bin')
-    scan.open_scan(scan_path)
     power = 16
+    range_data = np.copy(scan.proj_range)
 
-    # def get_mpl_colormap(cmap_name):
-    #     cmap = plt.get_cmap(cmap_name)
-    #     # Initialize the matplotlib color map
-    #     sm = plt.cm.ScalarMappable(cmap=cmap)
-    #     # Obtain linear color range
-    #     color_range = sm.to_rgba(np.linspace(0, 1, 256), bytes=True)[:, 2::-1]
-    #     return color_range.reshape(256, 3).astype(np.float32) / 255.0
-    #
-    # # new canvas prepared for visualizing data
-    # canvas = SceneCanvas(keys='interactive', show=True)
-    #
-    # # grid
-    # grid = canvas.central_widget.add_grid()
-    #
-    # # laserscan part
-    # scan_view = vispy.scene.widgets.ViewBox(border_color='white', parent=canvas.scene)
-    # grid.add_widget(scan_view, 0, 0)
-    # scan_vis = visuals.Markers()
-    # scan_view.camera = 'turntable'
-    # scan_view.add(scan_vis)
-    # visuals.XYZAxis(parent=scan_view.scene)
-    #
-    # # plot scan
-    # # print()
-    # range_data = np.copy(scan.unproj_range)
-    # # print(range_data.max(), range_data.min())
-    # range_data = range_data ** (1 / power)
-    # # print(range_data.max(), range_data.min())
-    # viridis_range = ((range_data - range_data.min()) /
-    #                  (range_data.max() - range_data.min()) *
-    #                  255).astype(np.uint8)
-    # viridis_map = get_mpl_colormap("viridis")
-    # viridis_colors = viridis_map[viridis_range]
-    #
-    # scan_vis.set_data(scan.points,
-    #                   face_color=viridis_colors[..., ::-1],
-    #                   edge_color=viridis_colors[..., ::-1],
-    #                   size=1)
-    #
-    # # new canvas for img
-    # img_canvas = SceneCanvas(keys='interactive', show=True, size=(1024, 64 * 1))
-    # # grid
-    # img_grid = img_canvas.central_widget.add_grid()
-    # # add a view for the depth
-    # img_view = vispy.scene.widgets.ViewBox(border_color='white', parent=img_canvas.scene)
-    # img_grid.add_widget(img_view, 0, 0)
-    # img_vis = visuals.Image(cmap='viridis')
-    # img_view.add(img_vis)
+    range_data[range_data > 0] = range_data[range_data > 0] ** (1 / power)
+    range_data[range_data < 0] = range_data[range_data > 0].min()
 
-    # now do all the range image stuff
-    # plot range image
-    data = np.copy(scan.proj_range)
-    # print(data[data > 0].max(), data[data > 0].min())
-    data[data > 0] = data[data > 0] ** (1 / power)
-    data[data < 0] = data[data > 0].min()
-    # print(data.max(), data.min())
-    data = (data - data[data > 0].min()) / \
-           (data.max() - data[data > 0].min())
-    # print(data.max(), data.min())
-    # img_vis.set_data(data)
-    # img_vis.update()
-    #
-    # vispy.app.run()
+    range_data = (range_data - range_data[range_data > 0].min()) / (range_data.max() - range_data[range_data > 0].min())
 
-    plt.imshow(data)
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    plt.imshow(range_data)
+    plt.subplot(2, 1, 2)
+    plt.imshow(scan.proj_sem_color)
     plt.show()
 
 
@@ -646,6 +598,7 @@ def semseg_test():
 
     CFG = yaml.safe_load(open(os.path.join(data_dir,  "../config/rellis.yaml"), 'r'))
     color_map = CFG["color_map"]
+    # gt_arg = np.argmax(gt_mask[1:, ...], axis=0).astype(np.uint8)  # ignore background mask
     gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8) - 1
     gt_arg = convert_label(gt_arg, inverse=True)
     gt_color = convert_color(gt_arg, color_map)
@@ -741,8 +694,8 @@ def semseg_demo():
 
 
 def main():
-    laser_scan_demo()
-    # semseg_test()
+    semantic_laser_scan_demo()
+    semseg_test()
     # lidar_map_demo()
     # lidar2cam_demo()
     # semseg_demo()
