@@ -609,7 +609,7 @@ class Rellis3DCloud:
         self.scan.open_label(item["label"])
         self.scan.colorize()
 
-        depth = self.scan.proj_range
+        depth = self.scan.proj_range[None]  # (1 x H x W)
         mask = self.scan.proj_sem_label
 
         # extract certain classes from mask
