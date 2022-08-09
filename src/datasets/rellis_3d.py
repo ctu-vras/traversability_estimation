@@ -173,10 +173,7 @@ class Rellis3D(BaseDataset):
                      19: 13,
                      23: 14,
                      27: 15,
-                     # 29: 1,
-                     # 30: 1,
                      31: 16,
-                     # 32: 4,
                      33: 17,
                      34: 18}
 
@@ -554,6 +551,26 @@ class SemLaserScan(LaserScan):
 class Rellis3DCloud:
     CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
+    LABEL_MAPPING = {0: 0,
+                     1: 0,
+                     3: 1,
+                     4: 2,
+                     5: 3,
+                     6: 4,
+                     7: 5,
+                     8: 6,
+                     9: 7,
+                     10: 8,
+                     12: 9,
+                     15: 10,
+                     17: 11,
+                     18: 12,
+                     19: 13,
+                     23: 14,
+                     27: 15,
+                     31: 16,
+                     33: 17,
+                     34: 18}
 
     def __init__(self,
                  path=None,
@@ -573,19 +590,31 @@ class Rellis3DCloud:
         if not classes:
             classes = self.CLASSES
         # convert str names to class values on masks
+        # self.class_values = [list(self.LABEL_MAPPING.values())[self.CLASSES.index(cls.lower())] for cls in classes]
         self.class_values = [self.CLASSES.index(cls.lower()) for cls in classes]
 
         if not color_map:
             CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
             color_map = CFG["color_map"]
+        self.color_map = color_map
         n_classes = len(color_map)
-        self.scan = SemLaserScan(n_classes, color_map, project=True)
+        self.scan = SemLaserScan(n_classes, self.color_map, project=True)
 
         self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
 
         self.files = self.read_files()
         if num_samples:
             self.files = self.files[:num_samples]
+
+    def convert_label(self, label, inverse=False):
+        temp = label.copy()
+        if inverse:
+            for v, k in self.LABEL_MAPPING.items():
+                label[temp == k] = v
+        else:
+            for k, v in self.LABEL_MAPPING.items():
+                label[temp == k] = v
+        return label
 
     def read_files(self):
         files = []
@@ -609,37 +638,51 @@ class Rellis3DCloud:
         self.scan.open_label(item["label"])
         self.scan.colorize()
 
-        depth = self.scan.proj_range[None]  # (1 x H x W)
-        mask = self.scan.proj_sem_label
+        # following SalsaNext approach: (x, y, z, i, r)
+        input = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
+                                self.scan.proj_remission[None],  # (1 x H x W)
+                                self.scan.proj_range[None]], axis=0)  # (1 x H x W)
 
-        # extract certain classes from mask
-        masks = [(mask == v) for v in self.class_values]
+        mask = self.scan.proj_sem_label.copy()
+        # mask = self.convert_label(mask, inverse=False)
+        masks = [(mask == v) for v in self.class_values]   # extract certain classes from mask
         mask = np.stack(masks, axis=0).astype('float')
-        return depth.copy(), mask.copy()
+        return input, mask
 
     def __len__(self):
         return len(self.files)
 
 
 def semantic_laser_scan_demo():
-    split = np.random.choice(['test', 'train', 'val'])
+    from datasets.utils import convert_label, convert_color
+
+    # split = np.random.choice(['test', 'train', 'val'])
+    split = 'test'
 
     ds = Rellis3DCloud(split=split)
 
-    depth, mask = ds[np.random.choice(range(len(ds)))]
+    # input, gt_mask = ds[np.random.choice(range(len(ds)))]
+    input, gt_mask = ds[0]
 
+    # range_img = {-1: no data, 0..1: for scaled distances}
     power = 16
-    range_data = np.copy(depth)
-    range_data[range_data > 0] = range_data[range_data > 0] ** (1 / power)
-    range_data[range_data < 0] = range_data[range_data > 0].min()
-    range_data = (range_data - range_data[range_data > 0].min()) / (range_data.max() - range_data[range_data > 0].min())
+    range_img = np.copy(input[3])  # depth
+    range_img[range_img > 0] = range_img[range_img > 0] ** (1 / power)
+    range_img[range_img > 0] = (range_img[range_img > 0] - range_img[range_img > 0].min()) / \
+                               (range_img[range_img > 0].max() - range_img[range_img > 0].min())
+
+    gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
+    # gt_arg = convert_label(gt_arg, inverse=True) - 1
+    gt_color = convert_color(gt_arg, ds.color_map)
 
     plt.figure()
     # https://stackoverflow.com/questions/12439588/how-to-maximize-a-plt-show-window-using-python
     plt.switch_backend('QT5Agg')  # default on my system
-    plt.subplot(2, 1, 1)
-    plt.imshow(range_data)
-    plt.subplot(2, 1, 2)
+    plt.subplot(3, 1, 1)
+    plt.imshow(range_img)
+    plt.subplot(3, 1, 2)
+    plt.imshow(gt_color)
+    plt.subplot(3, 1, 3)
     plt.imshow(ds.scan.proj_sem_color)
     figManager = plt.get_current_fig_manager()
     figManager.window.showMaximized()
@@ -647,8 +690,7 @@ def semantic_laser_scan_demo():
 
 
 def semseg_test():
-    from datasets.utils import visualize, convert_color
-    from hrnet.core.function import convert_label
+    from datasets.utils import visualize, convert_color, convert_label
     import yaml
 
     split = np.random.choice(['test', 'train', 'val'])
@@ -759,8 +801,7 @@ def semseg_demo():
 
 
 def main():
-    for _ in range(5):
-        semantic_laser_scan_demo()
+    semantic_laser_scan_demo()
     # semseg_test()
     # lidar_map_demo()
     # lidar2cam_demo()
