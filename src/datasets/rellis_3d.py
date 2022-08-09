@@ -551,33 +551,98 @@ class SemLaserScan(LaserScan):
         self.proj_inst_color[mask] = self.inst_color_lut[self.inst_label[self.proj_idx[mask]]]
 
 
+class Rellis3DCloud:
+    CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+               'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
+
+    def __init__(self,
+                 path=None,
+                 split='train',
+                 num_samples=None,
+                 classes=None,
+                 color_map=None
+                 ):
+
+        if path is None:
+            path = join(data_dir, 'Rellis_3D')
+        assert os.path.exists(path)
+        assert split in ['train', 'val', 'test']
+        self.path = path
+        self.split = split
+
+        if not classes:
+            classes = self.CLASSES
+        # convert str names to class values on masks
+        self.class_values = [self.CLASSES.index(cls.lower()) for cls in classes]
+
+        if not color_map:
+            CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+            color_map = CFG["color_map"]
+        n_classes = len(color_map)
+        self.scan = SemLaserScan(n_classes, color_map, project=True)
+
+        self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
+
+        self.files = self.read_files()
+        if num_samples:
+            self.files = self.files[:num_samples]
+
+    def read_files(self):
+        files = []
+        for item in self.depths_list:
+            depth_path, label_path = item
+            depth_path = os.path.join(self.path, depth_path)
+            label_path = os.path.join(self.path, label_path)
+            name = os.path.splitext(os.path.basename(label_path))[0]
+            files.append({
+                "depth": depth_path,
+                "label": label_path,
+                "name": name,
+                "weight": 1
+            })
+        return files
+
+    def __getitem__(self, index):
+        item = self.files[index]
+
+        self.scan.open_scan(item["depth"])
+        self.scan.open_label(item["label"])
+        self.scan.colorize()
+
+        depth = self.scan.proj_range
+        mask = self.scan.proj_sem_label
+
+        # extract certain classes from mask
+        masks = [(mask == v) for v in self.class_values]
+        mask = np.stack(masks, axis=0).astype('float')
+        return depth.copy(), mask.copy()
+
+    def __len__(self):
+        return len(self.files)
+
+
 def semantic_laser_scan_demo():
-    # from hrnet.core.function import convert_label
-    CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
-    color_map = CFG["color_map"]
-    n_classes = len(color_map)
-    scan = SemLaserScan(n_classes, color_map, project=True)
-    scan_path = os.path.join(data_dir, 'Rellis_3D', '00000', 'os1_cloud_node_kitti_bin')
-    scan_file = np.random.choice(os.listdir(scan_path))
-    scan.open_scan(os.path.join(scan_path, scan_file))
-    scan.open_label(os.path.join(data_dir, 'Rellis_3D', '00000', 'os1_cloud_node_semantickitti_label_id',
-                                 scan_file.replace('.bin', '.label')))
-    # scan.set_label(convert_label(scan.sem_label, inverse=False))
-    scan.colorize()
+    split = np.random.choice(['test', 'train', 'val'])
+
+    ds = Rellis3DCloud(split=split)
+
+    depth, mask = ds[np.random.choice(range(len(ds)))]
 
     power = 16
-    range_data = np.copy(scan.proj_range)
-
+    range_data = np.copy(depth)
     range_data[range_data > 0] = range_data[range_data > 0] ** (1 / power)
     range_data[range_data < 0] = range_data[range_data > 0].min()
-
     range_data = (range_data - range_data[range_data > 0].min()) / (range_data.max() - range_data[range_data > 0].min())
 
     plt.figure()
+    # https://stackoverflow.com/questions/12439588/how-to-maximize-a-plt-show-window-using-python
+    plt.switch_backend('QT5Agg')  # default on my system
     plt.subplot(2, 1, 1)
     plt.imshow(range_data)
     plt.subplot(2, 1, 2)
-    plt.imshow(scan.proj_sem_color)
+    plt.imshow(ds.scan.proj_sem_color)
+    figManager = plt.get_current_fig_manager()
+    figManager.window.showMaximized()
     plt.show()
 
 
@@ -694,8 +759,9 @@ def semseg_demo():
 
 
 def main():
-    semantic_laser_scan_demo()
-    semseg_test()
+    for _ in range(5):
+        semantic_laser_scan_demo()
+    # semseg_test()
     # lidar_map_demo()
     # lidar2cam_demo()
     # semseg_demo()
