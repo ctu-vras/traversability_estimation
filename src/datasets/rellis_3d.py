@@ -438,56 +438,195 @@ class LaserScan:
         self.proj_mask = (self.proj_idx > 0).astype(np.float32)
 
 
+class SemLaserScan(LaserScan):
+    """Class that contains LaserScan with x,y,z,r,sem_label,sem_color_label,inst_label,inst_color_label"""
+    EXTENSIONS_LABEL = ['.label']
+
+    def __init__(self, nclasses, sem_color_dict=None, project=False, H=64, W=1024, fov_up=3.0, fov_down=-25.0):
+        super(SemLaserScan, self).__init__(project, H, W, fov_up, fov_down)
+        self.reset()
+        self.nclasses = nclasses         # number of classes
+
+        # make semantic colors
+        max_sem_key = 0
+        for key, data in sem_color_dict.items():
+            if key + 1 > max_sem_key:
+                max_sem_key = key + 1
+        self.sem_color_lut = np.zeros((max_sem_key + 100, 3), dtype=np.float32)
+        for key, value in sem_color_dict.items():
+            self.sem_color_lut[key] = np.array(value, np.float32) / 255.0
+
+        # make instance colors
+        max_inst_id = 100000
+        self.inst_color_lut = np.random.uniform(low=0.0,
+                                                high=1.0,
+                                                size=(max_inst_id, 3))
+        # force zero to a gray-ish color
+        self.inst_color_lut[0] = np.full((3), 0.1)
+
+    def reset(self):
+        """ Reset scan members. """
+        super(SemLaserScan, self).reset()
+
+        # semantic labels
+        self.sem_label = np.zeros((0, 1), dtype=np.uint32)         # [m, 1]: label
+        self.sem_label_color = np.zeros((0, 3), dtype=np.float32)  # [m ,3]: color
+
+        # instance labels
+        self.inst_label = np.zeros((0, 1), dtype=np.uint32)         # [m, 1]: label
+        self.inst_label_color = np.zeros((0, 3), dtype=np.float32)  # [m ,3]: color
+
+        # projection color with semantic labels
+        self.proj_sem_label = np.zeros((self.proj_H, self.proj_W),
+                                       dtype=np.int32)              # [H,W]  label
+        self.proj_sem_color = np.zeros((self.proj_H, self.proj_W, 3),
+                                       dtype=np.float)              # [H,W,3] color
+
+        # projection color with instance labels
+        self.proj_inst_label = np.zeros((self.proj_H, self.proj_W),
+                                        dtype=np.int32)              # [H,W]  label
+        self.proj_inst_color = np.zeros((self.proj_H, self.proj_W, 3),
+                                        dtype=np.float)              # [H,W,3] color
+
+    def open_label(self, filename):
+        """ Open raw scan and fill in attributes
+        """
+        # check filename is string
+        if not isinstance(filename, str):
+            raise TypeError("Filename should be string type, "
+                            "but was {type}".format(type=str(type(filename))))
+
+        # check extension is a laserscan
+        if not any(filename.endswith(ext) for ext in self.EXTENSIONS_LABEL):
+            raise RuntimeError("Filename extension is not valid label file.")
+
+        # if all goes well, open label
+        label = np.fromfile(filename, dtype=np.uint32)
+        label = label.reshape((-1))
+
+        # set it
+        self.set_label(label)
+
+    def set_label(self, label):
+        """ Set points for label not from file but from np
+        """
+        # check label makes sense
+        if not isinstance(label, np.ndarray):
+            raise TypeError("Label should be numpy array")
+
+        # only fill in attribute if the right size
+        if label.shape[0] == self.points.shape[0]:
+            self.sem_label = label & 0xFFFF  # semantic label in lower half
+            self.inst_label = label >> 16    # instance id in upper half
+        else:
+            print("Points shape: ", self.points.shape)
+            print("Label shape: ", label.shape)
+            raise ValueError("Scan and Label don't contain same number of points")
+
+        # sanity check
+        assert((self.sem_label + (self.inst_label << 16) == label).all())
+
+        if self.project:
+            self.do_label_projection()
+
+    def colorize(self):
+        """ Colorize pointcloud with the color of each semantic label
+        """
+        self.sem_label_color = self.sem_color_lut[self.sem_label]
+        self.sem_label_color = self.sem_label_color.reshape((-1, 3))
+
+        self.inst_label_color = self.inst_color_lut[self.inst_label]
+        self.inst_label_color = self.inst_label_color.reshape((-1, 3))
+
+    def do_label_projection(self):
+        # only map colors to labels that exist
+        mask = self.proj_idx >= 0
+
+        # semantics
+        self.proj_sem_label[mask] = self.sem_label[self.proj_idx[mask]]
+        self.proj_sem_color[mask] = self.sem_color_lut[self.sem_label[self.proj_idx[mask]]]
+
+        # instances
+        self.proj_inst_label[mask] = self.inst_label[self.proj_idx[mask]]
+        self.proj_inst_color[mask] = self.inst_color_lut[self.inst_label[self.proj_idx[mask]]]
+
+
 def laser_scan_demo():
     import vispy
     from vispy.scene import visuals, SceneCanvas
     from matplotlib import pyplot as plt
 
-    def get_mpl_colormap(cmap_name):
-        cmap = plt.get_cmap(cmap_name)
-        # Initialize the matplotlib color map
-        sm = plt.cm.ScalarMappable(cmap=cmap)
-        # Obtain linear color range
-        color_range = sm.to_rgba(np.linspace(0, 1, 256), bytes=True)[:, 2::-1]
-        return color_range.reshape(256, 3).astype(np.float32) / 255.0
-
-    # new canvas prepared for visualizing data
-    canvas = SceneCanvas(keys='interactive', show=True)
-
-    # grid
-    grid = canvas.central_widget.add_grid()
-
-    # laserscan part
-    scan_view = vispy.scene.widgets.ViewBox(border_color='white', parent=canvas.scene)
-    grid.add_widget(scan_view, 0, 0)
-    scan_vis = visuals.Markers()
-    scan_view.camera = 'turntable'
-    scan_view.add(scan_vis)
-    visuals.XYZAxis(parent=scan_view.scene)
-
     scan = LaserScan(project=True)
     scan_path = os.path.join(data_dir, 'Rellis_3D', '00000', 'os1_cloud_node_kitti_bin', '002218.bin')
     scan.open_scan(scan_path)
-
-    # plot scan
     power = 16
-    # print()
-    range_data = np.copy(scan.unproj_range)
-    # print(range_data.max(), range_data.min())
-    range_data = range_data ** (1 / power)
-    # print(range_data.max(), range_data.min())
-    viridis_range = ((range_data - range_data.min()) /
-                     (range_data.max() - range_data.min()) *
-                     255).astype(np.uint8)
-    viridis_map = get_mpl_colormap("viridis")
-    viridis_colors = viridis_map[viridis_range]
 
-    scan_vis.set_data(scan.points,
-                      face_color=viridis_colors[..., ::-1],
-                      edge_color=viridis_colors[..., ::-1],
-                      size=1)
+    # def get_mpl_colormap(cmap_name):
+    #     cmap = plt.get_cmap(cmap_name)
+    #     # Initialize the matplotlib color map
+    #     sm = plt.cm.ScalarMappable(cmap=cmap)
+    #     # Obtain linear color range
+    #     color_range = sm.to_rgba(np.linspace(0, 1, 256), bytes=True)[:, 2::-1]
+    #     return color_range.reshape(256, 3).astype(np.float32) / 255.0
+    #
+    # # new canvas prepared for visualizing data
+    # canvas = SceneCanvas(keys='interactive', show=True)
+    #
+    # # grid
+    # grid = canvas.central_widget.add_grid()
+    #
+    # # laserscan part
+    # scan_view = vispy.scene.widgets.ViewBox(border_color='white', parent=canvas.scene)
+    # grid.add_widget(scan_view, 0, 0)
+    # scan_vis = visuals.Markers()
+    # scan_view.camera = 'turntable'
+    # scan_view.add(scan_vis)
+    # visuals.XYZAxis(parent=scan_view.scene)
+    #
+    # # plot scan
+    # # print()
+    # range_data = np.copy(scan.unproj_range)
+    # # print(range_data.max(), range_data.min())
+    # range_data = range_data ** (1 / power)
+    # # print(range_data.max(), range_data.min())
+    # viridis_range = ((range_data - range_data.min()) /
+    #                  (range_data.max() - range_data.min()) *
+    #                  255).astype(np.uint8)
+    # viridis_map = get_mpl_colormap("viridis")
+    # viridis_colors = viridis_map[viridis_range]
+    #
+    # scan_vis.set_data(scan.points,
+    #                   face_color=viridis_colors[..., ::-1],
+    #                   edge_color=viridis_colors[..., ::-1],
+    #                   size=1)
+    #
+    # # new canvas for img
+    # img_canvas = SceneCanvas(keys='interactive', show=True, size=(1024, 64 * 1))
+    # # grid
+    # img_grid = img_canvas.central_widget.add_grid()
+    # # add a view for the depth
+    # img_view = vispy.scene.widgets.ViewBox(border_color='white', parent=img_canvas.scene)
+    # img_grid.add_widget(img_view, 0, 0)
+    # img_vis = visuals.Image(cmap='viridis')
+    # img_view.add(img_vis)
 
-    vispy.app.run()
+    # now do all the range image stuff
+    # plot range image
+    data = np.copy(scan.proj_range)
+    # print(data[data > 0].max(), data[data > 0].min())
+    data[data > 0] = data[data > 0] ** (1 / power)
+    data[data < 0] = data[data > 0].min()
+    # print(data.max(), data.min())
+    data = (data - data[data > 0].min()) / \
+           (data.max() - data[data > 0].min())
+    # print(data.max(), data.min())
+    # img_vis.set_data(data)
+    # img_vis.update()
+    #
+    # vispy.app.run()
+
+    plt.imshow(data)
+    plt.show()
 
 
 def semseg_test():
@@ -602,10 +741,11 @@ def semseg_demo():
 
 
 def main():
-    semseg_test()
-    lidar_map_demo()
-    lidar2cam_demo()
-    semseg_demo()
+    laser_scan_demo()
+    # semseg_test()
+    # lidar_map_demo()
+    # lidar2cam_demo()
+    # semseg_demo()
 
 
 if __name__ == '__main__':
