@@ -11,19 +11,17 @@ import datasets
 
 parser = ArgumentParser()
 parser.add_argument('--lr', type=float, default=1e-5)
-parser.add_argument('--dataset', type=str, default='Rellis3D')
+parser.add_argument('--dataset', type=str, default='Rellis3DCloud')
 parser.add_argument('--model', type=str, default='fcn')
 parser.add_argument('--encoder', type=str, default='resnet50')
 parser.add_argument('--batch_size', type=int, default=4)
-parser.add_argument('--img_size', nargs='+', default=(512, 512))
 parser.add_argument('--n_epochs', type=int, default=100)
 parser.add_argument('--n_workers', type=int, default=12)
 args = parser.parse_args()
-args.img_size = tuple(args.img_size)
 
 Dataset = eval('datasets.%s' % args.dataset)
-train_dataset = Dataset(crop_size=args.img_size, split='train')
-valid_dataset = Dataset(crop_size=args.img_size, split='val')
+train_dataset = Dataset(split='train')
+valid_dataset = Dataset(split='val')
 
 train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
 valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 3)
@@ -32,6 +30,10 @@ valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_worker
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 architecture = eval('torchvision.models.segmentation.%s_%s' % (args.model, args.encoder))
 model = architecture(pretrained=False)  # Load net
+# Change input layer to n inputs
+n_inputs = train_dataset[0][0].shape[0]
+model.backbone.conv1 = torch.nn.Conv2d(n_inputs, 64,
+                                       kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
 n_classes = len(train_dataset.class_values)
 model.classifier[-1] = torch.nn.Conv2d(512, n_classes,
                                        kernel_size=(1, 1), stride=(1, 1))  # Change final layer to n classes
