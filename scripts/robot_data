@@ -121,13 +121,14 @@ class RobotData:
         self.current_pose = pose
         self.poses.append(self.current_pose)
 
-        cloud_lid = structured_to_unstructured(cloud[['x', 'y', 'z']])[::self.map_step]
-        cloud_map = np.matmul(cloud_lid, pose[:3, :3].T) + pose[:3, 3:].T
+        cloud_lid = structured_to_unstructured(cloud)[::self.map_step]
+        cloud_map = cloud_lid.copy()
+        cloud_map[..., :3] = np.matmul(cloud_lid[..., :3], pose[:3, :3].T) + pose[:3, 3:].T
         self.clouds.append(cloud_map)
         rospy.logdebug('Point cloud shape:', cloud_map.shape)
 
         global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
-        global_cloud = unstructured_to_structured(global_cloud, names=['x', 'y', 'z'])
+        global_cloud = unstructured_to_structured(global_cloud, names=cloud.dtype.names)
 
         self.rgb = rgb
         self.semseg = semseg
@@ -163,7 +164,7 @@ class RobotData:
         img_height, img_width = self.ds.calibration['img_height'], self.ds.calibration['img_width']
         T_lid2cam = self.ds.calibration['lid2cam']
         K = self.ds.calibration['K']
-        cloud_cam, _ = filter_camera_points(cloud_lid, img_width, img_height, K, T_lid2cam)
+        cloud_cam, _ = filter_camera_points(cloud_lid[..., :3], img_width, img_height, K, T_lid2cam)
         cloud_cam = np.asarray(cloud_cam, dtype=np.float32)
         cloud_cam = unstructured_to_structured(cloud_cam, names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud_cam)
@@ -198,7 +199,14 @@ class RobotData:
     def to_cloud_msg(self, cloud, time_stamp, frame):
         # publish point cloud
         if cloud.dtype.names is None:
-            cloud = unstructured_to_structured(cloud[:, :3], names=['x', 'y', 'z'])
+            if cloud.shape[1] == 3:
+                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z'])
+            elif cloud.shape[1] == 6:
+                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z', 'vp_x', 'vp_y', 'vp_z'])
+            elif cloud.shape[1] == 7:
+                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z', 'i', 'vp_x', 'vp_y', 'vp_z'])
+            else:
+                cloud = unstructured_to_structured(cloud[..., :3], names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud)
         pc_msg.header.stamp = time_stamp
         pc_msg.header.frame_id = frame

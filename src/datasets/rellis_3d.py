@@ -11,6 +11,8 @@ __all__ = [
     'data_dir',
     'seq_names',
     'Sequence',
+    'Rellis3D',
+    'Rellis3DCloud',
 ]
 
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
@@ -89,7 +91,8 @@ class Sequence(torch.utils.data.Dataset):
         return ids, ts
 
     def local_cloud_path(self, id):
-        return os.path.join(self.path, self.seq, 'os1_cloud_node_color_ply', '%s.ply' % id)
+        # return os.path.join(self.path, self.seq, 'os1_cloud_node_color_ply', '%s.ply' % id)
+        return os.path.join(self.path, self.seq, 'os1_cloud_node_kitti_bin', '%06d.bin' % self.ids_lid.index(id))
 
     def cloud_poses_path(self):
         if self.poses_path:
@@ -192,7 +195,7 @@ class Rellis3D(BaseDataset):
                  mean=np.asarray([0.54218053, 0.64250553, 0.56620195]),
                  std=np.asarray([0.54218052, 0.64250552, 0.56620194])):
         super(Rellis3D, self).__init__(ignore_label, base_size,
-                                       crop_size, downsample_rate, scale_factor, mean, std, )
+                                       crop_size, downsample_rate, scale_factor, mean, std)
 
         if path is None:
             path = join(data_dir, 'Rellis_3D')
@@ -764,7 +767,7 @@ def lidar2cam_demo():
         t_lidar2cam = T_lid2cam[:3, 3]
         rvec, _ = cv2.Rodrigues(R_lidar2cam)
         tvec = t_lidar2cam.reshape(3, 1)
-        xyz_v, color = filter_camera_points(points, img_width, img_height, K, T_lid2cam)
+        xyz_v, color = filter_camera_points(points[..., :3], img_width, img_height, K, T_lid2cam)
 
         imgpoints, _ = cv2.projectPoints(xyz_v[:, :], rvec, tvec, K, dist_coeff)
         imgpoints = np.squeeze(imgpoints, 1)
@@ -802,10 +805,10 @@ def semseg_demo():
 
 def main():
     semantic_laser_scan_demo()
-    # semseg_test()
-    # lidar_map_demo()
-    # lidar2cam_demo()
-    # semseg_demo()
+    semseg_test()
+    lidar_map_demo()
+    lidar2cam_demo()
+    semseg_demo()
 
 
 if __name__ == '__main__':
