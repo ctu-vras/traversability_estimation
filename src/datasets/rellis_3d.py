@@ -706,13 +706,23 @@ def semseg_test():
 def colored_cloud_demo():
     import open3d as o3d
 
-    name = np.random.choice(seq_names)
-    ds = Rellis3DSequence(seq='rellis_3d/%s' % name)
+    # name = np.random.choice(seq_names)
+    # ds = Rellis3DSequence(seq='rellis_3d/%s' % name)
+    #
+    # cloud, label, _, _, _ = ds[int(np.random.choice(range(len(ds))))]
+    #
+    # xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
+    # label = structured_to_unstructured(label[['label']]).squeeze()
+    # color = convert_color(label, color_map=ds.color_map)
 
-    cloud, label, _, _, _ = ds[int(np.random.choice(range(len(ds))))]
+    ds = Rellis3DClouds(split='test')
+    xyzir, masks = ds[np.random.choice(range(len(ds)))]
 
-    xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
-    label = structured_to_unstructured(label[['label']]).squeeze()
+    xyz = xyzir[:3, ...].reshape((3, -1))
+    xyz = xyz.T
+
+    label = np.argmax(masks, axis=0)
+    label = label.reshape(-1,)
     color = convert_color(label, color_map=ds.color_map)
 
     pcd = o3d.geometry.PointCloud()
