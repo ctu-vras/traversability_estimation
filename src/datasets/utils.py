@@ -9,7 +9,7 @@ from timeit import default_timer as timer
 import torch
 
 
-def read_points(path, dtype=np.float32):
+def read_points_ply(path, dtype=np.float32):
     import open3d as o3d
     pcd = o3d.io.read_point_cloud(path)
     points = np.asarray(pcd.points)
@@ -18,6 +18,27 @@ def read_points(path, dtype=np.float32):
     points = np.hstack([points, vps])
     points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z', 'vp_x', 'vp_y', 'vp_z'])
     del pcd
+    return points
+
+
+def read_points_bin(path, dtype=np.float32):
+    xyzi = np.fromfile(path, dtype=dtype)
+    xyzi = xyzi.reshape((-1, 4))
+    vps = np.zeros_like(xyzi[:, :3])
+    xyzi_vps = np.hstack([xyzi, vps])
+    points = unstructured_to_structured(xyzi_vps.astype(dtype=dtype),
+                                        names=['x', 'y', 'z', 'i', 'vp_x', 'vp_y', 'vp_z'])
+    return points
+
+
+def read_points(path, dtype=np.float32):
+    # https://stackoverflow.com/questions/5899497/how-can-i-check-the-extension-of-a-file
+    if path.lower().endswith('.ply'):
+        points = read_points_ply(path, dtype)
+    elif path.lower().endswith('.bin'):
+        points = read_points_bin(path, dtype)
+    else:
+        raise ValueError('Cloud file must have .ply or .bin extension')
     return points
 
 
@@ -85,6 +106,7 @@ def depth_color(val, min_d=0, max_d=120):
 
 
 def filter_camera_points(points, img_width, img_height, K, RT):
+    assert points.shape[1] == 3
     ctl = np.array(RT)
     fov_x = 2 * np.arctan2(img_width, 2 * K[0, 0]) * 180 / 3.1415926 + 10
     fov_y = 2 * np.arctan2(img_height, 2 * K[1, 1]) * 180 / 3.1415926 + 10
