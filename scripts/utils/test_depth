@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import cv2
 import numpy as np
 import torch
 from argparse import ArgumentParser
@@ -20,12 +19,13 @@ Dataset = eval('datasets.%s' % args.dataset)
 ds = Dataset(split='test')
 
 # Initialize model with the best available weights
-model = torch.load('fcn_resnet50.pth', map_location=args.device)
+# model = torch.load('fcn_resnet50.pth', map_location=args.device)
+model = torch.load('fcn_resnet50_legacy.pth', map_location=args.device)
 model.eval()
 
 # Apply inference preprocessing transforms
-input, _ = ds[np.random.choice(range(len(ds)))]
-batch = torch.from_numpy(input).unsqueeze(0).to(args.device)
+xyzir, gt_mask = ds[np.random.choice(range(len(ds)))]
+batch = torch.from_numpy(xyzir).unsqueeze(0).to(args.device)
 
 # Use the model and visualize the prediction
 with torch.no_grad():
@@ -37,7 +37,16 @@ pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
 label_config = os.path.join(pkg_path, "config/rellis.yaml")
 data_cfg = yaml.safe_load(open(label_config, 'r'))
 
-result = convert_color(mask, data_cfg['color_map'])
+pred_color = convert_color(mask, data_cfg['color_map'])
+gt_mask = np.argmax(gt_mask, axis=0)
+gt_color = convert_color(gt_mask, data_cfg['color_map'])
+
 plt.figure()
-plt.imshow(result)
+# plt.switch_backend('QT5Agg')  # default on my system
+plt.subplot(2, 1, 1)
+plt.imshow(pred_color)
+plt.subplot(2, 1, 2)
+plt.imshow(gt_color)
+# figManager = plt.get_current_fig_manager()
+# figManager.window.showMaximized()
 plt.show()
