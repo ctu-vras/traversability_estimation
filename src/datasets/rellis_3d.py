@@ -24,8 +24,6 @@ seq_names = [
     '00003',
     '00004',
 ]
-
-
 # seq_names = ['%05d' % i for i in range(5)]
 
 
@@ -705,6 +703,24 @@ def semseg_test():
     )
 
 
+def colored_cloud_demo():
+    import open3d as o3d
+
+    name = np.random.choice(seq_names)
+    ds = Rellis3DSequence(seq='rellis_3d/%s' % name)
+
+    cloud, label, _, _, _ = ds[int(np.random.choice(range(len(ds))))]
+
+    xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
+    label = structured_to_unstructured(label[['label']]).squeeze()
+    color = convert_color(label, color_map=ds.color_map)
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(xyz)
+    pcd.colors = o3d.utility.Vector3dVector(color / 255.)
+    o3d.visualization.draw_geometries([pcd])
+
+
 def lidar_map_demo():
     from tqdm import tqdm
     import open3d as o3d
@@ -790,11 +806,12 @@ def semseg_demo():
 
 
 def main():
-    semantic_laser_scan_demo()
-    semseg_test()
-    lidar_map_demo()
-    lidar2cam_demo()
-    semseg_demo()
+    colored_cloud_demo()
+    # semantic_laser_scan_demo()
+    # semseg_test()
+    # lidar_map_demo()
+    # lidar2cam_demo()
+    # semseg_demo()
 
 
 if __name__ == '__main__':

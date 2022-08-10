@@ -27,9 +27,8 @@ def read_points_bin(path, dtype=np.float32):
 
 
 def read_points_labels(path, dtype=np.uint32):
-    # path = path.replace('os1_cloud_node_kitti_bin',
-    #                     'os1_cloud_node_semantickitti_label_id').replace('.bin', '.label')
     label = np.fromfile(path, dtype=dtype)
+    label = label.reshape((-1, 1))
     # label = convert_label(label, inverse=False)
     label = unstructured_to_structured(label.astype(dtype=dtype), names=['label'])
     return label
