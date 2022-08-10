@@ -271,7 +271,7 @@ class Rellis3D(BaseDataset):
         return image.copy(), mask.copy()
 
 
-class LaserScan:
+class LaserScan(object):
     """
     Class that contains LaserScan with x,y,z,r:
     https://github.com/PRBonn/semantic-kitti-api/blob/8e75f4d049b787321f68a11753cb5947b1e58e17/auxiliary/laserscan.py
@@ -505,7 +505,7 @@ class SemLaserScan(LaserScan):
         label = label.reshape((-1))
 
         # set it
-        self.set_label(label, filename)
+        self.set_label(label)
 
     def set_label(self, label):
         """ Set points for label not from file but from np
@@ -554,26 +554,6 @@ class SemLaserScan(LaserScan):
 class Rellis3DCloud:
     CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
-    LABEL_MAPPING = {0: 0,
-                     1: 0,
-                     3: 1,
-                     4: 2,
-                     5: 3,
-                     6: 4,
-                     7: 5,
-                     8: 6,
-                     9: 7,
-                     10: 8,
-                     12: 9,
-                     15: 10,
-                     17: 11,
-                     18: 12,
-                     19: 13,
-                     23: 14,
-                     27: 15,
-                     31: 16,
-                     33: 17,
-                     34: 18}
 
     def __init__(self,
                  path=None,
@@ -593,7 +573,6 @@ class Rellis3DCloud:
         if not classes:
             classes = self.CLASSES
         # convert str names to class values on masks
-        # self.class_values = [list(self.LABEL_MAPPING.values())[self.CLASSES.index(cls.lower())] for cls in classes]
         self.class_values = [self.CLASSES.index(cls.lower()) for cls in classes]
 
         if not color_map:
@@ -608,16 +587,6 @@ class Rellis3DCloud:
         self.files = self.read_files()
         if num_samples:
             self.files = self.files[:num_samples]
-
-    def convert_label(self, label, inverse=False):
-        temp = label.copy()
-        if inverse:
-            for v, k in self.LABEL_MAPPING.items():
-                label[temp == k] = v
-        else:
-            for k, v in self.LABEL_MAPPING.items():
-                label[temp == k] = v
-        return label
 
     def read_files(self):
         files = []
@@ -642,22 +611,21 @@ class Rellis3DCloud:
         self.scan.colorize()
 
         # following SalsaNext approach: (x, y, z, i, r)
-        input = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
+        xyzir = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
                                 self.scan.proj_remission[None],  # (1 x H x W)
                                 self.scan.proj_range[None]], axis=0)  # (1 x H x W)
 
         mask = self.scan.proj_sem_label.copy()
-        # mask = self.convert_label(mask, inverse=False)
         masks = [(mask == v) for v in self.class_values]   # extract certain classes from mask
         mask = np.stack(masks, axis=0).astype('float')
-        return input, mask
+        return xyzir, mask
 
     def __len__(self):
         return len(self.files)
 
 
 def semantic_laser_scan_demo():
-    from datasets.utils import convert_label, convert_color
+    from datasets.utils import convert_color
 
     split = np.random.choice(['test', 'train', 'val'])
     # split = 'test'
@@ -675,7 +643,6 @@ def semantic_laser_scan_demo():
                                (range_img[range_img > 0].max() - range_img[range_img > 0].min())
 
     gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
-    # gt_arg = convert_label(gt_arg, inverse=True) - 1
     gt_color = convert_color(gt_arg, ds.color_map)
 
     plt.figure()
