@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from argparse import ArgumentParser
 import datasets
+from tqdm import tqdm
 
 
 parser = ArgumentParser()
@@ -14,9 +15,9 @@ parser.add_argument('--lr', type=float, default=1e-5)
 parser.add_argument('--dataset', type=str, default='Rellis3DCloud')
 parser.add_argument('--model', type=str, default='fcn')
 parser.add_argument('--encoder', type=str, default='resnet50')
-parser.add_argument('--batch_size', type=int, default=4)
+parser.add_argument('--batch_size', type=int, default=8)
 parser.add_argument('--n_epochs', type=int, default=100)
-parser.add_argument('--n_workers', type=int, default=12)
+parser.add_argument('--n_workers', type=int, default=os.cpu_count())
 args = parser.parse_args()
 
 Dataset = eval('datasets.%s' % args.dataset)
@@ -24,7 +25,7 @@ train_dataset = Dataset(split='train')
 valid_dataset = Dataset(split='val')
 
 train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
-valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 3)
+valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
 
 # --------------Load and set model and optimizer-------------------------------------
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -46,7 +47,7 @@ optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create ad
 criterion = torch.nn.CrossEntropyLoss()  # Set loss function
 min_loss = np.Inf
 for e in range(args.n_epochs):
-    for itr, sample in enumerate(train_loader):
+    for itr, sample in tqdm(enumerate(train_loader)):
         images, labels = sample
         if torch.cuda.is_available():
             images, labels = images.cuda(), labels.cuda()
@@ -58,9 +59,12 @@ for e in range(args.n_epochs):
         loss.backward()  # Backpropagate loss
         optimizer.step()  # Apply gradient descent change to weight
 
-        print(itr, ") Loss=", loss.data.cpu().numpy())
-        if min_loss > loss.data.cpu().numpy():  # Save model weight once every 60k steps permanent file
+        if min_loss > loss.data.cpu().numpy():  # Save model weight
             min_loss = loss.data.cpu().numpy()
             name = "%s_%s.pth" % (args.model, args.encoder)
+            # name = './%s_%s_lr%g_bs%d_epoch%d_%s_loss_%.2f.pth' % \
+            #        (args.model, args.encoder,
+            #         args.lr, args.batch_size, e, args.dataset, min_loss)
             print("Saving Model:", name)
+            print("Iteration: %i, loss = %f" % (itr, loss.data.cpu().numpy()))
             torch.save(model, os.path.join(os.path.dirname(__file__), name))

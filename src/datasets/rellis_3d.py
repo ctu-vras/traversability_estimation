@@ -502,7 +502,7 @@ class SemLaserScan(LaserScan):
         label = label.reshape((-1))
 
         # set it
-        self.set_label(label)
+        self.set_label(label, filename)
 
     def set_label(self, label):
         """ Set points for label not from file but from np
@@ -656,13 +656,13 @@ class Rellis3DCloud:
 def semantic_laser_scan_demo():
     from datasets.utils import convert_label, convert_color
 
-    # split = np.random.choice(['test', 'train', 'val'])
-    split = 'test'
+    split = np.random.choice(['test', 'train', 'val'])
+    # split = 'test'
 
     ds = Rellis3DCloud(split=split)
 
-    # input, gt_mask = ds[np.random.choice(range(len(ds)))]
-    input, gt_mask = ds[0]
+    input, gt_mask = ds[np.random.choice(range(len(ds)))]
+    # input, gt_mask = ds[0]
 
     # range_img = {-1: no data, 0..1: for scaled distances}
     power = 16

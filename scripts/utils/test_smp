@@ -6,6 +6,7 @@ import torch
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import datasets
+from datasets.utils import convert_label, convert_color
 import yaml
 import os
 
@@ -37,83 +38,35 @@ def preprocessing(image, input_size, input_scale=1.0,
     return image
 
 
-def convert_label(label, inverse=False):
-    label_mapping = {0: 0,
-                     1: 0,
-                     3: 1,
-                     4: 2,
-                     5: 3,
-                     6: 4,
-                     7: 5,
-                     8: 6,
-                     9: 7,
-                     10: 8,
-                     12: 9,
-                     15: 10,
-                     17: 11,
-                     18: 12,
-                     19: 13,
-                     23: 14,
-                     27: 15,
-                     #  29: 1,
-                     #  30: 1,
-                     31: 16,
-                     #  32: 4,
-                     33: 17,
-                     34: 18}
-    if isinstance(label, np.ndarray):
-        temp = label.copy()
-    elif isinstance(label, torch.Tensor):
-        temp = label.clone()
-    else:
-        raise ValueError('Supported types: np.ndarray, torch.Tensor')
-    if inverse:
-        for v, k in label_mapping.items():
-            temp[label == k] = v
-    else:
-        for k, v in label_mapping.items():
-            temp[label == k] = v
-    return temp
-
-
-def convert_color(label, color_map):
-    if isinstance(label, np.ndarray):
-        temp = np.zeros(label.shape + (3,)).astype(np.uint8)
-    elif isinstance(label, torch.Tensor):
-        temp = torch.zeros(label.shape + (3,), dtype=torch.uint8)
-    else:
-        raise ValueError('Supported types: np.ndarray, torch.Tensor')
-    for k, v in color_map.items():
-        temp[label == k] = v
-    return temp
-
-
 parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='Rellis3D')
 parser.add_argument('--img_size', nargs='+', default=(704, 960))
-parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+parser.add_argument('--device', type=str, default='cpu')
 args = parser.parse_args()
 args.img_size = tuple(args.img_size)
+print(args)
 
 Dataset = eval('datasets.%s' % args.dataset)
 ds = Dataset(crop_size=args.img_size, split='test')
 
 # Initialize model with the best available weights
-model = torch.load("fcn_resnet50_legacy.pth").to(args.device)
+# model = torch.load("fcn_resnet50_legacy.pth").to(args.device)
+model = torch.load('../../config/weights/smp/PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth',
+                   map_location=args.device)
 model.eval()
 
 # Apply inference preprocessing transforms
-img, _ = ds[0]
+img_raw, _ = ds[np.random.choice(range(len(ds)))]
+img_vis = np.uint8(255 * (img_raw * ds.std + ds.mean))
 size = (960, 704)
-img = preprocessing(img, input_size=size)
-batch = torch.from_numpy(img).unsqueeze(0).to(args.device)
+input = preprocessing(img_raw, input_size=size)
+batch = torch.from_numpy(input).unsqueeze(0).to(args.device)
 
 # Use the model and visualize the prediction
 with torch.no_grad():
-    pred = model(batch)["out"]
-pred = pred.softmax(dim=1)
+    pred = model(batch)
 pred = pred.squeeze(0).cpu().numpy()
-mask = np.argmax(pred, axis=0)
+mask = np.argmax(pred, axis=0) - 1
 mask = convert_label(mask, inverse=True)
 mask = cv2.resize(mask.astype('float32'), size, interpolation=cv2.INTER_LINEAR).astype('int8')
 
@@ -122,5 +75,9 @@ label_config = os.path.join(pkg_path, "config/rellis.yaml")
 data_cfg = yaml.safe_load(open(label_config, 'r'))
 
 result = convert_color(mask, data_cfg['color_map'])
+plt.figure()
+plt.subplot(1, 2, 1)
+plt.imshow(img_vis)
+plt.subplot(1, 2, 2)
 plt.imshow(result)
 plt.show()
