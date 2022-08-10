@@ -83,8 +83,8 @@ class TraversabilityMapping:
         # Transform local map to ground truth localization frame
         local_map = numpify(pc_msg)
         local_map = structured_to_unstructured(local_map[['x', 'y', 'z', 'traversability']])
-        local_map = local_map[::self.map_step]
         rospy.logdebug('Point cloud of shape %s is received', local_map.shape)
+        local_map = local_map[::self.map_step]
         assert len(local_map.shape) == 2
         assert local_map.shape[1] == 4
 

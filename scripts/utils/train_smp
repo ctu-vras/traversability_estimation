@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 
 parser = ArgumentParser()
 parser.add_argument('--lr', type=float, default=1e-4)
-parser.add_argument('--dataset', type=str, default='Rellis3D')
+parser.add_argument('--dataset', type=str, default='Rellis3DImages')
 parser.add_argument('--model', type=str, default='Unet')
 parser.add_argument('--encoder', type=str, default='resnet34')
 parser.add_argument('--encoder_weights', type=str, default='imagenet')

@@ -14,9 +14,7 @@ def read_points_ply(path, dtype=np.float32):
     pcd = o3d.io.read_point_cloud(path)
     points = np.asarray(pcd.points)
     assert points.shape[1] == 3
-    vps = np.zeros_like(points)
-    points = np.hstack([points, vps])
-    points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z', 'vp_x', 'vp_y', 'vp_z'])
+    points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z'])
     del pcd
     return points
 
@@ -24,11 +22,17 @@ def read_points_ply(path, dtype=np.float32):
 def read_points_bin(path, dtype=np.float32):
     xyzi = np.fromfile(path, dtype=dtype)
     xyzi = xyzi.reshape((-1, 4))
-    vps = np.zeros_like(xyzi[:, :3])
-    xyzi_vps = np.hstack([xyzi, vps])
-    points = unstructured_to_structured(xyzi_vps.astype(dtype=dtype),
-                                        names=['x', 'y', 'z', 'i', 'vp_x', 'vp_y', 'vp_z'])
+    points = unstructured_to_structured(xyzi.astype(dtype=dtype), names=['x', 'y', 'z', 'i'])
     return points
+
+
+def read_points_labels(path, dtype=np.uint32):
+    # path = path.replace('os1_cloud_node_kitti_bin',
+    #                     'os1_cloud_node_semantickitti_label_id').replace('.bin', '.label')
+    label = np.fromfile(path, dtype=dtype)
+    # label = convert_label(label, inverse=False)
+    label = unstructured_to_structured(label.astype(dtype=dtype), names=['label'])
+    return label
 
 
 def read_points(path, dtype=np.float32):
@@ -218,10 +222,7 @@ def convert_label(label, inverse=False):
                      19: 13,
                      23: 14,
                      27: 15,
-                     #  29: 1,
-                     #  30: 1,
                      31: 16,
-                     #  32: 4,
                      33: 17,
                      34: 18}
     if isinstance(label, np.ndarray):

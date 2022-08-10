@@ -10,7 +10,7 @@ import random
 from torch.utils import data
 
 
-class BaseDataset(data.Dataset):
+class BaseDatasetImages(data.Dataset):
     def __init__(self,
                  ignore_label=-1,
                  base_size=2048,

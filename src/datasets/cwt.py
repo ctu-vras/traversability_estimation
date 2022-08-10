@@ -1,7 +1,7 @@
 import os
 from os.path import dirname, join, realpath
 from .utils import *
-from .base_dataset import BaseDataset
+from .base_dataset import BaseDatasetImages
 
 __all__ = [
     'data_dir',
@@ -11,7 +11,7 @@ __all__ = [
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
 
 
-class CWT(BaseDataset):
+class CWT(BaseDatasetImages):
     CLASSES = ["flat", "bumpy", "water", "rock", "mixed", "excavator", "obstacle"]
     PALETTE = [[0, 255, 0], [255, 255, 0], [255, 0, 0], [128, 0, 0], [100, 65, 0], [0, 255, 255], [0, 0, 255]]
 

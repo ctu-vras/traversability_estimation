@@ -3,7 +3,7 @@
 from __future__ import absolute_import, division, print_function
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
-from datasets.rellis_3d import Sequence, seq_names
+from datasets.rellis_3d import Rellis3DSequence, seq_names
 from datasets.utils import filter_camera_points, normalize
 # ROS
 import rospy
@@ -63,7 +63,7 @@ class RobotData:
         self.path = Path()
         self.path.header.frame_id = self.origin_frame
         self.map_step = rospy.get_param('~map_step', 10)
-        self.ds = Sequence(seq=sequence)
+        self.ds = Rellis3DSequence(seq=sequence)
         self.delay_start = rospy.get_param('~delay_start', 1.0)
         self.period = rospy.get_param('~period', 1.0)
         self.index = 0
@@ -116,7 +116,7 @@ class RobotData:
             rospy.loginfo('No more positions.')
             rospy.signal_shutdown('No more positions.')
 
-        cloud, pose, rgb, semseg = self.ds[self.index]
+        cloud, cloud_label, pose, rgb, semseg = self.ds[self.index]
 
         self.current_pose = pose
         self.poses.append(self.current_pose)
@@ -201,10 +201,10 @@ class RobotData:
         if cloud.dtype.names is None:
             if cloud.shape[1] == 3:
                 cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z'])
-            elif cloud.shape[1] == 6:
-                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z', 'vp_x', 'vp_y', 'vp_z'])
-            elif cloud.shape[1] == 7:
-                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z', 'i', 'vp_x', 'vp_y', 'vp_z'])
+            elif cloud.shape[1] == 4:
+                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z', 'i'])
+            elif cloud.shape[1] == 5:
+                cloud = unstructured_to_structured(cloud, names=['x', 'y', 'z', 'i', 'l'])
             else:
                 cloud = unstructured_to_structured(cloud[..., :3], names=['x', 'y', 'z'])
         pc_msg = msgify(PointCloud2, cloud)

@@ -9,6 +9,7 @@ from datasets.utils import convert_color
 import yaml
 import os
 
+
 parser = ArgumentParser()
 parser.add_argument('--dataset', type=str, default='Rellis3DCloud')
 parser.add_argument('--device', type=str, default='cpu')
