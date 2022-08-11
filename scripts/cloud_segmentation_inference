@@ -63,6 +63,8 @@ class CloudProcessor:
 
     def preprocessing(self, cloud):
         cloud = cloud[::self.map_step]
+        if len(cloud.shape) > 2:
+            cloud = cloud.reshape((-1, 4))
         assert len(cloud.shape) == 2
         assert cloud.shape[1] == 4
         self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3])
