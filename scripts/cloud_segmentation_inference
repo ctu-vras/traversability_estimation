@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import os
-import cv2
+# import cv2
 import datasets
 from datasets.utils import convert_color
 import rospy
@@ -31,13 +31,29 @@ class CloudProcessor:
         self.new_map = None
         self.lidar_frame = None
         self.map_step = rospy.get_param('~map_step', 1)
-        self.scan = datasets.rellis_3d.LaserScan(project=True,
-                                                 H=rospy.get_param('~lidar_channels', 64),
-                                                 W=rospy.get_param('~lidar_beams', 2048),
-                                                 fov_up=rospy.get_param('~lidar_fov_up', 22.5),
-                                                 fov_down=rospy.get_param('~lidar_fov_down', -22.5))
+        self.lidar_channels = rospy.get_param('~lidar_channels', 64)
+        self.lidar_beams = rospy.get_param('~lidar_beams', 2048)
+        self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 22.5)
+        self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -22.5)
+        self.scan = self.update_scan()
+
+        label_map = rospy.get_param('~label_map', None)
+        assert label_map is None or isinstance(label_map, (dict, list))
+        if isinstance(label_map, dict):
+            label_map = dict((int(k), int(v)) for k, v in label_map.items())
+            n = max(label_map) + 1
+            self.label_map = np.zeros((n,), dtype=np.uint8)
+            for k, v in label_map.items():
+                self.label_map[k] = v
+        elif isinstance(label_map, list):
+            self.label_map = np.asarray(label_map)
+        else:
+            self.label_map = None
+        if self.label_map is not None:
+            rospy.loginfo('Label map: %s', self.label_map)
+
         self.input_pc_fields = rospy.get_param('~input_fields', ['x', 'y', 'z', 'i'])
-        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b'])
+        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b', 'labels'])
         self.device = rospy.get_param('~device', 'cpu')
         self.model = self.load_model()
 
@@ -53,6 +69,14 @@ class CloudProcessor:
         self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
         rospy.loginfo('Point cloud processing node is ready.')
 
+    def update_scan(self):
+        self.scan = datasets.rellis_3d.LaserScan(project=True,
+                                                 H=self.lidar_channels,
+                                                 W=self.lidar_beams,
+                                                 fov_up=self.lidar_fov_up,
+                                                 fov_down=self.lidar_fov_down)
+        return self.scan
+
     def load_model(self):
         model_weights = rospy.get_param('~weights', "fcn_resnet50_legacy.pth")
         path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % model_weights)
@@ -64,9 +88,16 @@ class CloudProcessor:
     def preprocessing(self, cloud):
         cloud = cloud[::self.map_step]
         if len(cloud.shape) > 2:
-            cloud = cloud.reshape((-1, 4))
+            H, W, C = cloud.shape
+            if H != self.lidar_channels or W != self.lidar_beams:
+                rospy.logwarn('Updating scan')
+                self.lidar_channels = H
+                self.lidar_beams = W
+                self.update_scan()
+            cloud = cloud.reshape((-1, C))
         assert len(cloud.shape) == 2
-        assert cloud.shape[1] == 4
+        assert cloud.shape[1] >= 4
+
         self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3])
         # rospy.logdebug('Depth image shape: %s', self.scan.proj_range.shape)
         xyzir = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
@@ -83,28 +114,40 @@ class CloudProcessor:
         rospy.loginfo('Segmented result shape: %s', pred.shape)
         return pred
 
-    def postprocessing(self, pred, input):
+    def postprocessing(self, pred, xyzir):
         assert isinstance(pred, torch.Tensor)
-        assert isinstance(input, np.ndarray)
+        assert isinstance(xyzir, np.ndarray)
         pred = pred.squeeze(0).cpu().numpy()
         labels = np.argmax(pred, axis=0)
+
         # labels_vis = cv2.resize(labels.astype('float'),
         #                         (labels.shape[1] // 2, labels.shape[0] // 2),
         #                         interpolation=cv2.INTER_LINEAR).astype('int8')
         # colors_vis = convert_color(labels_vis, color_map=self.color_map)
         # cv2.imshow('Predicted labels', colors_vis)
         # cv2.waitKey(1)
+
         colors = convert_color(labels, color_map=self.color_map)
-        assert input.shape[0] >= 3
-        assert len(input.shape) == 3  # 5 x H x W
-        xyz = input[:3, ...]
+        assert xyzir.shape[0] >= 3
+        assert len(xyzir.shape) == 3  # 5 x H x W
+        xyz = xyzir[:3, ...]
         rgb = colors.transpose((2, 0, 1)) / 255.  # 3 x H x W
         assert xyz.shape[1:] == rgb.shape[1:]
         xyzrgb = np.concatenate([xyz, rgb], axis=0)
-        C = xyzrgb.shape[0]
+        C, H, W = xyzrgb.shape
+        n_pts = H * W
         xyzrgb = xyzrgb.reshape((C, -1)).T
-        rospy.logdebug('XYZRGB cloud shape: %s', xyzrgb.shape)
-        return np.asarray(xyzrgb, dtype=np.float32)
+        assert xyzrgb.shape == (n_pts, C)
+
+        if self.label_map is not None:
+            labels = self.label_map[labels]
+
+        labels = labels.reshape((n_pts, 1))
+        xyz_rgb_l = np.concatenate([xyzrgb, labels], axis=1)
+        assert xyz_rgb_l.shape == (n_pts, C+1)
+
+        rospy.logdebug('XYZ_RGB_L cloud shape: %s', xyzrgb.shape)
+        return np.asarray(xyz_rgb_l, dtype=np.float32)
 
     def segment_cloud_cb(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
@@ -124,11 +167,11 @@ class CloudProcessor:
 
         xyzir = self.preprocessing(cloud)
         pred = self.model_inference(xyzir)
-        xyzrgb = self.postprocessing(pred, input=xyzir)
+        xyz_rgb_l = self.postprocessing(pred, xyzir=xyzir)
 
         # publish result
         stamp = rospy.Time.now()
-        segm_pc_msg = msgify_cloud(xyzrgb, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
+        segm_pc_msg = msgify_cloud(xyz_rgb_l, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
         self.segm_cloud_pub.publish(segm_pc_msg)
 
 

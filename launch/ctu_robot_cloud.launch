@@ -13,8 +13,11 @@
             lidar_fov_up: 45.0
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
-            output_fields: ['x', 'y', 'z', 'r', 'g', 'b']
+            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'labels']
+            label_config: $(dirname)/../config/obstacles.yaml
         </rosparam>
+        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
+
         <remap from="cloud_in" to="/os_cloud_node/points"/>
         <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
     </node>
