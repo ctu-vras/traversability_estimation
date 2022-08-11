@@ -15,6 +15,10 @@
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: 1.0
+            lidar_channels: 64
+            lidar_beams: 2048
+            lidar_fov_up: 22.5
+            lidar_fov_down: -22.5
         </rosparam>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>

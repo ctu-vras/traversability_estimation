@@ -74,9 +74,8 @@
 
         <remap from="cloud_in" to="/points_filtered_jetson"/>
         <remap from="cloud_out" to="/points_filtered_jetson_traversability"/>
-        <!--
-        <remap from="cloud_in" to="/points_filtered_kontron"/>
-        <remap from="cloud_out" to="/points_filtered_kontron_traversability"/>
-        -->
+
+<!--        <remap from="cloud_in" to="/points_filtered_kontron"/>-->
+<!--        <remap from="cloud_out" to="/points_filtered_kontron_traversability"/>-->
     </node>
 </launch>
