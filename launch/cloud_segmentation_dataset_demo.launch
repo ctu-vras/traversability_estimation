@@ -19,6 +19,8 @@
             lidar_beams: 2048
             lidar_fov_up: 22.5
             lidar_fov_down: -22.5
+            input_filelds: ['x', 'y', 'z', 'i']
+            output_fields: ['x', 'y', 'z', 'r', 'g', 'b']
         </rosparam>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
