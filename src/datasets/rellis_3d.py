@@ -1,4 +1,7 @@
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from .utils import *
@@ -497,13 +500,13 @@ class SemLaserScan(LaserScan):
         self.proj_sem_label = np.zeros((self.proj_H, self.proj_W),
                                        dtype=np.int32)  # [H,W]  label
         self.proj_sem_color = np.zeros((self.proj_H, self.proj_W, 3),
-                                       dtype=np.float)  # [H,W,3] color
+                                       dtype=float)  # [H,W,3] color
 
         # projection color with instance labels
         self.proj_inst_label = np.zeros((self.proj_H, self.proj_W),
                                         dtype=np.int32)  # [H,W]  label
         self.proj_inst_color = np.zeros((self.proj_H, self.proj_W, 3),
-                                        dtype=np.float)  # [H,W,3] color
+                                        dtype=float)  # [H,W,3] color
 
     def open_label(self, filename):
         """ Open raw scan and fill in attributes
@@ -649,28 +652,42 @@ def semantic_laser_scan_demo():
 
     ds = Rellis3DClouds(split=split)
 
-    input, gt_mask = ds[np.random.choice(range(len(ds)))]
-    # input, gt_mask = ds[0]
+    xyzir, gt_mask = ds[np.random.choice(range(len(ds)))]
 
     # range_img = {-1: no data, 0..1: for scaled distances}
     power = 16
-    range_img = np.copy(input[3])  # depth
+    range_img = np.copy(xyzir[4])  # depth
     range_img[range_img > 0] = range_img[range_img > 0] ** (1 / power)
     range_img[range_img > 0] = (range_img[range_img > 0] - range_img[range_img > 0].min()) / \
                                (range_img[range_img > 0].max() - range_img[range_img > 0].min())
 
-    gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
-    gt_color = convert_color(gt_arg, ds.color_map)
+    # gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
+    # gt_color = convert_color(gt_arg, ds.color_map)
+    color_gt = ds.scan.proj_sem_color
+
+    model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/fcn_resnet50_legacy.pth'),
+                       map_location='cpu')
+    model.eval()
+    # Apply inference preprocessing transforms
+    batch = torch.from_numpy(xyzir).unsqueeze(0)
+    with torch.no_grad():
+        pred = model(batch)['out']
+    pred = pred.squeeze(0).cpu().numpy()
+    label_pred = np.argmax(pred, axis=0)
+    color_pred = convert_color(label_pred, color_map=ds.color_map) / 255.
 
     plt.figure()
     # https://stackoverflow.com/questions/12439588/how-to-maximize-a-plt-show-window-using-python
     plt.switch_backend('QT5Agg')  # default on my system
     plt.subplot(3, 1, 1)
     plt.imshow(range_img)
+    plt.title('Range map')
     plt.subplot(3, 1, 2)
-    plt.imshow(gt_color)
+    plt.imshow(color_gt)
+    plt.title('Semantics: GT')
     plt.subplot(3, 1, 3)
-    plt.imshow(ds.scan.proj_sem_color)
+    plt.imshow(color_pred)
+    plt.title('Semantics: Pred')
     figManager = plt.get_current_fig_manager()
     figManager.window.showMaximized()
     plt.show()
@@ -706,29 +723,41 @@ def semseg_test():
 def colored_cloud_demo():
     import open3d as o3d
 
-    # name = np.random.choice(seq_names)
-    # ds = Rellis3DSequence(seq='rellis_3d/%s' % name)
-    #
-    # cloud, label, _, _, _ = ds[int(np.random.choice(range(len(ds))))]
-    #
-    # xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
-    # label = structured_to_unstructured(label[['label']]).squeeze()
-    # color = convert_color(label, color_map=ds.color_map)
-
     ds = Rellis3DClouds(split='test')
-    xyzir, masks = ds[np.random.choice(range(len(ds)))]
+    i = np.random.choice(range(len(ds)))
+    xyzir, masks = ds[i]
 
     xyz = xyzir[:3, ...].reshape((3, -1))
     xyz = xyz.T
 
-    label = np.argmax(masks, axis=0)
-    label = label.reshape(-1,)
-    color = convert_color(label, color_map=ds.color_map)
+    # label = np.argmax(masks, axis=0)
+    # label = label.reshape(-1,)
+    # color = convert_color(label, color_map=ds.color_map) / 255.
+    color_gt = ds.scan.proj_sem_color.reshape((-1, 3))
 
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(xyz)
-    pcd.colors = o3d.utility.Vector3dVector(color / 255.)
-    o3d.visualization.draw_geometries([pcd])
+    model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/fcn_resnet50_legacy.pth'),
+                       map_location='cpu')
+    model.eval()
+    # Apply inference preprocessing transforms
+    batch = torch.from_numpy(xyzir).unsqueeze(0)
+
+    # Use the model and visualize the prediction
+    with torch.no_grad():
+        pred = model(batch)['out']
+    pred = pred.squeeze(0).cpu().numpy()
+    label_pred = np.argmax(pred, axis=0)
+    label_pred = label_pred.reshape(-1, )
+    color_pred = convert_color(label_pred, color_map=ds.color_map) / 255.
+
+    pcd_gt = o3d.geometry.PointCloud()
+    pcd_gt.points = o3d.utility.Vector3dVector(xyz + np.array([100, 0, 0]))
+    pcd_gt.colors = o3d.utility.Vector3dVector(color_gt)
+
+    pcd_pred = o3d.geometry.PointCloud()
+    pcd_pred.points = o3d.utility.Vector3dVector(xyz)
+    pcd_pred.colors = o3d.utility.Vector3dVector(color_pred)
+
+    o3d.visualization.draw_geometries([pcd_pred, pcd_gt])
 
 
 def lidar_map_demo():
@@ -817,11 +846,11 @@ def semseg_demo():
 
 def main():
     colored_cloud_demo()
-    # semantic_laser_scan_demo()
-    # semseg_test()
-    # lidar_map_demo()
-    # lidar2cam_demo()
-    # semseg_demo()
+    semantic_laser_scan_demo()
+    semseg_test()
+    lidar_map_demo()
+    lidar2cam_demo()
+    semseg_demo()
 
 
 if __name__ == '__main__':
