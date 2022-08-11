@@ -19,8 +19,7 @@ pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 
 def msgify_cloud(cloud, frame, stamp, names=None):
     if not names:
-        # names = cloud.dtype.names
-        names = ['x', 'y', 'z', 'traversability']
+        names = cloud.dtype.names
     cloud = unstructured_to_structured(cloud, names=names)
     msg = msgify(PointCloud2, cloud)
     msg.header.frame_id = frame
@@ -32,7 +31,7 @@ class CloudProcessor:
     def __init__(self, cloud_topic='cloud'):
         self.local_map = None
         self.new_map = None
-        self.map_frame = rospy.get_param('~map_frame', 'odom')
+        self.lidar_frame = None
         self.map_step = rospy.get_param('~map_step', 1)
         self.scan = datasets.rellis_3d.LaserScan(project=True,
                                                  H=rospy.get_param('~lidar_channels', 64),
@@ -85,18 +84,32 @@ class CloudProcessor:
         rospy.loginfo('Segmented result shape: %s', pred.shape)
         return pred
 
-    def postprocessing(self, pred):
+    def postprocessing(self, pred, input):
+        assert isinstance(pred, torch.Tensor)
+        assert isinstance(input, np.ndarray)
         pred = pred.squeeze(0).cpu().numpy()
         labels = np.argmax(pred, axis=0)
         labels_vis = cv2.resize(labels.astype('float'),
                                 (labels.shape[1] // 2, labels.shape[0] // 2),
                                 interpolation=cv2.INTER_LINEAR).astype('int8')
-        colors = convert_color(labels_vis, color_map=self.color_map)
-        cv2.imshow('Predicted labels', colors)
+        colors_vis = convert_color(labels_vis, color_map=self.color_map)
+        cv2.imshow('Predicted labels', colors_vis)
         cv2.waitKey(1)
+        colors = convert_color(labels, color_map=self.color_map)
+        assert input.shape[0] >= 3
+        assert len(input.shape) == 3  # 5 x H x W
+        xyz = input[:3, ...]
+        rgb = colors.transpose((2, 0, 1)) / 255.  # 3 x H x W
+        assert xyz.shape[1:] == rgb.shape[1:]
+        xyzrgb = np.concatenate([xyz, rgb], axis=0)
+        C = xyzrgb.shape[0]
+        xyzrgb = xyzrgb.reshape((C, -1)).T
+        rospy.logdebug('XYZRGB cloud shape: %s', xyzrgb.shape)
+        return np.asarray(xyzrgb, dtype=np.float32)
 
     def segment_cloud_cb(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
+        self.lidar_frame = pc_msg.header.frame_id
 
         # Discard old messages.
         msg_stamp = rospy.Time.now()
@@ -112,11 +125,11 @@ class CloudProcessor:
 
         xyzir = self.preprocessing(cloud)
         pred = self.model_inference(xyzir)
-        self.postprocessing(pred)
+        xyzrgb = self.postprocessing(pred, input=xyzir)
 
-        # stamp = rospy.Time.now()
-        # global_map_msg = msgify_cloud(self.global_map, frame=self.map_frame, stamp=stamp)
-        # self.segm_cloud_pub.publish(global_map_msg)
+        stamp = rospy.Time.now()
+        segm_pc_msg = msgify_cloud(xyzrgb, frame=self.lidar_frame, stamp=stamp, names=['x', 'y', 'z', 'r', 'g', 'b'])
+        self.segm_cloud_pub.publish(segm_pc_msg)
 
 
 if __name__ == '__main__':
