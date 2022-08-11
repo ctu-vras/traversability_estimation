@@ -1,0 +1,125 @@
+#!/usr/bin/env python
+
+import os
+import cv2
+import datasets
+from datasets.utils import convert_color
+import rospy
+from sensor_msgs.msg import PointCloud2
+from ros_numpy import msgify, numpify
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+from timeit import default_timer as timer
+import torch
+import yaml
+
+
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+def msgify_cloud(cloud, frame, stamp, names=None):
+    if not names:
+        # names = cloud.dtype.names
+        names = ['x', 'y', 'z', 'traversability']
+    cloud = unstructured_to_structured(cloud, names=names)
+    msg = msgify(PointCloud2, cloud)
+    msg.header.frame_id = frame
+    msg.header.stamp = stamp
+    return msg
+
+
+class CloudProcessor:
+    def __init__(self, cloud_topic='cloud'):
+        self.local_map = None
+        self.new_map = None
+        self.map_frame = rospy.get_param('~map_frame', 'odom')
+        self.map_step = rospy.get_param('~map_step', 1)
+        self.scan = datasets.rellis_3d.LaserScan(project=True,
+                                                 H=rospy.get_param('~lidar_channels', 64),
+                                                 W=rospy.get_param('~lidar_beams', 2048),
+                                                 fov_up=rospy.get_param('~lidar_fov_up', 22.5),
+                                                 fov_down=rospy.get_param('~lidar_fov_down', -22.5))
+        self.device = rospy.get_param('~device', 'cpu')
+        self.dtype = rospy.get_param('~dtype', 'float')
+        self.model = self.load_model()
+
+        data_cfg = yaml.safe_load(open(os.path.join(pkg_path, "config/rellis.yaml"), 'r'))
+        self.color_map = data_cfg['color_map']
+
+        # any point that is farer than this threshold from points in existing pcl is considered as new
+        self.max_age = rospy.get_param('~max_age', 10.0)
+
+        self.rate = rospy.get_param('~rate', 1.0)
+        self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
+
+        self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
+        rospy.loginfo('Point cloud processing node is ready.')
+
+    def load_model(self):
+        model_weights = rospy.get_param('~weights', "fcn_resnet50_legacy.pth")
+        path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % model_weights)
+        model = torch.load(path, map_location=self.device)
+        model = model.eval()
+        rospy.loginfo('Loaded cloud segmentation model: %s', model_weights)
+        return model
+
+    def preprocessing(self, cloud):
+        cloud = cloud[::self.map_step]
+        assert len(cloud.shape) == 2
+        assert cloud.shape[1] == 4
+
+        self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3])
+        # rospy.logdebug('Depth image shape: %s', self.scan.proj_range.shape)
+
+        xyzir = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
+                                self.scan.proj_remission[None],  # (1 x H x W)
+                                self.scan.proj_range[None]], axis=0)  # (1 x H x W)
+        rospy.logdebug('xyzir input shape: %s', xyzir.shape)
+        return xyzir
+
+    def model_inference(self, xyzir):
+        # Apply inference preprocessing transforms
+        batch = torch.from_numpy(xyzir).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            pred = self.model(batch)['out']
+        rospy.loginfo('Segmented result shape: %s', pred.shape)
+        return pred
+
+    def postprocessing(self, pred):
+        pred = pred.squeeze(0).cpu().numpy()
+        labels = np.argmax(pred, axis=0)
+        labels_vis = cv2.resize(labels.astype('float'),
+                                (labels.shape[1] // 2, labels.shape[0] // 2),
+                                interpolation=cv2.INTER_LINEAR).astype('int8')
+        colors = convert_color(labels_vis, color_map=self.color_map)
+        cv2.imshow('Predicted labels', colors)
+        cv2.waitKey(1)
+
+    def segment_cloud_cb(self, pc_msg):
+        assert isinstance(pc_msg, PointCloud2)
+
+        # Discard old messages.
+        msg_stamp = rospy.Time.now()
+        age = (msg_stamp - pc_msg.header.stamp).to_sec()
+        if age > self.max_age:
+            rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
+            return
+
+        # Transform local map to ground truth localization frame
+        cloud = numpify(pc_msg)
+        cloud = structured_to_unstructured(cloud[['x', 'y', 'z', 'i']])
+        rospy.logdebug('Point cloud of shape %s is received', cloud.shape)
+
+        xyzir = self.preprocessing(cloud)
+        pred = self.model_inference(xyzir)
+        self.postprocessing(pred)
+
+        # stamp = rospy.Time.now()
+        # global_map_msg = msgify_cloud(self.global_map, frame=self.map_frame, stamp=stamp)
+        # self.segm_cloud_pub.publish(global_map_msg)
+
+
+if __name__ == '__main__':
+    rospy.init_node('cloud_segmentation', log_level=rospy.DEBUG)
+    proc = CloudProcessor(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
+    rospy.spin()

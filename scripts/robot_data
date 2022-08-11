@@ -60,6 +60,7 @@ class RobotData:
         self.origin_frame = rospy.get_param('~origin_frame', 'odom')
         self.lidar_frame = rospy.get_param('~lidar_frame', 'ouster_lidar')
         self.camera_frame = rospy.get_param('~camera_frame', 'pylon_camera')
+        self.publish_global_map = rospy.get_param('~publish_global_map', False)
         self.path = Path()
         self.path.header.frame_id = self.origin_frame
         self.map_step = rospy.get_param('~map_step', 10)
@@ -122,18 +123,19 @@ class RobotData:
         self.poses.append(self.current_pose)
 
         cloud_lid = structured_to_unstructured(cloud)[::self.map_step]
-        cloud_map = cloud_lid.copy()
-        cloud_map[..., :3] = np.matmul(cloud_lid[..., :3], pose[:3, :3].T) + pose[:3, 3:].T
-        self.clouds.append(cloud_map)
-        rospy.logdebug('Point cloud shape:', cloud_map.shape)
 
-        global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
-        global_cloud = unstructured_to_structured(global_cloud, names=cloud.dtype.names)
+        if self.publish_global_map:
+            cloud_map = cloud_lid.copy()
+            cloud_map[..., :3] = np.matmul(cloud_lid[..., :3], pose[:3, :3].T) + pose[:3, 3:].T
+            self.clouds.append(cloud_map)
+            rospy.logdebug('Point cloud shape:', cloud_map.shape)
+            global_cloud = np.asarray(np.concatenate(self.clouds), dtype=np.float32)
+            global_cloud = unstructured_to_structured(global_cloud, names=cloud.dtype.names)
+            self.global_cloud = global_cloud
 
         self.rgb = rgb
         self.semseg = semseg
         self.lidar_cloud = cloud_lid
-        self.global_cloud = global_cloud
 
     def run(self, evt):
         self.step()
@@ -141,21 +143,23 @@ class RobotData:
         stamp = rospy.Time.now()
         self.time_stamp = stamp
         path_msg = self.get_path_msg(time_stamp=stamp)
-        global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.origin_frame)
         lidar_pc_msg = self.to_cloud_msg(self.lidar_cloud, time_stamp=stamp, frame=self.lidar_frame)
-        cam_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.lidar_cloud, time_stamp=stamp)
         img_msg = self.get_image_msg(self.rgb, time_stamp=stamp)
         semseg_msg = self.get_image_msg(self.semseg, time_stamp=stamp)
+        if self.publish_global_map:
+            global_pc_msg = self.to_cloud_msg(self.global_cloud, time_stamp=stamp, frame=self.origin_frame)
+            cam_pc_msg = self.get_camera_cloud_msg(cloud_lid=self.lidar_cloud, time_stamp=stamp)
 
         # publish messages
         self.calibration_msgs['intrinsics'].header.stamp = self.time_stamp
         self.caminfo_pub.publish(self.calibration_msgs['intrinsics'])
         self.path_pub.publish(path_msg)
-        self.map_pc_pub.publish(global_pc_msg)
         self.lidar_pc_pub.publish(lidar_pc_msg)
-        self.cam_pc_pub.publish(cam_pc_msg)
         self.rgb_pub.publish(img_msg)
         self.semseg_pub.publish(semseg_msg)
+        if self.publish_global_map:
+            self.map_pc_pub.publish(global_pc_msg)
+            self.cam_pc_pub.publish(cam_pc_msg)
 
         # move to next index
         self.move()
