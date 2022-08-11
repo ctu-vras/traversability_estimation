@@ -36,6 +36,8 @@ class CloudProcessor:
                                                  W=rospy.get_param('~lidar_beams', 2048),
                                                  fov_up=rospy.get_param('~lidar_fov_up', 22.5),
                                                  fov_down=rospy.get_param('~lidar_fov_down', -22.5))
+        self.input_pc_fields = rospy.get_param('~input_fields', ['x', 'y', 'z', 'i'])
+        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b'])
         self.device = rospy.get_param('~device', 'cpu')
         self.model = self.load_model()
 
@@ -115,7 +117,7 @@ class CloudProcessor:
 
         # Transform local map to ground truth localization frame
         cloud = numpify(pc_msg)
-        cloud = structured_to_unstructured(cloud[['x', 'y', 'z', 'i']])
+        cloud = structured_to_unstructured(cloud[self.input_pc_fields])
         rospy.logdebug('Point cloud of shape %s is received', cloud.shape)
 
         xyzir = self.preprocessing(cloud)
@@ -124,7 +126,7 @@ class CloudProcessor:
 
         # publish result
         stamp = rospy.Time.now()
-        segm_pc_msg = msgify_cloud(xyzrgb, frame=self.lidar_frame, stamp=stamp, names=['x', 'y', 'z', 'r', 'g', 'b'])
+        segm_pc_msg = msgify_cloud(xyzrgb, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
         self.segm_cloud_pub.publish(segm_pc_msg)
 
 
