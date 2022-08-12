@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 
 import os
-# import cv2
+import cv2
 import datasets
 from datasets.utils import convert_color
 import rospy
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
@@ -65,6 +65,8 @@ class CloudProcessor:
 
         self.rate = rospy.get_param('~rate', 1.0)
         self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
+        self.resized_cloud_pub = rospy.Publisher('resized_cloud', PointCloud2, queue_size=1)
+        self.resized_depth_pub = rospy.Publisher('resized_depth', Image, queue_size=1)
 
         self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
         rospy.loginfo('Point cloud processing node is ready.')
@@ -86,23 +88,34 @@ class CloudProcessor:
         return model
 
     def preprocessing(self, cloud):
+        depth = np.linalg.norm(cloud[..., :3], axis=-1, keepdims=True)
+        depth_msg = msgify(Image, depth, '32FC1')
+        # depth_msg = msgify(Image, (depth * 1000).astype(np.uint16), 'mono16')
+        self.resized_depth_pub.publish(depth_msg)
+        cloud[..., 3] = cloud[..., 3] / 2**16
+        cloud = np.concatenate([cloud, depth], axis=-1)
+        cloud = cloud.transpose([2, 0, 1])
+        return cloud
+        
         cloud = cloud[::self.map_step]
         if len(cloud.shape) > 2:
             H, W, C = cloud.shape
-            if H != self.lidar_channels or W != self.lidar_beams:
-                rospy.logwarn('Updating scan')
-                self.lidar_channels = H
-                self.lidar_beams = W
-                self.update_scan()
+            #if H != self.lidar_channels or W != self.lidar_beams:
+            #    rospy.logwarn('Updating scan')
+            #    self.lidar_channels = H
+            #    self.lidar_beams = W
+            #    self.update_scan()
             cloud = cloud.reshape((-1, C))
         assert len(cloud.shape) == 2
         assert cloud.shape[1] >= 4
-
-        self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3])
+        
+        self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3] / 2**16)
         # rospy.logdebug('Depth image shape: %s', self.scan.proj_range.shape)
         xyzir = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
                                 self.scan.proj_remission[None],  # (1 x H x W)
                                 self.scan.proj_range[None]], axis=0)  # (1 x H x W)
+        depth_msg = msgify(Image, xyzir[-1], '32FC1')
+        self.resized_depth_pub.publish(depth_msg)
         rospy.logdebug('xyzir input shape: %s', xyzir.shape)
         return xyzir
 
@@ -164,6 +177,20 @@ class CloudProcessor:
         cloud = numpify(pc_msg)
         cloud = structured_to_unstructured(cloud[self.input_pc_fields])
         rospy.logdebug('Point cloud of shape %s is received', cloud.shape)
+        
+        # Resize if needed.
+        if False and self.lidar_channels != cloud.shape[0] or self.lidar_beams != cloud.shape[1]:
+            resized = []
+            for i in range(cloud.shape[2]):
+                c = cv2.resize(cloud[..., i], (self.lidar_channels, self.lidar_beams), interpolation=cv2.INTER_LINEAR)
+                resized.append(c)
+            resized = np.stack(resized, axis=-1)
+            cloud = resized
+            rospy.loginfo('Point cloud resized to %s', resized.shape)
+            # Publish resized point cloud for debugging.
+            resized_struct = unstructured_to_structured(resized, names=self.input_pc_fields)
+            resized_msg = msgify(PointCloud2, resized_struct)
+            self.resized_cloud_pub.publish(resized_msg)
 
         xyzir = self.preprocessing(cloud)
         pred = self.model_inference(xyzir)

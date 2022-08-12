@@ -13,8 +13,9 @@
             lidar_fov_up: 45.0
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
-            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'labels']
+            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
             label_config: $(dirname)/../config/obstacles.yaml
+            weights: 'fcn_resnet50_legacy.pth'
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
 
