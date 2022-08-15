@@ -27,6 +27,10 @@ repositories:
     type: git
     url: git@github.com:tpet/point_cloud_color.git
     version: master
+  ros-utils:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/common/ros-utils.git
+    version: master
   traversability_estimation:
     type: git
     url: git@github.com:RuslanAgishev/traversability_estimation.git
