@@ -2,7 +2,6 @@
 <launch>
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28.bag $(dirname)/../data/bags/traversability/ugv_2022-06-30-14-23-28_cameras.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
-
     <!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34.bag"/>-->
     <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17.bag"/>
     <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
@@ -21,6 +20,9 @@
 
     <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
         <arg name="fields_to_publish" value="x,y,z,intensity,t"/>
+    </include>
+    <include file="$(dirname)/slam.launch">
+        <arg name="cloud" value="/os_cloud_node/points"/>
     </include>
 
 <!--    <include file="$(dirname)/ctu_robot_cloud.launch" pass_all_args="true"/>-->

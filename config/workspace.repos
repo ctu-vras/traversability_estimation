@@ -15,6 +15,18 @@ repositories:
     type: git
     url: git@gitlab.fel.cvut.cz:cras/subt/sensors/ouster/cras_ouster_msgs.git
     version: master
+  libpointmatcher_ros:
+    type: git
+    url: https://github.com/norlab-ulaval/libpointmatcher_ros.git
+    version: master
+  norlab_icp_mapper:
+    type: git
+    url: git@github.com:tpet/norlab_icp_mapper.git
+    version: master
+  norlab_icp_mapper_ros:
+    type: git
+    url: git@github.com:tpet/norlab_icp_mapper_ros.git
+    version: master
   ouster_example:
     type: git
     url: https://github.com/ouster-lidar/ouster_example.git
@@ -26,6 +38,10 @@ repositories:
   point_cloud_color:
     type: git
     url: git@github.com:tpet/point_cloud_color.git
+    version: master
+  ros-utils:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/common/ros-utils.git
     version: master
   traversability_estimation:
     type: git
