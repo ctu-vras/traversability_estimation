@@ -1,0 +1,49 @@
+repositories:
+  cras_msgs:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/common/cras_msgs.git
+    version: master
+  cras_ouster_description:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/sensors/ouster/cras_ouster_description.git
+    version: master
+  cras_ouster_driver:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/sensors/ouster/cras_ouster_driver.git
+    version: master
+  cras_ouster_msgs:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/sensors/ouster/cras_ouster_msgs.git
+    version: master
+  libpointmatcher_ros:
+    type: git
+    url: https://github.com/norlab-ulaval/libpointmatcher_ros.git
+    version: master
+  norlab_icp_mapper:
+    type: git
+    url: git@github.com:tpet/norlab_icp_mapper.git
+    version: master
+  norlab_icp_mapper_ros:
+    type: git
+    url: git@github.com:tpet/norlab_icp_mapper_ros.git
+    version: master
+  ouster_example:
+    type: git
+    url: https://github.com/ouster-lidar/ouster_example.git
+    version: 47f25ed29ab0b4b6d32c3209fa1b53ea46751d0c
+  ouster_ray_directions:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/sensors/ouster/ouster_ray_directions.git
+    version: master
+  point_cloud_color:
+    type: git
+    url: git@github.com:tpet/point_cloud_color.git
+    version: master
+  ros-utils:
+    type: git
+    url: git@gitlab.fel.cvut.cz:cras/subt/common/ros-utils.git
+    version: master
+  traversability_estimation:
+    type: git
+    url: git@github.com:RuslanAgishev/traversability_estimation.git
+    version: devel

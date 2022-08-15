@@ -9,15 +9,39 @@ from timeit import default_timer as timer
 import torch
 
 
-def read_points(path, dtype=np.float32):
+def read_points_ply(path, dtype=np.float32):
     import open3d as o3d
     pcd = o3d.io.read_point_cloud(path)
     points = np.asarray(pcd.points)
     assert points.shape[1] == 3
-    vps = np.zeros_like(points)
-    points = np.hstack([points, vps])
-    points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z', 'vp_x', 'vp_y', 'vp_z'])
+    points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z'])
     del pcd
+    return points
+
+
+def read_points_bin(path, dtype=np.float32):
+    xyzi = np.fromfile(path, dtype=dtype)
+    xyzi = xyzi.reshape((-1, 4))
+    points = unstructured_to_structured(xyzi.astype(dtype=dtype), names=['x', 'y', 'z', 'i'])
+    return points
+
+
+def read_points_labels(path, dtype=np.uint32):
+    label = np.fromfile(path, dtype=dtype)
+    label = label.reshape((-1, 1))
+    # label = convert_label(label, inverse=False)
+    label = unstructured_to_structured(label.astype(dtype=dtype), names=['label'])
+    return label
+
+
+def read_points(path, dtype=np.float32):
+    # https://stackoverflow.com/questions/5899497/how-can-i-check-the-extension-of-a-file
+    if path.lower().endswith('.ply'):
+        points = read_points_ply(path, dtype)
+    elif path.lower().endswith('.bin'):
+        points = read_points_bin(path, dtype)
+    else:
+        raise ValueError('Cloud file must have .ply or .bin extension')
     return points
 
 
@@ -85,6 +109,7 @@ def depth_color(val, min_d=0, max_d=120):
 
 
 def filter_camera_points(points, img_width, img_height, K, RT):
+    assert points.shape[1] == 3
     ctl = np.array(RT)
     fov_x = 2 * np.arctan2(img_width, 2 * K[0, 0]) * 180 / 3.1415926 + 10
     fov_y = 2 * np.arctan2(img_height, 2 * K[1, 1]) * 180 / 3.1415926 + 10
@@ -196,10 +221,7 @@ def convert_label(label, inverse=False):
                      19: 13,
                      23: 14,
                      27: 15,
-                     #  29: 1,
-                     #  30: 1,
                      31: 16,
-                     #  32: 4,
                      33: 17,
                      34: 18}
     if isinstance(label, np.ndarray):

@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 parser = ArgumentParser()
 parser.add_argument('--lr', type=float, default=1e-5)
-parser.add_argument('--dataset', type=str, default='Rellis3DCloud')
+parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
 parser.add_argument('--model', type=str, default='fcn')
 parser.add_argument('--encoder', type=str, default='resnet50')
 parser.add_argument('--batch_size', type=int, default=8)
