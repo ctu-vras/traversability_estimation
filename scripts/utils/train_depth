@@ -21,8 +21,8 @@ parser.add_argument('--n_workers', type=int, default=os.cpu_count())
 args = parser.parse_args()
 
 Dataset = eval('datasets.%s' % args.dataset)
-train_dataset = Dataset(split='train')
-valid_dataset = Dataset(split='val')
+train_dataset = Dataset(split='train', lidar_beams_step=2)
+valid_dataset = Dataset(split='val', lidar_beams_step=2)
 
 train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
 valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
