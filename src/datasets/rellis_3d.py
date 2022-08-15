@@ -580,7 +580,8 @@ class Rellis3DClouds:
                  split='train',
                  num_samples=None,
                  classes=None,
-                 color_map=None
+                 color_map=None,
+                 lidar_beams_step=1
                  ):
 
         if path is None:
@@ -589,6 +590,7 @@ class Rellis3DClouds:
         assert split in ['train', 'val', 'test']
         self.path = path
         self.split = split
+        self.lidar_beams_step = lidar_beams_step
 
         if not classes:
             classes = self.CLASSES
@@ -638,6 +640,10 @@ class Rellis3DClouds:
         mask = self.scan.proj_sem_label.copy()
         masks = [(mask == v) for v in self.class_values]  # extract certain classes from mask
         mask = np.stack(masks, axis=0).astype('float')
+
+        if self.lidar_beams_step:
+            xyzir = xyzir[..., ::self.lidar_beams_step]
+            mask = mask[..., ::self.lidar_beams_step]
         return xyzir, mask
 
     def __len__(self):
@@ -650,7 +656,7 @@ def semantic_laser_scan_demo():
     split = np.random.choice(['test', 'train', 'val'])
     # split = 'test'
 
-    ds = Rellis3DClouds(split=split)
+    ds = Rellis3DClouds(split=split, lidar_beams_step=2)
 
     xyzir, gt_mask = ds[np.random.choice(range(len(ds)))]
 
@@ -661,9 +667,9 @@ def semantic_laser_scan_demo():
     range_img[range_img > 0] = (range_img[range_img > 0] - range_img[range_img > 0].min()) / \
                                (range_img[range_img > 0].max() - range_img[range_img > 0].min())
 
-    # gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
-    # gt_color = convert_color(gt_arg, ds.color_map)
-    color_gt = ds.scan.proj_sem_color
+    gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
+    color_gt = convert_color(gt_arg, ds.color_map)
+    # color_gt = ds.scan.proj_sem_color
 
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/fcn_resnet50_legacy.pth'),
                        map_location='cpu')
@@ -723,17 +729,17 @@ def semseg_test():
 def colored_cloud_demo():
     import open3d as o3d
 
-    ds = Rellis3DClouds(split='test')
+    ds = Rellis3DClouds(split='test', lidar_beams_step=2)
     i = np.random.choice(range(len(ds)))
     xyzir, masks = ds[i]
 
     xyz = xyzir[:3, ...].reshape((3, -1))
     xyz = xyz.T
 
-    # label = np.argmax(masks, axis=0)
-    # label = label.reshape(-1,)
-    # color = convert_color(label, color_map=ds.color_map) / 255.
-    color_gt = ds.scan.proj_sem_color.reshape((-1, 3))
+    label = np.argmax(masks, axis=0)
+    label = label.reshape(-1,)
+    color_gt = convert_color(label, color_map=ds.color_map) / 255.
+    # color_gt = ds.scan.proj_sem_color.reshape((-1, 3))
 
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/fcn_resnet50_legacy.pth'),
                        map_location='cpu')
