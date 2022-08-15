@@ -20,7 +20,7 @@
             lidar_fov_up: 22.5
             lidar_fov_down: -22.5
             input_filelds: ['x', 'y', 'z', 'i']
-            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'labels']
+            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
@@ -29,6 +29,6 @@
 
     <!-- RVIZ -->
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/robot_data.rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/cloud_segm.rviz"/>
 
 </launch>
