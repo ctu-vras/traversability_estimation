@@ -23,6 +23,10 @@ repositories:
     type: git
     url: https://github.com/norlab-ulaval/libpointmatcher_ros.git
     version: master
+  marv_common:
+    type: git
+    url: https://gitlab.jettyvision.cz/usar_marv/marv_common.git
+    version: master
   norlab_icp_mapper:
     type: git
     url: git@github.com:tpet/norlab_icp_mapper.git
