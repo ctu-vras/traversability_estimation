@@ -19,7 +19,7 @@
 <!--    <include file="$(dirname)/$(arg robot)_robot.launch" pass_all_args="true"/>-->
 
     <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
-        <arg name="fields_to_publish" value="intensity,reflectivity,ambient,t"/>
+<!--        <arg name="fields_to_publish" value="intensity,reflectivity,ambient,t"/>-->
     </include>
     <node name="destagger" pkg="nodelet" type="nodelet" args="standalone cras_ouster_driver/destagger_nodelet">
         <remap from="info" to="/os_node/sensor_info"/>
