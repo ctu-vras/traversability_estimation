@@ -26,6 +26,14 @@
         <remap from="input" to="/os_cloud_node/points"/>
         <remap from="output" to="/os_cloud_node/destaggered_points"/>
     </node>
+    <node name="cloud_to_depth_points" pkg="traversability_estimation" type="cloud_to_depth">
+        <remap from="cloud" to="/os_cloud_node/points"/>
+        <remap from="image" to="/os_cloud_node/points_depth"/>
+    </node>
+    <node name="cloud_to_depth_destaggered" pkg="traversability_estimation" type="cloud_to_depth">
+        <remap from="cloud" to="/os_cloud_node/destaggered_points"/>
+        <remap from="image" to="/os_cloud_node/destaggered_points_depth"/>
+    </node>
     <include file="$(dirname)/slam.launch">
         <arg name="cloud" value="/os_cloud_node/points"/>
     </include>

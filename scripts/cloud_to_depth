@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+from __future__ import absolute_import, division, print_function
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured
+from ros_numpy import msgify, numpify
+import rospy
+from sensor_msgs.msg import Image, PointCloud2
+
+
+class CloudToDepth:
+    def __init__(self):
+        self.image_pub = rospy.Publisher('image', Image, queue_size=2)
+        self.cloud_sub = rospy.Subscriber('cloud', PointCloud2, self.on_cloud, queue_size=2)
+
+    def on_cloud(self, cloud_msg):
+        cloud = numpify(cloud_msg)
+        cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
+        depth = 1000.0 * np.linalg.norm(cloud, 2, axis=-1)
+        depth = depth.astype(np.uint16)
+        depth_msg = msgify(Image, depth, 'mono16')
+        self.image_pub.publish(depth_msg)
+
+if __name__ == '__main__':
+    rospy.init_node('depth_to_cloud', log_level=rospy.INFO)
+    node = CloudToDepth()
+    rospy.spin()
