@@ -21,6 +21,11 @@
     <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
         <arg name="fields_to_publish" value="intensity,reflectivity,ambient,t"/>
     </include>
+    <node name="destagger" pkg="nodelet" type="nodelet" args="standalone cras_ouster_driver/destagger_nodelet">
+        <remap from="info" to="/os_node/sensor_info"/>
+        <remap from="input" to="/os_cloud_node/points"/>
+        <remap from="output" to="/os_cloud_node/destaggered_points"/>
+    </node>
     <include file="$(dirname)/slam.launch">
         <arg name="cloud" value="/os_cloud_node/points"/>
     </include>
