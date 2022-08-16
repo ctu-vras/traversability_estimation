@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from argparse import ArgumentParser
 import datasets
 from tqdm import tqdm
+import segmentation_models_pytorch as smp
 
 
 parser = ArgumentParser()
@@ -15,12 +16,15 @@ parser.add_argument('--lr', type=float, default=1e-5)
 parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
 parser.add_argument('--model', type=str, default='fcn')
 parser.add_argument('--encoder', type=str, default='resnet50')
-parser.add_argument('--batch_size', type=int, default=8)
+parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--n_epochs', type=int, default=100)
 parser.add_argument('--n_workers', type=int, default=os.cpu_count())
 args = parser.parse_args()
 
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../..'))
+
 Dataset = eval('datasets.%s' % args.dataset)
+# lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
 train_dataset = Dataset(split='train', lidar_beams_step=2)
 valid_dataset = Dataset(split='val', lidar_beams_step=2)
 
@@ -38,16 +42,25 @@ model.backbone.conv1 = torch.nn.Conv2d(n_inputs, 64,
 n_classes = len(train_dataset.class_values)
 model.classifier[-1] = torch.nn.Conv2d(512, n_classes,
                                        kernel_size=(1, 1), stride=(1, 1))  # Change final layer to n classes
+# model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud/fcn_resnet50_legacy.pth'))
 model = model.to(device)
 model = model.train()
 
 optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create adam optimizer
 
 # ----------------Train--------------------------------------------------------------------------
-criterion = torch.nn.CrossEntropyLoss()  # Set loss function
-min_loss = np.Inf
-for e in range(args.n_epochs):
+# Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+# IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
+criterion_fn = smp.utils.losses.DiceLoss()
+metric_fn = smp.utils.metrics.IoU(threshold=0.5)
+
+# criterion = torch.nn.CrossEntropyLoss()  # Set loss function
+max_metric = -np.Inf
+
+for e in tqdm(range(args.n_epochs)):
+    # train epoch
     for itr, sample in tqdm(enumerate(train_loader)):
+
         images, labels = sample
         if torch.cuda.is_available():
             images, labels = images.cuda(), labels.cuda()
@@ -55,16 +68,42 @@ for e in range(args.n_epochs):
         pred = model(images)['out']  # make prediction
         model.zero_grad()
 
-        loss = criterion(pred, labels)  # Calculate cross entropy loss
+        pred = torch.softmax(pred, dim=1)
+        assert pred.min() >= 0.0 and pred.max() <= 1.0
+
+        loss = criterion_fn(pred, labels)  # Calculate loss
         loss.backward()  # Backpropagate loss
         optimizer.step()  # Apply gradient descent change to weight
 
-        if min_loss > loss.data.cpu().numpy():  # Save model weight
-            min_loss = loss.data.cpu().numpy()
-            name = "%s_%s.pth" % (args.model, args.encoder)
-            # name = './%s_%s_lr%g_bs%d_epoch%d_%s_loss_%.2f.pth' % \
-            #        (args.model, args.encoder,
-            #         args.lr, args.batch_size, e, args.dataset, min_loss)
-            print("Saving Model:", name)
-            print("Iteration: %i, loss = %f" % (itr, loss.data.cpu().numpy()))
-            torch.save(model, os.path.join(os.path.dirname(__file__), name))
+    # validation epoch
+    metrics = []
+    for itr, sample in tqdm(enumerate(valid_loader)):
+
+        images, labels = sample
+        if torch.cuda.is_available():
+            images, labels = images.cuda(), labels.cuda()
+
+        pred = model(images)['out']  # make prediction
+        model.zero_grad()
+
+        pred = torch.softmax(pred, dim=1)
+        assert pred.min() >= 0.0 and pred.max() <= 1.0
+
+        metric1 = metric_fn(pred, labels)  # Calculate loss
+        metrics.append(metric1.cpu().numpy())
+
+    metric = np.mean(metrics)
+
+    # save better model
+    if max_metric < metric:  # Save model weight
+        max_metric = metric
+        # name = "%s_%s.pth" % (args.model, args.encoder)
+        name = './%s_%s_lr%g_bs%d_epoch%d_%s_iou_%.2f.pth' % \
+               (args.model, args.encoder,
+                args.lr, args.batch_size, e, args.dataset, float(max_metric))
+        print("Saving Model:", name)
+        torch.save(model, os.path.join(os.path.dirname(__file__), name))
+
+    print("Epoch: %i" % e)
+    print('Train loss: %.3f' % loss.data.cpu().numpy())
+    print('Validation metric: %.3f' % metric)
