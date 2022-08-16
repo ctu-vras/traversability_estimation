@@ -19,7 +19,7 @@
 <!--    <include file="$(dirname)/$(arg robot)_robot.launch" pass_all_args="true"/>-->
 
     <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
-        <arg name="fields_to_publish" value="x,y,z,intensity,t"/>
+        <arg name="fields_to_publish" value="intensity,reflectivity,ambient,t"/>
     </include>
     <include file="$(dirname)/slam.launch">
         <arg name="cloud" value="/os_cloud_node/points"/>
