@@ -14,9 +14,12 @@
             initial_robot_pose: ''
             final_map_file_name: $(dirname)/../map.vtk
             final_trajectory_file_name: $(dirname)/../trajectory.vtk
-            icp_config: $(dirname)/../config/slam/icp.yaml
-            input_filters_config: $(dirname)/../config/slam/input_filters.yaml
+<!--            icp_config: $(dirname)/../config/slam/icp.yaml-->
+<!--            input_filters_config: $(dirname)/../config/slam/input_filters.yaml-->
 <!--            map_post_filters_config: $(dirname)/../config/slam/map_post_filters.yaml-->
+            input_filters_config: $(find ctu_mapping)/params/realtime_input_filters.yaml
+            icp_config: $(find ctu_mapping)/params/realtime_icp_config.yaml
+            map_post_filters_config: $(find ctu_mapping)/params/realtime_post_filters.yaml
             map_update_condition: overlap
             map_update_overlap: 0.9
             map_update_delay: 0.0
