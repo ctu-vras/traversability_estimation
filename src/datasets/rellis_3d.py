@@ -578,12 +578,12 @@ class Rellis3DClouds:
     def __init__(self,
                  path=None,
                  split='train',
+                 fields=None,
                  num_samples=None,
                  classes=None,
                  color_map=None,
-                 lidar_beams_step=1
+                 lidar_beams_step=1,
                  ):
-
         if path is None:
             path = join(data_dir, 'Rellis_3D')
         assert os.path.exists(path)
@@ -591,6 +591,11 @@ class Rellis3DClouds:
         self.path = path
         self.split = split
         self.lidar_beams_step = lidar_beams_step
+        if fields is None:
+            fields = ['x', 'y', 'z', 'intensity', 'depth']
+        self.fields = fields
+        # make sure the input fields are supported
+        assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
 
         if not classes:
             classes = self.CLASSES
@@ -632,19 +637,23 @@ class Rellis3DClouds:
         self.scan.open_label(item["label"])
         self.scan.colorize()
 
-        # following SalsaNext approach: (x, y, z, i, r)
-        xyzir = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
+        # following SalsaNext approach: (x, y, z, intensity, depth)
+        xyzid = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
                                 self.scan.proj_remission[None],  # (1 x H x W)
                                 self.scan.proj_range[None]], axis=0)  # (1 x H x W)
+        # select input data according to the fields list
+        ids = [['x', 'y', 'z', 'intensity', 'depth'].index(f) for f in self.fields]
+        input = xyzid[ids]
 
         mask = self.scan.proj_sem_label.copy()
         masks = [(mask == v) for v in self.class_values]  # extract certain classes from mask
         mask = np.stack(masks, axis=0).astype('float')
 
         if self.lidar_beams_step:
-            xyzir = xyzir[..., ::self.lidar_beams_step]
+            input = input[..., ::self.lidar_beams_step]
             mask = mask[..., ::self.lidar_beams_step]
-        return xyzir, mask
+
+        return input, mask
 
     def __len__(self):
         return len(self.files)

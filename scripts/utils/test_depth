@@ -10,44 +10,50 @@ import yaml
 import os
 
 
-parser = ArgumentParser()
-parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-parser.add_argument('--device', type=str, default='cpu')
-args = parser.parse_args()
-print(args)
+def main():
+    parser = ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
+    parser.add_argument('--device', type=str, default='cpu')
+    args = parser.parse_args()
+    print(args)
 
-Dataset = eval('datasets.%s' % args.dataset)
-ds = Dataset(split='test')
+    Dataset = eval('datasets.%s' % args.dataset)
+    ds = Dataset(split='test')
 
-# Initialize model with the best available weights
-# model = torch.load('fcn_resnet50.pth', map_location=args.device)
-model = torch.load('fcn_resnet50_legacy.pth', map_location=args.device)
-model.eval()
+    # Initialize model with the best available weights
+    model = torch.load('fcn_resnet50_lr1e-05_bs16_epoch6_Rellis3DClouds_iou_0.61.pth', map_location=args.device)
+    # model = torch.load('fcn_resnet50_legacy.pth', map_location=args.device)
+    model.eval()
 
-# Apply inference preprocessing transforms
-xyzir, gt_mask = ds[np.random.choice(range(len(ds)))]
-batch = torch.from_numpy(xyzir).unsqueeze(0).to(args.device)
+    for _ in range(5):
+        # Apply inference preprocessing transforms
+        xyzir, gt_mask = ds[np.random.choice(range(len(ds)))]
+        batch = torch.from_numpy(xyzir).unsqueeze(0).to(args.device)
 
-# Use the model and visualize the prediction
-with torch.no_grad():
-    pred = model(batch)['out']
-pred = pred.squeeze(0).cpu().numpy()
-mask = np.argmax(pred, axis=0)
+        # Use the model and visualize the prediction
+        with torch.no_grad():
+            pred = model(batch)['out']
+        pred = pred.squeeze(0).cpu().numpy()
+        mask = np.argmax(pred, axis=0)
 
-pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
-label_config = os.path.join(pkg_path, "config/rellis.yaml")
-data_cfg = yaml.safe_load(open(label_config, 'r'))
+        pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
+        label_config = os.path.join(pkg_path, "config/rellis.yaml")
+        data_cfg = yaml.safe_load(open(label_config, 'r'))
 
-pred_color = convert_color(mask, data_cfg['color_map'])
-gt_mask = np.argmax(gt_mask, axis=0)
-gt_color = convert_color(gt_mask, data_cfg['color_map'])
+        pred_color = convert_color(mask, data_cfg['color_map'])
+        gt_mask = np.argmax(gt_mask, axis=0)
+        gt_color = convert_color(gt_mask, data_cfg['color_map'])
 
-plt.figure()
-# plt.switch_backend('QT5Agg')  # default on my system
-plt.subplot(2, 1, 1)
-plt.imshow(pred_color)
-plt.subplot(2, 1, 2)
-plt.imshow(gt_color)
-# figManager = plt.get_current_fig_manager()
-# figManager.window.showMaximized()
-plt.show()
+        plt.figure(figsize=(20, 10))
+        # plt.switch_backend('QT5Agg')  # default on my system
+        plt.subplot(2, 1, 1)
+        plt.imshow(pred_color)
+        plt.subplot(2, 1, 2)
+        plt.imshow(gt_color)
+        # figManager = plt.get_current_fig_manager()
+        # figManager.window.showMaximized()
+        plt.show()
+
+
+if __name__ == '__main__':
+    main()
