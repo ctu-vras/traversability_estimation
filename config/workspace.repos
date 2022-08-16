@@ -54,4 +54,4 @@ repositories:
   traversability_estimation:
     type: git
     url: git@github.com:RuslanAgishev/traversability_estimation.git
-    version: devel
+    version: main
