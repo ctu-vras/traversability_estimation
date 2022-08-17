@@ -71,7 +71,7 @@ def main():
     n_classes = len(train_dataset.class_values)
     print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
 
-    model = create_model(args.architecture, n_inputs, n_classes)
+    model = create_model(args.architecture, n_inputs, n_classes, pretrained=False)
     # model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud/fcn_resnet50_legacy.pth'))
     model = model.to(device)
 
@@ -88,8 +88,6 @@ def main():
         # train epoch
         model = model.train()
         for itr, sample in tqdm(enumerate(train_loader)):
-            # if itr == 10:
-            #     break
 
             images, labels = sample
             if torch.cuda.is_available():
@@ -109,8 +107,6 @@ def main():
         metrics = []
         model = model.eval()
         for itr, sample in tqdm(enumerate(valid_loader)):
-            # if itr == 10:
-            #     break
 
             images, labels = sample
             if torch.cuda.is_available():
