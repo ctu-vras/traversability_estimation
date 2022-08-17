@@ -17,13 +17,22 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    Dataset = eval('datasets.%s' % args.dataset)
-    ds = Dataset(split='test')
+    pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
+    label_config = os.path.join(pkg_path, "config/rellis.yaml")
+    data_cfg = yaml.safe_load(open(label_config, 'r'))
 
     # Initialize model with the best available weights
-    model = torch.load('fcn_resnet50_lr1e-05_bs16_epoch6_Rellis3DClouds_iou_0.61.pth', map_location=args.device)
+    model_name = 'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth'
+    # model_name = 'fcn_resnet50_lr_1e-05_bs_32_epoch_93_Rellis3DClouds_intensity_depth_iou_0.64.pth'
+    # model_name = 'fcn_resnet50_lr_1e-05_bs_32_epoch_99_Rellis3DClouds_depth_iou_0.63.pth'
+    model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud', model_name), map_location=args.device)
     # model = torch.load('fcn_resnet50_legacy.pth', map_location=args.device)
     model.eval()
+
+    data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_name]
+    print('Model takes as input: %s' % ','.join(data_fields))
+    Dataset = eval('datasets.%s' % args.dataset)
+    ds = Dataset(split='test', fields=data_fields)
 
     for _ in range(5):
         # Apply inference preprocessing transforms
@@ -35,10 +44,6 @@ def main():
             pred = model(batch)['out']
         pred = pred.squeeze(0).cpu().numpy()
         mask = np.argmax(pred, axis=0)
-
-        pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
-        label_config = os.path.join(pkg_path, "config/rellis.yaml")
-        data_cfg = yaml.safe_load(open(label_config, 'r'))
 
         pred_color = convert_color(mask, data_cfg['color_map'])
         gt_mask = np.argmax(gt_mask, axis=0)

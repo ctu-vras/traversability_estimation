@@ -13,7 +13,7 @@ import segmentation_models_pytorch as smp
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--lr', type=float, default=1e-5)
+    parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     parser.add_argument('--model', type=str, default='fcn')
     parser.add_argument('--encoder', type=str, default='resnet50')
@@ -39,6 +39,7 @@ def main():
     model = architecture(pretrained=False)  # Load net
     # Change input layer to n inputs
     n_inputs = train_dataset[0][0].shape[0]
+    print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
     model.backbone.conv1 = torch.nn.Conv2d(n_inputs, 64,
                                            kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
     n_classes = len(train_dataset.class_values)
