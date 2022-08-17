@@ -140,6 +140,10 @@ def main():
         print('Train loss: %.3f' % loss.data.cpu().numpy())
         print('Validation metric: %.3f' % metric)
 
+        if e == 60:
+            optimizer.param_groups[0]['lr'] /= 10.0
+            print('Decrease decoder learning rate to %f !' % optimizer.param_groups[0]['lr'])
+
 
 if __name__ == '__main__':
     main()
