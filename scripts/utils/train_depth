@@ -11,43 +11,69 @@ from tqdm import tqdm
 import segmentation_models_pytorch as smp
 
 
+def create_model(architecture, n_inputs, n_outputs, pretrained=True):
+    assert architecture in ['fcn_resnet50', 'fcn_resnet101', 'deeplabv3_resnet50', 'deeplabv3_resnet101',
+                            'deeplabv3_mobilenet_v3_large', 'lraspp_mobilenet_v3_large']
+
+    print('Creating model %s with %i inputs and %i outputs' % (architecture, n_inputs, n_outputs))
+    Architecture = eval('torchvision.models.segmentation.%s' % architecture)
+    model = Architecture(pretrained=pretrained)
+
+    arch = architecture.split('_')[0]
+    encoder = '_'.join(architecture.split('_')[1:])
+
+    # Change input layer to accept n_inputs
+    if encoder == 'mobilenet_v3_large':
+        model.backbone['0'][0] = torch.nn.Conv2d(n_inputs, 16,
+                                                 kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    else:
+        model.backbone['conv1'] = torch.nn.Conv2d(n_inputs, 64,
+                                                  kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+
+    # Change final layer to output n classes
+    if arch == 'lraspp':
+        model.classifier.low_classifier = torch.nn.Conv2d(40, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+        model.classifier.high_classifier = torch.nn.Conv2d(128, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+    elif arch == 'fcn':
+        model.classifier[-1] = torch.nn.Conv2d(512, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+    elif arch == 'deeplabv3':
+        model.classifier[-1] = torch.nn.Conv2d(256, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+
+    return model
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-    parser.add_argument('--model', type=str, default='fcn')
-    parser.add_argument('--encoder', type=str, default='resnet50')
+    parser.add_argument('--architecture', type=str, default='fcn_resnet50')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count())
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
+    parser.add_argument('--num_samples', type=int, default=None)
     args = parser.parse_args()
 
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../..'))
 
     Dataset = eval('datasets.%s' % args.dataset)
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
-    train_dataset = Dataset(split='train', lidar_beams_step=2, fields=args.data_fields)
-    valid_dataset = Dataset(split='val', lidar_beams_step=2, fields=args.data_fields)
+    train_dataset = Dataset(split='train', lidar_beams_step=2, fields=args.data_fields, num_samples=args.num_samples)
+    valid_dataset = Dataset(split='val', lidar_beams_step=2, fields=args.data_fields, num_samples=args.num_samples)
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
 
     # --------------Load and set model and optimizer-------------------------------------
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    architecture = eval('torchvision.models.segmentation.%s_%s' % (args.model, args.encoder))
-    model = architecture(pretrained=False)  # Load net
     # Change input layer to n inputs
     n_inputs = train_dataset[0][0].shape[0]
-    print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
-    model.backbone.conv1 = torch.nn.Conv2d(n_inputs, 64,
-                                           kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
     n_classes = len(train_dataset.class_values)
-    model.classifier[-1] = torch.nn.Conv2d(512, n_classes,
-                                           kernel_size=(1, 1), stride=(1, 1))  # Change final layer to n classes
+    print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
+
+    model = create_model(args.architecture, n_inputs, n_classes)
     # model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud/fcn_resnet50_legacy.pth'))
     model = model.to(device)
-    model = model.train()
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create adam optimizer
 
@@ -60,6 +86,7 @@ def main():
     max_metric = -np.Inf
     for e in tqdm(range(args.n_epochs)):
         # train epoch
+        model = model.train()
         for itr, sample in tqdm(enumerate(train_loader)):
             # if itr == 10:
             #     break
@@ -80,6 +107,7 @@ def main():
 
         # validation epoch
         metrics = []
+        model = model.eval()
         for itr, sample in tqdm(enumerate(valid_loader)):
             # if itr == 10:
             #     break
@@ -102,9 +130,8 @@ def main():
         # save better model
         if max_metric < metric:  # Save model weight
             max_metric = metric
-            # name = "%s_%s.pth" % (args.model, args.encoder)
-            name = '%s_%s_lr_%g_bs_%d_epoch_%d_%s_%s_iou_%.2f.pth' % \
-                   (args.model, args.encoder,
+            name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_iou_%.2f.pth' % \
+                   (args.architecture,
                     args.lr, args.batch_size, e, args.dataset, '_'.join(args.data_fields), float(max_metric))
             print("Saving Model:", name)
             torch.save(model, os.path.join(os.path.dirname(__file__), name))
