@@ -318,7 +318,7 @@ Visualization Manager:
           use image: true
         - Class: rviz/Image
           Enabled: true
-          Image Topic: /resized_depth
+          Image Topic: /depth
           Max Value: 1
           Median window: 5
           Min Value: 0

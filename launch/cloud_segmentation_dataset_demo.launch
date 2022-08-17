@@ -21,6 +21,8 @@
             lidar_fov_down: -22.5
             input_filelds: ['x', 'y', 'z', 'i']
             output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
+<!--            weights: fcn_resnet50_legacy.pth-->
+            weights: fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
