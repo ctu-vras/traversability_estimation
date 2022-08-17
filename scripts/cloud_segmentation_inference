@@ -123,7 +123,7 @@ class CloudProcessor:
             cloud = cloud.reshape([H * W, C])
         assert cloud.shape == (self.lidar_channels * self.lidar_beams, C)
 
-        self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3])
+        self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3] if cloud.shape[-1] >= 4 else None)
         # rospy.logdebug('Depth image shape: %s', self.scan.proj_range.shape)
         xyzid = {'x': self.scan.proj_xyz.transpose([2, 0, 1])[0],  # (H x W)
                  'y': self.scan.proj_xyz.transpose([2, 0, 1])[1],  # (H x W)
@@ -150,17 +150,16 @@ class CloudProcessor:
         pred = pred.squeeze(0).cpu().numpy()
         labels = np.argmax(pred, axis=0)
 
-        # labels_vis = cv2.resize(labels.astype('float'),
-        #                         (labels.shape[1] // 2, labels.shape[0] // 2),
-        #                         interpolation=cv2.INTER_LINEAR).astype('int8')
-        # colors_vis = convert_color(labels_vis, color_map=self.color_map)
-        # cv2.imshow('Predicted labels', colors_vis)
-        # cv2.waitKey(1)
-
         if isinstance(xyzid, dict):
             xyzid = np.concatenate([xyzid[f][None] for f in xyzid.keys()], axis=0)
 
         colors = convert_color(labels, color_map=self.color_map)
+        # colors_vis = cv2.resize(colors.astype('float'),
+        #                         (colors.shape[1] // 2, colors.shape[0] // 2),
+        #                         interpolation=cv2.INTER_LINEAR) / 255.
+        # cv2.imshow('Predicted labels', colors_vis)
+        # cv2.waitKey(1)
+
         assert xyzid.shape[0] >= 3
         assert len(xyzid.shape) == 3  # 5 x H x W
         xyz = xyzid[:3, ...]
@@ -195,6 +194,9 @@ class CloudProcessor:
 
         # Transform local map to ground truth localization frame
         cloud = numpify(pc_msg)
+        if not set(self.input_pc_fields) <= set(cloud.dtype.names):
+            rospy.logwarn('Point cloud does not contain all requested input fields. \nUsing only "x y z".')
+            self.input_pc_fields = ['x', 'y', 'z']
         cloud = structured_to_unstructured(cloud[self.input_pc_fields])
         rospy.logdebug('Point cloud of shape %s is received', cloud.shape)
 
@@ -219,6 +221,6 @@ class CloudProcessor:
 
 
 if __name__ == '__main__':
-    rospy.init_node('cloud_segmentation', log_level=rospy.DEBUG)
+    rospy.init_node('cloud_segmentation', log_level=rospy.INFO)
     proc = CloudProcessor(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
     rospy.spin()
