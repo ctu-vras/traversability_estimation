@@ -40,48 +40,48 @@ def preprocessing(image, input_size, input_scale=1.0,
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='Rellis3D')
+    parser.add_argument('--dataset', type=str, default='Rellis3DImages')
     parser.add_argument('--img_size', nargs='+', default=(704, 960))
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
-    args.img_size = tuple(args.img_size)
     print(args)
 
     Dataset = eval('datasets.%s' % args.dataset)
     ds = Dataset(crop_size=args.img_size, split='test')
 
     # Initialize model with the best available weights
-    # model = torch.load("fcn_resnet50_legacy.pth").to(args.device)
-    model = torch.load('../../config/weights/smp/PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth',
+    model = torch.load(os.path.join('../../config/weights/smp/',
+                                    'PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth'),
                        map_location=args.device)
     model.eval()
-
-    # Apply inference preprocessing transforms
-    img_raw, _ = ds[np.random.choice(range(len(ds)))]
-    img_vis = np.uint8(255 * (img_raw * ds.std + ds.mean))
-    size = (960, 704)
-    input = preprocessing(img_raw, input_size=size)
-    batch = torch.from_numpy(input).unsqueeze(0).to(args.device)
-
-    # Use the model and visualize the prediction
-    with torch.no_grad():
-        pred = model(batch)
-    pred = pred.squeeze(0).cpu().numpy()
-    mask = np.argmax(pred, axis=0) - 1
-    mask = convert_label(mask, inverse=True)
-    mask = cv2.resize(mask.astype('float32'), size, interpolation=cv2.INTER_LINEAR).astype('int8')
 
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
     label_config = os.path.join(pkg_path, "config/rellis.yaml")
     data_cfg = yaml.safe_load(open(label_config, 'r'))
 
-    result = convert_color(mask, data_cfg['color_map'])
-    plt.figure()
-    plt.subplot(1, 2, 1)
-    plt.imshow(img_vis)
-    plt.subplot(1, 2, 2)
-    plt.imshow(result)
-    plt.show()
+    for _ in range(5):
+        # Apply inference preprocessing transforms
+        img_raw, _ = ds[np.random.choice(range(len(ds)))]
+        img_vis = np.uint8(255 * (img_raw * ds.std + ds.mean))
+        size = (args.img_size[1], args.img_size[0])
+        input = preprocessing(img_raw, input_size=size)
+        batch = torch.from_numpy(input).unsqueeze(0).to(args.device)
+
+        # Use the model and visualize the prediction
+        with torch.no_grad():
+            pred = model(batch)
+        pred = pred.squeeze(0).cpu().numpy()
+        mask = np.argmax(pred, axis=0) - 1
+        mask = convert_label(mask, inverse=True)
+        mask = cv2.resize(mask.astype('float32'), size, interpolation=cv2.INTER_LINEAR).astype('int8')
+
+        result = convert_color(mask, data_cfg['color_map'])
+        plt.figure(figsize=(20, 10))
+        plt.subplot(1, 2, 1)
+        plt.imshow(img_vis)
+        plt.subplot(1, 2, 2)
+        plt.imshow(result)
+        plt.show()
 
 
 if __name__ == '__main__':

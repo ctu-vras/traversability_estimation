@@ -5,7 +5,7 @@ import torch
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import datasets
-from datasets.utils import convert_color
+from datasets.utils import convert_label
 import yaml
 import os
 
@@ -18,8 +18,6 @@ def main():
     print(args)
 
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
-    label_config = os.path.join(pkg_path, "config/rellis.yaml")
-    data_cfg = yaml.safe_load(open(label_config, 'r'))
 
     # Initialize model with the best available weights
     # model_name = 'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth'
@@ -27,8 +25,9 @@ def main():
     # model_name = 'fcn_resnet50_lr_1e-05_bs_32_epoch_99_Rellis3DClouds_depth_iou_0.63.pth'
     # model_name = 'lraspp_mobilenet_v3_large_lr_0.0001_bs_50_epoch_59_Rellis3DClouds_z_depth_iou_0.73.pth'
     model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_33_Rellis3DClouds_depth_iou_0.73.pth'
+    # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud', model_name), map_location=args.device)
-    # model = torch.load('fcn_resnet50_legacy.pth', map_location=args.device)
+    # model = torch.load(model_name, map_location=args.device)
     model.eval()
 
     data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_name]
@@ -38,29 +37,35 @@ def main():
 
     for _ in range(5):
         # Apply inference preprocessing transforms
-        xyzir, gt_mask = ds[np.random.choice(range(len(ds)))]
+        xyzir, label = ds[np.random.choice(range(len(ds)))]
         batch = torch.from_numpy(xyzir).unsqueeze(0).to(args.device)
 
         # Use the model and visualize the prediction
         with torch.no_grad():
             pred = model(batch)['out']
         pred = pred.squeeze(0).cpu().numpy()
-        mask = np.argmax(pred, axis=0)
 
-        pred_color = convert_color(mask, data_cfg['color_map'])
-        gt_mask = np.argmax(gt_mask, axis=0)
-        gt_color = convert_color(gt_mask, data_cfg['color_map'])
+        if len(pred.shape) == 3:
+            C, H, W = pred.shape
+            pred = np.argmax(pred, axis=0)
+            assert pred.shape == (H, W)
+        pred = convert_label(pred, inverse=True)
+        color_pred = ds.scan.sem_color_lut[pred]
+
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        label = convert_label(label, inverse=True)
+        color_gt = ds.scan.sem_color_lut[label]
 
         plt.figure(figsize=(20, 10))
-        # plt.switch_backend('QT5Agg')  # default on my system
         plt.subplot(2, 1, 1)
-        plt.imshow(pred_color)
+        plt.imshow(color_pred)
         plt.title('Prediction')
         plt.subplot(2, 1, 2)
-        plt.imshow(gt_color)
+        plt.imshow(color_gt)
         plt.title('Ground truth')
-        # figManager = plt.get_current_fig_manager()
-        # figManager.window.showMaximized()
         plt.show()
 
 

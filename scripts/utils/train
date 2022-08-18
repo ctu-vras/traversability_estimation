@@ -32,7 +32,7 @@ valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_worker
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 architecture = eval('torchvision.models.segmentation.%s_%s' % (args.model, args.encoder))
 model = architecture(pretrained=False)  # Load net
-n_classes = len(train_dataset.class_values)
+n_classes = len(train_dataset.CLASSES)
 model.classifier[-1] = torch.nn.Conv2d(512, n_classes,
                                        kernel_size=(1, 1), stride=(1, 1))  # Change final layer to n classes
 model = model.to(device)

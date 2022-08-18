@@ -25,7 +25,7 @@ def main():
 
     Dataset = eval('datasets.%s' % args.dataset)
     train_dataset = Dataset(crop_size=args.img_size, split='train', num_samples=args.num_samples)
-    valid_dataset = Dataset(crop_size=args.img_size, split='val', num_samples=args.num_samples)
+    valid_dataset = Dataset(crop_size=(1184, 1920), split='val', num_samples=args.num_samples)
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
@@ -36,8 +36,8 @@ def main():
         encoder_name=args.encoder,
         encoder_weights=args.encoder_weights,
         in_channels=3,
-        classes=len(train_dataset.class_values),
-        activation='sigmoid' if len(train_dataset.class_values) == 1 else 'softmax2d',
+        classes=len(train_dataset.CLASSES),
+        activation='sigmoid' if len(train_dataset.CLASSES) == 1 else 'softmax2d',
     )
     # model = torch.load('../config/weights/smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth')
     model = model.train()
