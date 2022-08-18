@@ -39,25 +39,21 @@ def main():
         classes=len(train_dataset.CLASSES),
         activation='sigmoid' if len(train_dataset.CLASSES) == 1 else 'softmax2d',
     )
-    # model = torch.load('../config/weights/smp/mobilenet_v2_352x640_lr1e-4_iou_0.46.pth')
     model = model.train()
 
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-    loss = smp.utils.losses.DiceLoss()
-    # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    metrics = [
-        smp.utils.metrics.IoU(threshold=0.5),
-    ]
+    loss_fn = smp.utils.losses.DiceLoss(activation='softmax2d')
 
-    optimizer = torch.optim.Adam([
-        dict(params=model.parameters(), lr=args.lr),
-    ])
+    # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
+    metrics = [smp.utils.metrics.IoU(threshold=0.5)]
+
+    optimizer = torch.optim.Adam([dict(params=model.parameters(), lr=args.lr)])
 
     # create epoch runners
     # it is a simple loop of iterating over dataloader`s samples
     train_epoch = smp.utils.train.TrainEpoch(
         model,
-        loss=loss,
+        loss=loss_fn,
         metrics=metrics,
         optimizer=optimizer,
         device=args.device,
@@ -66,7 +62,7 @@ def main():
 
     valid_epoch = smp.utils.train.ValidEpoch(
         model,
-        loss=loss,
+        loss=loss_fn,
         metrics=metrics,
         device=args.device,
         verbose=True,

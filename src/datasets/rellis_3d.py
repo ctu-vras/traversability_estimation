@@ -699,7 +699,6 @@ def semseg_test(n_runs=1):
 
         image_vis = np.uint8(255 * (image * ds.std + ds.mean))
 
-        # gt_arg = np.argmax(gt_mask[1:, ...], axis=0).astype(np.uint8)  # ignore background mask
         gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
         gt_arg = convert_label(gt_arg, inverse=True)
         gt_color = convert_color(gt_arg, color_map)

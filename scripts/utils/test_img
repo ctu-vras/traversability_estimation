@@ -50,10 +50,10 @@ def main():
     ds = Dataset(crop_size=args.img_size, split='test')
 
     # Initialize model with the best available weights
-    model = torch.load(os.path.join('../../config/weights/smp/',
-                                    'PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth'),
-                       map_location=args.device)
-    model.eval()
+    model_path = 'Unet_resnet34_704x960_lr0.0001_bs2_epoch4_Rellis3DImages_iou_0.12.pth'
+    # model_path = os.path.join('../../config/weights/smp/',
+    #                           'PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth')
+    model = torch.load(model_path, map_location=args.device).eval()
 
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
     label_config = os.path.join(pkg_path, "config/rellis.yaml")
@@ -71,7 +71,7 @@ def main():
         with torch.no_grad():
             pred = model(batch)
         pred = pred.squeeze(0).cpu().numpy()
-        mask = np.argmax(pred, axis=0) - 1
+        mask = np.argmax(pred, axis=0)
         mask = convert_label(mask, inverse=True)
         mask = cv2.resize(mask.astype('float32'), size, interpolation=cv2.INTER_LINEAR).astype('int8')
 
