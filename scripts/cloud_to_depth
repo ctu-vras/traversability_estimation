@@ -9,6 +9,7 @@ from sensor_msgs.msg import Image, PointCloud2
 
 class CloudToDepth:
     def __init__(self):
+        self.negative = rospy.get_param('~negative', False)
         self.image_pub = rospy.Publisher('image', Image, queue_size=2)
         self.cloud_sub = rospy.Subscriber('cloud', PointCloud2, self.on_cloud, queue_size=2)
 
@@ -17,6 +18,9 @@ class CloudToDepth:
         cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
         depth = 1000.0 * np.linalg.norm(cloud, 2, axis=-1)
         depth = depth.astype(np.uint16)
+        if self.negative:
+            depth[depth > 0] = 2**16 - depth[depth > 0]
+        print(depth.dtype, depth.shape)
         depth_msg = msgify(Image, depth, 'mono16')
         self.image_pub.publish(depth_msg)
 
