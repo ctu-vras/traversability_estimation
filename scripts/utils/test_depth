@@ -22,9 +22,11 @@ def main():
     data_cfg = yaml.safe_load(open(label_config, 'r'))
 
     # Initialize model with the best available weights
-    model_name = 'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth'
+    # model_name = 'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth'
     # model_name = 'fcn_resnet50_lr_1e-05_bs_32_epoch_93_Rellis3DClouds_intensity_depth_iou_0.64.pth'
     # model_name = 'fcn_resnet50_lr_1e-05_bs_32_epoch_99_Rellis3DClouds_depth_iou_0.63.pth'
+    # model_name = 'lraspp_mobilenet_v3_large_lr_0.0001_bs_50_epoch_59_Rellis3DClouds_z_depth_iou_0.73.pth'
+    model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_33_Rellis3DClouds_depth_iou_0.73.pth'
     model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud', model_name), map_location=args.device)
     # model = torch.load('fcn_resnet50_legacy.pth', map_location=args.device)
     model.eval()
@@ -53,8 +55,10 @@ def main():
         # plt.switch_backend('QT5Agg')  # default on my system
         plt.subplot(2, 1, 1)
         plt.imshow(pred_color)
+        plt.title('Prediction')
         plt.subplot(2, 1, 2)
         plt.imshow(gt_color)
+        plt.title('Ground truth')
         # figManager = plt.get_current_fig_manager()
         # figManager.window.showMaximized()
         plt.show()
