@@ -177,7 +177,7 @@ class Rellis3DSequence(torch.utils.data.Dataset):
 
 
 class Rellis3DImages(BaseDatasetImages):
-    CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
     LABEL_MAPPING = {0: 0,
                      1: 0,
@@ -196,7 +196,10 @@ class Rellis3DImages(BaseDatasetImages):
                      19: 13,
                      23: 14,
                      27: 15,
+                     29: 1,
+                     30: 1,
                      31: 16,
+                     32: 4,
                      33: 17,
                      34: 18}
 
@@ -572,8 +575,6 @@ class SemLaserScan(LaserScan):
 
 
 class Rellis3DClouds:
-    # CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
-    #            'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
     CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
 

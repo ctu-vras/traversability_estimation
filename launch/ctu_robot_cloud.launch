@@ -25,6 +25,8 @@
             label_config: $(dirname)/../config/obstacles.yaml
 <!--            weights: 'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth'-->
             weights: 'fcn_resnet50_lr_1e-05_bs_32_epoch_99_Rellis3DClouds_depth_iou_0.63.pth'
+<!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_33_Rellis3DClouds_depth_iou_0.73.pth'-->
+<!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_57_Rellis3DClouds_z_depth_iou_0.73.pth'-->
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
 
