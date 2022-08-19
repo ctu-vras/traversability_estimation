@@ -617,15 +617,20 @@ class Rellis3DClouds:
         # select input data according to the fields list
         ids = [['x', 'y', 'z', 'intensity', 'depth'].index(f) for f in self.fields]
         input = xyzid[ids]
+        n_inputs, H, W = input.shape
 
         label = self.scan.proj_sem_label.copy()
         label = convert_label(label, inverse=False)
-        assert input.shape[1:] == label.shape  # (C, H, W) and (H, W)
+        assert input.shape[1:] == label.shape  # (N, H, W) and (H, W)
 
         # extract certain classes from mask (one hot encoding)
-        assert label.max() <= len(self.CLASSES)
-        masks = [(label == v) for v in range(len(self.CLASSES))]
+        n_classes = len(self.CLASSES)
+        assert label.max() <= n_classes
+        masks = [(label == v) for v in range(n_classes)]
         label = np.stack(masks, axis=0).astype('float')
+
+        assert label.shape == (n_classes, H, W)
+        assert input.shape == (n_inputs, H, W)
 
         if self.lidar_beams_step:
             input = input[..., ::self.lidar_beams_step]
@@ -643,7 +648,8 @@ def semantic_laser_scan_demo(n_runs=1):
 
     ds = Rellis3DClouds(split=split, lidar_beams_step=2)
 
-    model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
+    # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
+    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
                        map_location='cpu').eval()
     for _ in range(n_runs):
@@ -714,7 +720,8 @@ def colored_cloud_demo(n_runs=1):
 
     ds = Rellis3DClouds(split='test', lidar_beams_step=1)
 
-    model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
+    # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
+    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
                        map_location='cpu')
     model.eval()

@@ -49,7 +49,7 @@ def main():
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_epochs', type=int, default=100)
-    parser.add_argument('--n_workers', type=int, default=os.cpu_count())
+    parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
     parser.add_argument('--num_samples', type=int, default=None)
     args = parser.parse_args()
@@ -125,7 +125,7 @@ def main():
             torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
         print("Epoch: %i" % e)
-        print('Train loss: %.3f' % loss.data.cpu().numpy())
+        print('Train loss: %f' % loss.data.cpu().numpy())
         print('Validation metric: %.3f' % metric)
 
         if e == 60:
