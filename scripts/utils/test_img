@@ -50,9 +50,8 @@ def main():
     ds = Dataset(crop_size=args.img_size, split='test')
 
     # Initialize model with the best available weights
-    model_path = 'Unet_resnet34_704x960_lr0.0001_bs2_epoch4_Rellis3DImages_iou_0.12.pth'
-    # model_path = os.path.join('../../config/weights/smp/',
-    #                           'PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth')
+    model_path = os.path.join('../../config/weights/smp/',
+                              'Unet_resnet34_1184x1920_lr0.0001_bs1_epoch2_Rellis3DImages_iou_0.77.pth')
     model = torch.load(model_path, map_location=args.device).eval()
 
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))

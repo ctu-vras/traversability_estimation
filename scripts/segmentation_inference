@@ -260,9 +260,8 @@ class ImageProcessor(object):
     def postprocessing(self, pred_raw, size):
         if self.model_name == 'hrnet':
             pred_raw = pred_raw[config.TEST.OUTPUT_INDEX]
-            pred_raw = torch.softmax(pred_raw, dim=1)  # TODO: not sure about this step: normalize to 0..1 distribution
-        else:
-            pred_raw = pred_raw[:, 1:, ...]  # background mask (0) is not needed
+            pred_raw = torch.softmax(pred_raw, dim=1)
+
         pred_raw = pred_raw.squeeze(0).cpu().numpy()
         pred = np.argmax(pred_raw, axis=0)
 
