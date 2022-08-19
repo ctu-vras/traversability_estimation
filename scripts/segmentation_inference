@@ -147,7 +147,7 @@ class ImageProcessor(object):
         return model
 
     def load_smp_model(self):
-        model_weights = rospy.get_param('~smp_weights', "FPN_se_resnext50_32x4d_352x640_lr1e-4_Rellis3D.pth")
+        model_weights = rospy.get_param('~smp_weights', "PSPNet_resnext50_32x4d_1184x1920_lr0.0001_bs1_epoch6_Rellis3DImages_iou_0.68.pth")
         PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/%s" % model_weights)
         model = torch.load(PRETRAINED_MODEL)
         model = model.eval()
