@@ -4,7 +4,7 @@ import fiftyone as fo
 import fiftyone.utils.splits as fous
 
 
-class FODataset(object):
+class TraversabilityDataset(object):
     def __init__(self, dataset_name: str, dataset_dir: str, crop_size: tuple, split_dict: dict):
         self.dataset_name = dataset_name
         self.crop_size = crop_size
@@ -86,7 +86,7 @@ class FODataset(object):
 if __name__ == "__main__":
     name = "traversability_dataset"
     directory = "/home/ales/dataset/traversability_dataset"
-    dataset = FODataset(name, directory, (320, 192), {"train": 0.7, "test": 0.2, "val": 0.1})
+    dataset = TraversabilityDataset(name, directory, (320, 192), {"train": 0.7, "test": 0.2, "val": 0.1})
 
     # train_split = dataset.dataset.match_tags(["train"])
     # Print the first few samples in the dataset

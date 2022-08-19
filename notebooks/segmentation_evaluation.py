@@ -17,12 +17,13 @@ import segmentation_models_pytorch as smp
 from PIL import Image
 from hrnet import models
 from hrnet.config import config
-from my_dataset import FODataset
+from datasets.traversability_dataset import TraversabilityDataset
 from datasets.utils import visualize
 from torch.utils.data import DataLoader
-from datasets.rellis_3d import Rellis3D
+from datasets.rellis_3d import Rellis3DImages
 from hrnet.core.function import convert_label, convert_color
-from datasets.traversability_rellis import Rellis3D as Dataset
+
+# from datasets.traversability_rellis import Rellis3D as Dataset
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 SMP_MODEL = os.path.join(pkg_path, "config/weights/smp/"
@@ -33,7 +34,7 @@ HRNET_MODEL_CONFIG = os.path.join(pkg_path, "config/hrnet_rellis/"
                                             "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484.yaml")
 TRAVERSABILITY_CONFIG = os.path.join(pkg_path, "config/rellis_traversability.yaml")
 MY_DATASET = "my-dataset-2"
-MY_DATASET_DIR = "/home/ales/dataset/cvat_dataset"
+MY_DATASET_DIR = "/home/ales/dataset/traversability_dataset"
 
 
 class ModelEvaluator(object):
@@ -63,17 +64,10 @@ class ModelEvaluator(object):
         assert dataset in ['rellis3d', 'my-dataset']
         self.dataset_name = dataset
         if dataset == 'rellis3d':
-            self.dataset = Rellis3D(crop_size=image_size[::-1], split='test')
+            self.dataset = Rellis3DImages(crop_size=image_size[::-1], split='test')
         elif dataset == 'my-dataset':
-            if fo.dataset_exists(MY_DATASET):
-                cvat_dataset = fo.load_dataset(MY_DATASET)
-                cvat_dataset.delete()
-            cvat_dataset = fo.Dataset.from_dir(
-                dataset_dir=MY_DATASET_DIR,
-                dataset_type=fo.types.CVATImageDataset,
-                name=MY_DATASET,
-            )
-            self.dataset = FODataset(cvat_dataset, crop_size=image_size[::-1])
+            self.dataset = TraversabilityDataset(MY_DATASET, MY_DATASET_DIR, image_size[::-1],
+                                                 {"train": 0.7, "test": 0.2, "val": 0.1})
         self.split = 'test'
         self.image_size = image_size
         self.cfg = yaml.safe_load(open(TRAVERSABILITY_CONFIG, 'r'))
@@ -130,9 +124,18 @@ class ModelEvaluator(object):
         return avg_iou
 
     def visualize_prediction(self):
-        n = np.random.choice(len(self.dataset))
+        if self.dataset_name == 'rellis3d':
+            length = len(self.dataset)
+            n = np.random.choice(length)
+            image, gt_mask = self.dataset[n]
+        elif self.dataset_name == 'my-dataset':
+            length = self.dataset.get_length(self.split)
+            n = np.random.choice(length)
+            image, gt_mask = self.dataset.get_item(n, self.split)
+        else:
+            raise ValueError(f"Dataset {self.dataset_name} not supported")
 
-        image, gt_mask = self.dataset[n]
+        print(self.dataset.std)
         image_vis = image * self.dataset.std + self.dataset.mean
         gt_mask = self.process_ground_truth(gt_mask)
         x_tensor = self.prepare_image(image)
@@ -296,9 +299,9 @@ def map_labels(mask):
 def main():
     evaluator = ModelEvaluator('hrnet', 'my-dataset', 'cuda', (320, 192))
     # evaluator.evaluate()
-    # evaluator.visualize_prediction()
-    evaluator.save_predictions()
-    evaluator.show_dataset()
+    evaluator.visualize_prediction()
+    # evaluator.save_predictions()
+    # evaluator.show_dataset()
 
 
 if __name__ == '__main__':
