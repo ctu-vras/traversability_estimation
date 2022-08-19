@@ -92,7 +92,6 @@ class CloudProcessor:
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        label = convert_label(label, inverse=True)
         color = self.scan.sem_color_lut[label]
         return color
 
@@ -162,17 +161,20 @@ class CloudProcessor:
         assert isinstance(pred, torch.Tensor)
         assert isinstance(xyzid, np.ndarray) or isinstance(xyzid, dict)
         pred = pred.squeeze(0).cpu().numpy()
+        n_classes = pred.shape[0]
         labels = np.argmax(pred, axis=0)
 
         if isinstance(xyzid, dict):
             xyzid = np.concatenate([xyzid[f][None] for f in xyzid.keys()], axis=0)
 
+        assert labels.max() <= n_classes
+        labels = convert_label(labels, inverse=True)
         colors = self.label_to_color(labels)
-        colors_vis = cv2.resize(colors.astype('float'),
-                                (colors.shape[1] // 2, colors.shape[0] // 2),
-                                interpolation=cv2.INTER_LINEAR) / colors.max()
-        cv2.imshow('Predicted labels', colors_vis)
-        cv2.waitKey(1)
+        # colors_vis = cv2.resize(colors.astype('float'),
+        #                         (colors.shape[1] // 2, colors.shape[0] // 2),
+        #                         interpolation=cv2.INTER_LINEAR) / colors.max()
+        # cv2.imshow('Predicted labels', colors_vis)
+        # cv2.waitKey(1)
 
         assert xyzid.shape[0] >= 3
         assert len(xyzid.shape) == 3  # 5 x H x W
