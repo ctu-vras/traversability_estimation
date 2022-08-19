@@ -1,10 +1,16 @@
+import os
 import cv2
 import numpy as np
 import fiftyone as fo
 import fiftyone.utils.splits as fous
+from .laserscan import LaserScan
+from numpy.lib.recfunctions import structured_to_unstructured
 
 
-class TraversabilityDataset(object):
+data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+
+
+class TraversabilityImages(object):
     def __init__(self, dataset_name: str, dataset_dir: str, crop_size: tuple, split_dict: dict):
         self.dataset_name = dataset_name
         self.crop_size = crop_size
@@ -83,10 +89,46 @@ class TraversabilityDataset(object):
         return len(self.ids[split])
 
 
-if __name__ == "__main__":
+class TraversabilityClouds:
+
+    def __init__(self,
+                 path=None,
+                 num_samples=None,
+                 H=128,
+                 W=1024,
+                 fov_up=45.0,
+                 fov_down=-45.0,
+                 ):
+        if path is None:
+            path = os.path.join(data_dir, 'bags/traversability/marv/ugv_2022-08-12-15-18-34/')
+        assert os.path.exists(path)
+        self.path = path
+        self.W = W
+        self.H = H
+        self.scan = LaserScan(project=True, H=self.H, W=self.W, fov_up=fov_up, fov_down=fov_down)
+
+        self.files = self.read_files()
+        if num_samples:
+            self.files = self.files[:num_samples]
+
+    def read_files(self):
+        clouds_path = os.path.join(self.path, 'os_cloud_node/points/')
+        files = [os.path.join(clouds_path, f) for f in os.listdir(clouds_path)]
+        return files
+
+    def __getitem__(self, index):
+        cloud_path = self.files[index]
+        cloud = np.load(cloud_path, allow_pickle=True)['arr_0'].item()['cloud']
+        return cloud
+
+    def __len__(self):
+        return len(self.files)
+
+
+def images_demo():
     name = "traversability_dataset"
-    directory = "/home/ales/dataset/traversability_dataset"
-    dataset = TraversabilityDataset(name, directory, (320, 192), {"train": 0.7, "test": 0.2, "val": 0.1})
+    directory = os.path.join(data_dir, name)
+    dataset = TraversabilityImages(name, directory, (320, 192), {"train": 0.7, "test": 0.2, "val": 0.1})
 
     # train_split = dataset.dataset.match_tags(["train"])
     # Print the first few samples in the dataset
@@ -95,3 +137,30 @@ if __name__ == "__main__":
         pass
 
     dataset.show_dataset()
+
+
+def clouds_demo():
+    from matplotlib import pyplot as plt
+
+    ds = TraversabilityClouds()
+
+    cloud = ds[np.random.choice(len(ds))]
+    xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
+    intensity = cloud['intensity']
+
+    ds.scan.set_points(points=xyz, remissions=intensity)
+
+    power = 16
+    depth_img = np.copy(ds.scan.proj_range)  # depth
+    depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
+    depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
+                               (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
+
+    plt.figure(figsize=(20, 10))
+    plt.imshow(depth_img)
+    plt.show()
+
+
+if __name__ == "__main__":
+    # images_demo()
+    clouds_demo()
