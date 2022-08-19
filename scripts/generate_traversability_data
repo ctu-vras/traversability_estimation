@@ -1,0 +1,266 @@
+#!/usr/bin/env python
+"""Generate self-supervised data from ROS bag files with robot trajectories.
+
+Paramaters:
+- Simplified robot model from primitives (bounding boxes, spheres).
+- Lookahead time / distance to mark traversed-through points.
+
+Multi-pass processing:
+1. Load transforms from bag files into a buffer. There have to be a transform
+   from the fixed frame to the robot.
+2. Process bags again and annotate points within given horizon contained in
+   the model primitives.
+"""
+from __future__ import absolute_import, division, print_function
+from argparse import ArgumentParser
+import numpy as np
+from numpy.lib.recfunctions import merge_arrays, structured_to_unstructured, unstructured_to_structured
+import os
+from ros_numpy import msgify, numpify
+from rosbag import Bag, ROSBagException, Compression
+import rospy
+from sensor_msgs.msg import PointCloud2
+from tf2_ros import BufferCore, TransformException
+from tqdm import tqdm
+
+
+def parse_args():
+    parser = ArgumentParser(epilog="""Path format uses following placeholders:
+    {dir} - parent directory of the first bag file,
+    {name} - name without extension of the first bag file,
+    {topic} - name of the topic as read from bag file,
+    {secs}, {nsecs} - timestamp from the header (if available).
+    """)
+    parser.add_argument('--topics', type=str, nargs='+')
+    parser.add_argument('--fixed-frame', type=str, default='map')
+    parser.add_argument('--robot-frame', type=str, default='base_link')
+    parser.add_argument('-r', type=float, default=1.0)
+    # parser.add_argument('-x', type=float, nargs=2, default=[-0.5, 0.5])
+    # parser.add_argument('-y', type=float, nargs=2, default=[-0.5, 0.5])
+    # parser.add_argument('-z', type=float, nargs=2, default=[-0.5, 0.5])
+    parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
+    parser.add_argument('--time-horizon', '-t', type=float, default=10.0)
+    parser.add_argument('--time-step', '-s', type=float, default=1.0)
+    # FIXME: Handle redundant /?
+    parser.add_argument('--output-path', '-o', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
+    # parser.add_argument('--cloud-path', '-c', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
+    # parser.add_argument('--image-path', '-i', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
+    parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
+    parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
+    parser.add_argument('bags', type=str, nargs='+')
+    args = parser.parse_args()
+    print(args)
+    return args
+
+
+def affine(tf, x):
+    assert tf.ndim == 2
+    assert x.ndim == 2
+    assert tf.shape[1] == x.shape[0] + 1
+    return np.matmul(tf[:-1, :-1], x) + tf[:-1, -1:]
+
+
+class Body(object):
+    def __init__(self, pose=None):
+        if pose is None:
+            pose = np.eye(4)
+        self.pose = pose
+        self.pose_inv = np.linalg.inv(pose)
+
+    def contains_local(self, x):
+        # return np.zeros((x.shape[1],), dtype=bool)
+        raise NotImplementedError()
+
+    def contains(self, x):
+        return self.contains_local(affine(self.pose_inv, x))
+
+
+class Sphere(Body):
+    def __init__(self, origin=(0, 0, 0), radius=1.0):
+        origin = np.asarray(origin).reshape((3, -1))
+        pose = np.eye(4)
+        pose[:3, 3:] = -origin
+        super(Sphere, self).__init__(pose=pose)
+        self.origin = origin
+        self.radius = radius
+
+    def contains_local(self, x):
+        return np.linalg.norm(x, axis=0) < self.radius
+
+
+class Bodies(Body):
+    def __init__(self, bodies, pose=None):
+        super(Bodies, self).__init__(pose=pose)
+        self.bodies = bodies
+
+    def contains_local(self, x):
+        c = np.zeros((x.shape[1],), dtype=bool)
+        # return any(body.contains_local(x) for body in self.bodies)
+        for body in self.bodies:
+            c = np.logical_or(c, body.contains_local(x))
+        return c
+
+
+def slots(msg):
+    """Return message attributes (slots) as list."""
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
+def get_topic_types(bag):
+    return {k: v.msg_type for k, v in bag.get_type_and_topic_info().topics.items()}
+
+
+# def populate_buffer(buffer, bag):
+#
+#     for topic, msg, stamp in tqdm(bag.read_messages(topics=tf_topics),
+#                                   desc='%s: reading transforms' % path.split('/')[-1],
+#                                   total=bag.get_message_count(topic_filters=tf_topics)):
+#         if topic == '/tf':
+#             for tf in msg.transforms:
+#                 buffer.set_transform(tf, 'bag')
+#         elif topic == '/tf_static':
+#             for tf in msg.transforms:
+#                 buffer.set_transform_static(tf, 'bag')
+
+
+def load_buffer(bag_paths):
+    tf_topics = ['/tf', '/tf_static']
+    buffer = BufferCore(cache_time=rospy.Duration.from_sec(1e12))
+    for path in bag_paths:
+        try:
+            with Bag(path, 'r') as bag:
+                for topic, msg, stamp in tqdm(bag.read_messages(topics=tf_topics),
+                                              desc='%s: reading transforms' % path.split('/')[-1],
+                                              total=bag.get_message_count(topic_filters=tf_topics)):
+                    if topic == '/tf':
+                        for tf in msg.transforms:
+                            buffer.set_transform(tf, 'bag')
+                    elif topic == '/tf_static':
+                        for tf in msg.transforms:
+                            buffer.set_transform_static(tf, 'bag')
+        except ROSBagException as ex:
+            print('Could not read %s: %s' % (path, ex))
+
+    return buffer
+
+
+def segment_cloud(model, arr, tfs, label='empty'):
+    assert isinstance(model, Body)
+    assert isinstance(arr, np.ndarray)
+    x = structured_to_unstructured(arr.ravel()[['x', 'y', 'z']])
+    x = x.T
+    c = np.zeros((x.shape[1],), dtype=bool)
+    for tf in tfs:
+        assert isinstance(tf, np.ndarray)
+        y = affine(tf, x)
+        cy = model.contains(y)
+        print('%i / %i = %.6f' % (cy.sum(), cy.size, cy.sum() / cy.size))
+        c = np.logical_or(c, cy)
+    invalid = (x == 0.0).all(axis=0)
+    print(invalid.shape, c.shape)
+    c[invalid] = 0
+    print('max bool', c.max())
+    # c = c.reshape(arr.shape).astype(np.uint8)
+    c = c.astype(np.uint8)
+    print('max uint8', c.max())
+    c = c.reshape((-1, 1))
+    c = unstructured_to_structured(c, names=[label])
+    c = c.reshape(arr.shape)
+    segmented = merge_arrays((arr, c), flatten=True)
+    return segmented
+
+
+def generate_data(bag_paths, topics, fixed_frame, robot_frame, model,
+                  distance_horizon=None, time_horizon=None, time_step=None,
+                  output_path_fmt=None, output_bag_path_fmt=None, output_topic_fmt=None):
+    assert bag_paths
+    dir = os.path.dirname(bag_paths[0])
+    name, _ = os.path.splitext(os.path.basename(bag_paths[0]))
+    print(name, dir)
+
+    if output_bag_path_fmt:
+        output_bag_path = output_bag_path_fmt.format(dir=dir, name=name)
+        if output_bag_path in bag_paths:
+            print('Output %s removed from input bag files.' % output_bag_path)
+            del bag_paths[bag_paths.index(output_bag_path)]
+        # else:
+        #     print('%s not in %s.' % (output_bag_path, bag_paths))
+        output_bag = Bag(output_bag_path, 'w', compression=Compression.LZ4)
+    else:
+        output_bag = None
+
+    buffer = load_buffer(bag_paths)
+    for path in bag_paths:
+
+        with Bag(path, 'r') as bag:
+            topic_types = get_topic_types(bag)
+            # print('Topic types:', *['%s: %s' % (k, v)
+            #                         for k, v in topic_types.items() if k in topics], sep='\n')
+            for topic, msg, stamp in tqdm(bag.read_messages(topics=topics),
+                                          desc='%s: generating data' % path.split('/')[-1],
+                                          total=bag.get_message_count(topic_filters=topics)):
+
+                start = msg.header.stamp.to_sec()
+                n = int(np.floor(time_horizon / time_step))
+                tfs = []
+                for t in np.linspace(start, start + n * time_step, n + 1):
+                    try:
+                        tf = buffer.lookup_transform_full_core(robot_frame, rospy.Time.from_seconds(t),
+                                                               msg.header.frame_id, msg.header.stamp,
+                                                               fixed_frame)
+                    except TransformException as ex:
+                        print('Could not transform from %s to %s at %.3f s.' % (msg.header.frame_id, robot_frame, t))
+                        break
+                    tf = numpify(tf.transform)
+                    if tfs:
+                        # Check distance horizon.
+                        diff = np.matmul(tfs[0], np.linalg.inv(tf))
+                        distance = np.linalg.norm(diff[:-1, -1])
+                        if distance > distance_horizon:
+                            print('Distance horizon reached, %.3f m > %.3f m.' % (distance, distance_horizon))
+                            break
+                    tfs.append(tf)
+
+                print('%i poses gathered for %s at %.3f s.' % (len(tfs), topic, stamp.to_sec()))
+
+                fmt_kwargs = {'dir': dir, 'name': name, 'topic': topic}
+                if hasattr(msg, 'header'):
+                    secs, nsecs = msg.header.stamp.secs, msg.header.stamp.nsecs
+                else:
+                    secs, nsecs = stamp.secs, stamp.nsecs
+                fmt_kwargs['secs'], fmt_kwargs['nsecs'] = secs, nsecs
+                key = '%s@%i.%09i' % (topic, secs, nsecs)
+
+                if topic_types[topic] == 'sensor_msgs/PointCloud2':
+                    msg = PointCloud2(*slots(msg))
+                    arr = numpify(msg)
+                    segmented_arr = segment_cloud(model, arr, tfs)
+
+                    if output_path_fmt is not None:
+                        output_path = output_path_fmt.format(**fmt_kwargs)
+                        # print('would save to %s' % output_path)
+                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                        np.savez_compressed(output_path, {key: segmented_arr})
+
+                    if output_bag is not None:
+                        output_topic = output_topic_fmt.format(topic=topic)
+                        print(output_topic)
+                        segmented_msg = msgify(PointCloud2, segmented_arr)
+                        segmented_msg.header = msg.header
+                        # print('would write to bag')
+                        output_bag.write(output_topic, segmented_msg, stamp)
+    if output_bag:
+        output_bag.close()
+
+
+def main():
+    args = parse_args()
+    model = Bodies([Sphere(radius=args.r)])
+    generate_data(args.bags, args.topics, args.fixed_frame, args.robot_frame, model,
+                  distance_horizon=args.distance_horizon, time_horizon=args.time_horizon, time_step=args.time_step,
+                  output_path_fmt=args.output_path, output_bag_path_fmt=args.output_bag_path,
+                  output_topic_fmt=args.output_topic)
+
+
+if __name__ == '__main__':
+    main()

@@ -10,8 +10,7 @@ def main():
     parser.add_argument('input', type=str)
     parser.add_argument('output', type=str)
     args = parser.parse_args()
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    obj = torch.load(args.input, map_location=device)
+    obj = torch.load(args.input, map_location='cpu')
     torch.save(obj, args.output, _use_new_zipfile_serialization=False)
     print('Model %s converted to %s in legacy format.' % (args.input, args.output))
 

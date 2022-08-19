@@ -5,9 +5,11 @@
     <arg name="input_img_topic" default="robot_data/rgb/compressed"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset"/>
     <arg name="rviz" default="true"/>
-    <arg name="model_name" default="hrnet" doc="Currently supported options: ['hrnet', 'smp']"/>
-    <arg name="smp_weights" default="PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth"
-         doc="SMP model weights (file name stored in 'config/weights/smp/' folder)"/>
+    <arg name="model_name" default="smp" doc="Currently supported options: ['hrnet', 'smp']"/>
+<!--    <arg name="smp_weights" default="PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth"-->
+<!--         doc="SMP model weights (file name stored in 'config/weights/smp/' folder)"/>-->
+<!--    <arg name="smp_weights" default="Unet_resnet34_1184x1920_lr0.0001_bs1_epoch2_Rellis3DImages_iou_0.77.pth"/>-->
+    <arg name="smp_weights" default="PSPNet_resnext50_32x4d_1184x1920_lr0.0001_bs1_epoch6_Rellis3DImages_iou_0.68.pth"/>
     <arg name="hrnet_weights" default="seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth"
          doc="SMP model weights (file name stored in 'config/weights/' folder)"/>
 

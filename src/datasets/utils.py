@@ -6,28 +6,42 @@ from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
-import rospy
+import torch
 
 
-def timing(f):
-    def timing_wrapper(*args, **kwargs):
-        t0 = timer()
-        ret = f(*args, **kwargs)
-        t1 = timer()
-        rospy.logdebug('%s %.6f s' % (f.__name__, t1 - t0))
-        return ret
-    return timing_wrapper
-
-
-def read_points(path, dtype=np.float32):
+def read_points_ply(path, dtype=np.float32):
     import open3d as o3d
     pcd = o3d.io.read_point_cloud(path)
     points = np.asarray(pcd.points)
     assert points.shape[1] == 3
-    vps = np.zeros_like(points)
-    points = np.hstack([points, vps])
-    points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z', 'vp_x', 'vp_y', 'vp_z'])
+    points = unstructured_to_structured(points.astype(dtype=dtype), names=['x', 'y', 'z'])
     del pcd
+    return points
+
+
+def read_points_bin(path, dtype=np.float32):
+    xyzi = np.fromfile(path, dtype=dtype)
+    xyzi = xyzi.reshape((-1, 4))
+    points = unstructured_to_structured(xyzi.astype(dtype=dtype), names=['x', 'y', 'z', 'i'])
+    return points
+
+
+def read_points_labels(path, dtype=np.uint32):
+    label = np.fromfile(path, dtype=dtype)
+    label = label.reshape((-1, 1))
+    # label = convert_label(label, inverse=False)
+    label = unstructured_to_structured(label.astype(dtype=dtype), names=['label'])
+    return label
+
+
+def read_points(path, dtype=np.float32):
+    # https://stackoverflow.com/questions/5899497/how-can-i-check-the-extension-of-a-file
+    if path.lower().endswith('.ply'):
+        points = read_points_ply(path, dtype)
+    elif path.lower().endswith('.bin'):
+        points = read_points_bin(path, dtype)
+    else:
+        raise ValueError('Cloud file must have .ply or .bin extension')
     return points
 
 
@@ -95,6 +109,7 @@ def depth_color(val, min_d=0, max_d=120):
 
 
 def filter_camera_points(points, img_width, img_height, K, RT):
+    assert points.shape[1] == 3
     ctl = np.array(RT)
     fov_x = 2 * np.arctan2(img_width, 2 * K[0, 0]) * 180 / 3.1415926 + 10
     fov_y = 2 * np.arctan2(img_height, 2 * K[1, 1]) * 180 / 3.1415926 + 10
@@ -143,19 +158,18 @@ color_palette = {
 }
 
 
-def convert_label(label, inverse=False):
-    temp = label.copy()
-    if inverse:
-        for v, k in color_palette.items():
-            label[temp == k["color"]] = v
-    else:
-        label = np.zeros(temp.shape+(3,))
-        for k, v in color_palette.items():
-            label[temp == k, :] = v["color"]
-    return label
-
-
 def read_semseg(path, label_size=None):
+    def convert_label(label, inverse=False):
+        temp = label.copy()
+        if inverse:
+            for v, k in color_palette.items():
+                label[temp == k["color"]] = v
+        else:
+            label = np.zeros(temp.shape + (3,))
+            for k, v in color_palette.items():
+                label[temp == k, :] = v["color"]
+        return label
+
     semseg = Image.open(path)
     if label_size is not None:
         if label_size[0] != semseg.size[0] or label_size[1] != semseg.size[1]:
@@ -189,8 +203,53 @@ def visualize(**images):
     plt.show()
 
 
+def convert_label(label, inverse=False, label_mapping=None):
+    if not label_mapping:
+        label_mapping = {0: 0,
+                         # 1: 0,
+                         3: 1,
+                         4: 2,
+                         5: 3,
+                         6: 4,
+                         7: 5,
+                         8: 6,
+                         9: 7,
+                         10: 8,
+                         12: 9,
+                         15: 10,
+                         17: 11,
+                         18: 12,
+                         19: 13,
+                         23: 14,
+                         27: 15,
+                         # 29: 1,
+                         # 30: 1,
+                         31: 16,
+                         # 32: 4,
+                         33: 17,
+                         34: 18}
+    if isinstance(label, np.ndarray):
+        temp = label.copy()
+    elif isinstance(label, torch.Tensor):
+        temp = label.clone()
+    else:
+        raise ValueError('Supported types: np.ndarray, torch.Tensor')
+    if inverse:
+        for v, k in label_mapping.items():
+            temp[label == k] = v
+    else:
+        for k, v in label_mapping.items():
+            temp[label == k] = v
+    return temp
+
+
 def convert_color(label, color_map):
-    temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    if isinstance(label, np.ndarray):
+        temp = np.zeros(label.shape + (3,)).astype(np.uint8)
+    elif isinstance(label, torch.Tensor):
+        temp = torch.zeros(label.shape + (3,), dtype=torch.uint8)
+    else:
+        raise ValueError('Supported types: np.ndarray, torch.Tensor')
     for k, v in color_map.items():
         temp[label == k] = v
     return temp

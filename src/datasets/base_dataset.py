@@ -10,9 +10,9 @@ import random
 from torch.utils import data
 
 
-class BaseDataset(data.Dataset):
+class BaseDatasetImages(data.Dataset):
     def __init__(self,
-                 ignore_label=-1,
+                 ignore_label=0,
                  base_size=2048,
                  crop_size=(512, 1024),
                  downsample_rate=1,
@@ -143,7 +143,7 @@ class BaseDataset(data.Dataset):
     def apply_augmentations(self, image, label, multi_scale=True, is_flip=True):
         if multi_scale:
             rand_scale = 0.5 + random.randint(0, self.scale_factor) / 10.0
-            image, label = self.multi_scale_aug(image, label, rand_scale=rand_scale)
+            image, label = self.multi_scale_aug(image, label, rand_scale=rand_scale, rand_crop=True)
 
         image = self.random_brightness(image)
         image = self.input_transform(image)

@@ -1,8 +1,11 @@
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from .utils import *
-from .base_dataset import BaseDataset
+from .base_dataset import BaseDatasetImages
 from copy import copy
 import torch
 from PIL import Image
@@ -10,7 +13,9 @@ from PIL import Image
 __all__ = [
     'data_dir',
     'seq_names',
-    'Sequence',
+    'Rellis3DSequence',
+    'Rellis3DImages',
+    'Rellis3DClouds',
 ]
 
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
@@ -22,27 +27,12 @@ seq_names = [
     '00003',
     '00004',
 ]
-
-
 # seq_names = ['%05d' % i for i in range(5)]
 
 
-class Sequence(torch.utils.data.Dataset):
-    def __init__(self, seq=None, path=None, poses_file='poses.txt', poses_path=None, split=None):
+class Rellis3DSequence(torch.utils.data.Dataset):
+    def __init__(self, seq=None, path=None, poses_file='poses.txt', poses_path=None, color_map=None):
         """Rellis-3D dataset: https://unmannedlab.github.io/research/RELLIS-3D.
-        
-        Rellis_3D
-        ├── 00000
-        │   ├── os1_cloud_node_color_ply
-        │   ├── pylon_camera_node
-        │   ├── pylon_camera_node_label_color
-        │   └── pylon_camera_node_label_id
-        ...
-        ├── bags
-        └── calibration
-            ├── 00000
-            ...
-            └── raw_data
 
         :param seq: Sequence number (from 0 to 4).
         :param path: Dataset path, takes precedence over name.
@@ -59,6 +49,13 @@ class Sequence(torch.utils.data.Dataset):
             seq = parts[1]
         if path is None:
             path = join(data_dir, 'Rellis_3D')
+
+        if not color_map:
+            CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+            color_map = CFG["color_map"]
+        self.color_map = color_map
+        n_classes = len(color_map)
+        self.scan = SemLaserScan(n_classes, self.color_map, project=True)
 
         self.seq = seq
         self.path = path
@@ -101,8 +98,15 @@ class Sequence(torch.utils.data.Dataset):
         ts = np.sort(ts).tolist()
         return ids, ts
 
-    def local_cloud_path(self, id):
-        return os.path.join(self.path, self.seq, 'os1_cloud_node_color_ply', '%s.ply' % id)
+    def local_cloud_path(self, id, filetype='bin'):
+        if filetype == '.ply':
+            return os.path.join(self.path, self.seq, 'os1_cloud_node_color_ply', '%s.ply' % id)
+        else:
+            return os.path.join(self.path, self.seq, 'os1_cloud_node_kitti_bin', '%06d.bin' % self.ids_lid.index(id))
+
+    def cloud_label_path(self, id):
+        return os.path.join(self.path, self.seq, 'os1_cloud_node_semantickitti_label_id',
+                            '%06d.label' % self.ids_lid.index(id))
 
     def cloud_poses_path(self):
         if self.poses_path:
@@ -127,7 +131,9 @@ class Sequence(torch.utils.data.Dataset):
     def __getitem__(self, item):
         if isinstance(item, int):
             id = self.ids[item]
-            return self.local_cloud(id), self.cloud_pose(id), self.camera_image(id), self.camera_semseg(id)
+            return self.local_cloud(id), self.cloud_label(id), \
+                   self.cloud_pose(id), \
+                   self.camera_image(id), self.camera_semseg(id)
 
         ds = copy(self)
         if isinstance(item, (list, tuple)):
@@ -144,6 +150,10 @@ class Sequence(torch.utils.data.Dataset):
     def local_cloud(self, id_lid):
         assert id_lid in self.ids_lid
         return read_points(self.local_cloud_path(id_lid))
+
+    def cloud_label(self, id_lid):
+        assert id_lid in self.ids_lid
+        return read_points_labels(self.cloud_label_path(id_lid))
 
     def cloud_pose(self, id):
         t = float(id.split('-')[1].split('_')[0]) + float(id.split('-')[1].split('_')[1]) / 1000.0
@@ -166,38 +176,14 @@ class Sequence(torch.utils.data.Dataset):
         return read_semseg(self.semseg_path(self.ids_semseg[i]))
 
 
-class Rellis3D(BaseDataset):
-    CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+class Rellis3DImages(BaseDatasetImages):
+    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
-    LABEL_MAPPING = {0: 0,
-                     1: 0,
-                     3: 1,
-                     4: 2,
-                     5: 3,
-                     6: 4,
-                     7: 5,
-                     8: 6,
-                     9: 7,
-                     10: 8,
-                     12: 9,
-                     15: 10,
-                     17: 11,
-                     18: 12,
-                     19: 13,
-                     23: 14,
-                     27: 15,
-                     # 29: 1,
-                     # 30: 1,
-                     31: 16,
-                     # 32: 4,
-                     33: 17,
-                     34: 18}
 
     def __init__(self,
                  path=None,
                  split='train',
                  num_samples=None,
-                 classes=None,
                  multi_scale=True,
                  flip=True,
                  ignore_label=-1,
@@ -207,8 +193,8 @@ class Rellis3D(BaseDataset):
                  scale_factor=16,
                  mean=np.asarray([0.54218053, 0.64250553, 0.56620195]),
                  std=np.asarray([0.54218052, 0.64250552, 0.56620194])):
-        super(Rellis3D, self).__init__(ignore_label, base_size,
-                                       crop_size, downsample_rate, scale_factor, mean, std, )
+        super(Rellis3DImages, self).__init__(ignore_label, base_size,
+                                             crop_size, downsample_rate, scale_factor, mean, std)
 
         if path is None:
             path = join(data_dir, 'Rellis_3D')
@@ -216,10 +202,9 @@ class Rellis3D(BaseDataset):
         assert split in ['train', 'val', 'test']
         self.path = path
         self.split = split
-        if not classes:
-            classes = self.CLASSES
+
         # convert str names to class values on masks
-        self.class_values = [list(self.LABEL_MAPPING.values())[self.CLASSES.index(cls.lower())] for cls in classes]
+        self.class_values = list(range(len(self.CLASSES)))
 
         self.base_size = base_size
         self.crop_size = crop_size
@@ -239,14 +224,6 @@ class Rellis3D(BaseDataset):
         if num_samples:
             self.files = self.files[:num_samples]
 
-        self.class_weights = torch.FloatTensor( [1.999999271012097, 1.664128991557095, 1.8496996235972305,
-                                                 1.9998671743556093, 1.9985603836216685, 1.6997860667619373,
-                                                 1.9996238518374807, 1.999762456018869, 1.9993409160693856,
-                                                 1.9997133730241352, 1.999513379675197, 1.9993347608141532,
-                                                 1.9996433543012653, 1.8417302013930952, 1.9900446258633235,
-                                                 1.9956819252010565, 1.9949043721923583, 1.9714094933783817,
-                                                 1.9972557793256613]).cuda()
-
     def read_files(self):
         files = []
         for item in self.img_list:
@@ -262,22 +239,12 @@ class Rellis3D(BaseDataset):
             })
         return files
 
-    def convert_label(self, label, inverse=False):
-        temp = label.copy()
-        if inverse:
-            for v, k in self.LABEL_MAPPING.items():
-                label[temp == k] = v
-        else:
-            for k, v in self.LABEL_MAPPING.items():
-                label[temp == k] = v
-        return label
-
     def __getitem__(self, index):
         item = self.files[index]
         image = cv2.imread(item["img"], cv2.IMREAD_COLOR)
 
         mask = np.array(Image.open(item["label"]))
-        mask = self.convert_label(mask, inverse=False)
+        mask = convert_label(mask, inverse=False)
 
         if 'test' in self.split:
             new_h, new_w = self.crop_size
@@ -286,37 +253,506 @@ class Rellis3D(BaseDataset):
         else:
             # add augmentations
             image, mask = self.apply_augmentations(image, mask, self.multi_scale, self.flip)
+
         # extract certain classes from mask
         masks = [(mask == v) for v in self.class_values]
         mask = np.stack(masks, axis=0).astype('float')
+
         return image.copy(), mask.copy()
 
 
-def semseg_test():
-    from datasets.utils import visualize, convert_color
-    from hrnet.core.function import convert_label
-    import yaml
+class LaserScan(object):
+    """
+    Class that contains LaserScan with x,y,z,r:
+    https://github.com/PRBonn/semantic-kitti-api/blob/8e75f4d049b787321f68a11753cb5947b1e58e17/auxiliary/laserscan.py
+    """
+    EXTENSIONS_SCAN = ['.bin']
 
+    def __init__(self, project=False, H=64, W=2048, fov_up=22.5, fov_down=-22.5):
+        self.project = project
+        self.proj_H = H
+        self.proj_W = W
+        self.proj_fov_up = fov_up
+        self.proj_fov_down = fov_down
+        self.reset()
+
+    def reset(self):
+        """ Reset scan members. """
+        self.points = np.zeros((0, 3), dtype=np.float32)  # [m, 3]: x, y, z
+        self.remissions = np.zeros((0, 1), dtype=np.float32)  # [m ,1]: remission
+
+        # projected range image - [H,W] range (-1 is no data)
+        self.proj_range = np.full((self.proj_H, self.proj_W), -1,
+                                  dtype=np.float32)
+
+        # unprojected range (list of depths for each point)
+        self.unproj_range = np.zeros((0, 1), dtype=np.float32)
+
+        # projected point cloud xyz - [H,W,3] xyz coord (-1 is no data)
+        self.proj_xyz = np.full((self.proj_H, self.proj_W, 3), -1,
+                                dtype=np.float32)
+
+        # projected remission - [H,W] intensity (-1 is no data)
+        self.proj_remission = np.full((self.proj_H, self.proj_W), -1,
+                                      dtype=np.float32)
+
+        # projected index (for each pixel, what I am in the pointcloud)
+        # [H,W] index (-1 is no data)
+        self.proj_idx = np.full((self.proj_H, self.proj_W), -1,
+                                dtype=np.int32)
+
+        # for each point, where it is in the range image
+        self.proj_x = np.zeros((0, 1), dtype=np.float32)  # [m, 1]: x
+        self.proj_y = np.zeros((0, 1), dtype=np.float32)  # [m, 1]: y
+
+        # mask containing for each pixel, if it contains a point or not
+        self.proj_mask = np.zeros((self.proj_H, self.proj_W),
+                                  dtype=np.int32)  # [H,W] mask
+
+    def size(self):
+        """ Return the size of the point cloud. """
+        return self.points.shape[0]
+
+    def __len__(self):
+        return self.size()
+
+    def open_scan(self, filename):
+        """ Open raw scan and fill in attributes
+        """
+        # reset just in case there was an open structure
+        self.reset()
+
+        # check filename is string
+        if not isinstance(filename, str):
+            raise TypeError("Filename should be string type, "
+                            "but was {type}".format(type=str(type(filename))))
+
+        # check extension is a laserscan
+        if not any(filename.endswith(ext) for ext in self.EXTENSIONS_SCAN):
+            raise RuntimeError("Filename extension is not valid scan file.")
+
+        # if all goes well, open pointcloud
+        scan = np.fromfile(filename, dtype=np.float32)
+        scan = scan.reshape((-1, 4))
+
+        # put in attribute
+        points = scan[:, 0:3]  # get xyz
+        remissions = scan[:, 3]  # get remission
+        self.set_points(points, remissions)
+
+    def set_points(self, points, remissions=None):
+        """ Set scan attributes (instead of opening from file)
+        """
+        # reset just in case there was an open structure
+        self.reset()
+
+        # check scan makes sense
+        if not isinstance(points, np.ndarray):
+            raise TypeError("Scan should be numpy array")
+
+        # check remission makes sense
+        if remissions is not None and not isinstance(remissions, np.ndarray):
+            raise TypeError("Remissions should be numpy array")
+
+        # put in attribute
+        self.points = points  # get xyz
+        if remissions is not None:
+            self.remissions = remissions  # get remission
+        else:
+            self.remissions = np.zeros((points.shape[0]), dtype=np.float32)
+
+        # if projection is wanted, then do it and fill in the structure
+        if self.project:
+            self.do_range_projection()
+
+    def do_range_projection(self):
+        """ Project a pointcloud into a spherical projection image.projection.
+            Function takes no arguments because it can be also called externally
+            if the value of the constructor was not set (in case you change your
+            mind about wanting the projection)
+        """
+        # laser parameters
+        fov_up = self.proj_fov_up / 180.0 * np.pi  # field of view up in rad
+        fov_down = self.proj_fov_down / 180.0 * np.pi  # field of view down in rad
+        fov = abs(fov_down) + abs(fov_up)  # get field of view total in rad
+
+        # get depth of all points
+        depth = np.linalg.norm(self.points, 2, axis=1)
+
+        # get scan components
+        scan_x = self.points[:, 0]
+        scan_y = self.points[:, 1]
+        scan_z = self.points[:, 2]
+
+        # get angles of all points
+        yaw = -np.arctan2(scan_y, scan_x)
+        pitch = np.arcsin(scan_z / (depth + 1e-8))
+
+        # get projections in image coords
+        proj_x = 0.5 * (yaw / np.pi + 1.0)  # in [0.0, 1.0]
+        proj_y = 1.0 - (pitch + abs(fov_down)) / fov  # in [0.0, 1.0]
+
+        # scale to image size using angular resolution
+        proj_x *= self.proj_W  # in [0.0, W]
+        proj_y *= self.proj_H  # in [0.0, H]
+
+        # round and clamp for use as index
+        proj_x = np.floor(proj_x)
+        proj_x = np.minimum(self.proj_W - 1, proj_x)
+        proj_x = np.maximum(0, proj_x).astype(np.int32)  # in [0,W-1]
+        self.proj_x = np.copy(proj_x)  # store a copy in orig order
+
+        proj_y = np.floor(proj_y)
+        proj_y = np.minimum(self.proj_H - 1, proj_y)
+        proj_y = np.maximum(0, proj_y).astype(np.int32)  # in [0,H-1]
+        self.proj_y = np.copy(proj_y)  # store a copy in original order
+
+        # copy of depth in original order
+        self.unproj_range = np.copy(depth)
+
+        # order in decreasing depth
+        indices = np.arange(depth.shape[0])
+        order = np.argsort(depth)[::-1]
+        depth = depth[order]
+        indices = indices[order]
+        points = self.points[order]
+        remission = self.remissions[order]
+        proj_y = proj_y[order]
+        proj_x = proj_x[order]
+
+        # assing to images
+        self.proj_range[proj_y, proj_x] = depth
+        self.proj_xyz[proj_y, proj_x] = points
+        self.proj_remission[proj_y, proj_x] = remission
+        self.proj_idx[proj_y, proj_x] = indices
+        self.proj_mask = (self.proj_idx > 0).astype(np.float32)
+
+
+class SemLaserScan(LaserScan):
+    """Class that contains LaserScan with x,y,z,r,sem_label,sem_color_label,inst_label,inst_color_label"""
+    EXTENSIONS_LABEL = ['.label']
+
+    def __init__(self, nclasses, sem_color_dict=None, project=False, H=64, W=2048, fov_up=22.5, fov_down=-22.5):
+        super(SemLaserScan, self).__init__(project, H, W, fov_up, fov_down)
+        self.reset()
+        self.nclasses = nclasses  # number of classes
+
+        # make semantic colors
+        max_sem_key = 0
+        for key, data in sem_color_dict.items():
+            if key + 1 > max_sem_key:
+                max_sem_key = key + 1
+        self.sem_color_lut = np.zeros((max_sem_key + 100, 3), dtype=np.float32)
+        for key, value in sem_color_dict.items():
+            self.sem_color_lut[key] = np.array(value, np.float32) / 255.0
+
+        # make instance colors
+        max_inst_id = 100000
+        self.inst_color_lut = np.random.uniform(low=0.0,
+                                                high=1.0,
+                                                size=(max_inst_id, 3))
+        # force zero to a gray-ish color
+        self.inst_color_lut[0] = np.full((3), 0.1)
+
+    def reset(self):
+        """ Reset scan members. """
+        super(SemLaserScan, self).reset()
+
+        # semantic labels
+        self.sem_label = np.zeros((0, 1), dtype=np.uint32)  # [m, 1]: label
+        self.sem_label_color = np.zeros((0, 3), dtype=np.float32)  # [m ,3]: color
+
+        # instance labels
+        self.inst_label = np.zeros((0, 1), dtype=np.uint32)  # [m, 1]: label
+        self.inst_label_color = np.zeros((0, 3), dtype=np.float32)  # [m ,3]: color
+
+        # projection color with semantic labels
+        self.proj_sem_label = np.zeros((self.proj_H, self.proj_W),
+                                       dtype=np.int32)  # [H,W]  label
+        self.proj_sem_color = np.zeros((self.proj_H, self.proj_W, 3),
+                                       dtype=float)  # [H,W,3] color
+
+        # projection color with instance labels
+        self.proj_inst_label = np.zeros((self.proj_H, self.proj_W),
+                                        dtype=np.int32)  # [H,W]  label
+        self.proj_inst_color = np.zeros((self.proj_H, self.proj_W, 3),
+                                        dtype=float)  # [H,W,3] color
+
+    def open_label(self, filename):
+        """ Open raw scan and fill in attributes
+        """
+        # check filename is string
+        if not isinstance(filename, str):
+            raise TypeError("Filename should be string type, "
+                            "but was {type}".format(type=str(type(filename))))
+
+        # check extension is a laserscan
+        if not any(filename.endswith(ext) for ext in self.EXTENSIONS_LABEL):
+            raise RuntimeError("Filename extension is not valid label file.")
+
+        # if all goes well, open label
+        label = np.fromfile(filename, dtype=np.uint32)
+        label = label.reshape((-1))
+
+        # set it
+        self.set_label(label)
+
+    def set_label(self, label):
+        """ Set points for label not from file but from np
+        """
+        # check label makes sense
+        if not isinstance(label, np.ndarray):
+            raise TypeError("Label should be numpy array")
+
+        # only fill in attribute if the right size
+        if label.shape[0] == self.points.shape[0]:
+            self.sem_label = label & 0xFFFF  # semantic label in lower half
+            self.inst_label = label >> 16  # instance id in upper half
+        else:
+            print("Points shape: ", self.points.shape)
+            print("Label shape: ", label.shape)
+            raise ValueError("Scan and Label don't contain same number of points")
+
+        # sanity check
+        assert ((self.sem_label + (self.inst_label << 16) == label).all())
+
+        if self.project:
+            self.do_label_projection()
+
+    def colorize(self):
+        """ Colorize pointcloud with the color of each semantic label
+        """
+        self.sem_label_color = self.sem_color_lut[self.sem_label]
+        self.sem_label_color = self.sem_label_color.reshape((-1, 3))
+
+        self.inst_label_color = self.inst_color_lut[self.inst_label]
+        self.inst_label_color = self.inst_label_color.reshape((-1, 3))
+
+    def do_label_projection(self):
+        # only map colors to labels that exist
+        mask = self.proj_idx >= 0
+
+        # semantics
+        self.proj_sem_label[mask] = self.sem_label[self.proj_idx[mask]]
+        self.proj_sem_color[mask] = self.sem_color_lut[self.sem_label[self.proj_idx[mask]]]
+
+        # instances
+        self.proj_inst_label[mask] = self.inst_label[self.proj_idx[mask]]
+        self.proj_inst_color[mask] = self.inst_color_lut[self.inst_label[self.proj_idx[mask]]]
+
+
+class Rellis3DClouds:
+    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+               'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
+
+    def __init__(self,
+                 path=None,
+                 split='train',
+                 fields=None,
+                 num_samples=None,
+                 color_map=None,
+                 lidar_beams_step=1,
+                 ):
+        if path is None:
+            path = join(data_dir, 'Rellis_3D')
+        assert os.path.exists(path)
+        assert split in ['train', 'val', 'test']
+        self.path = path
+        self.split = split
+        self.lidar_beams_step = lidar_beams_step
+        if fields is None:
+            fields = ['x', 'y', 'z', 'intensity', 'depth']
+        self.fields = fields
+        # make sure the input fields are supported
+        assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
+
+        if not color_map:
+            CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+            color_map = CFG["color_map"]
+        self.color_map = color_map
+        n_classes = len(color_map)
+        self.scan = SemLaserScan(n_classes, self.color_map, project=True)
+
+        self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
+
+        self.files = self.read_files()
+        if num_samples:
+            self.files = self.files[:num_samples]
+
+    def read_files(self):
+        files = []
+        for item in self.depths_list:
+            depth_path, label_path = item
+            depth_path = os.path.join(self.path, depth_path)
+            label_path = os.path.join(self.path, label_path)
+            name = os.path.splitext(os.path.basename(label_path))[0]
+            files.append({
+                "depth": depth_path,
+                "label": label_path,
+                "name": name,
+                "weight": 1
+            })
+        return files
+
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        label = convert_label(label, inverse=True)
+        color = self.scan.sem_color_lut[label]
+        return color
+
+    def __getitem__(self, index):
+        item = self.files[index]
+
+        self.scan.open_scan(item["depth"])
+        self.scan.open_label(item["label"])
+        self.scan.colorize()
+
+        # following SalsaNext approach: (x, y, z, intensity, depth)
+        xyzid = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
+                                self.scan.proj_remission[None],  # (1 x H x W)
+                                self.scan.proj_range[None]], axis=0)  # (1 x H x W)
+        # select input data according to the fields list
+        ids = [['x', 'y', 'z', 'intensity', 'depth'].index(f) for f in self.fields]
+        input = xyzid[ids]
+
+        label = self.scan.proj_sem_label.copy()
+        label = convert_label(label, inverse=False)
+        assert input.shape[1:] == label.shape  # (C, H, W) and (H, W)
+
+        # extract certain classes from mask (one hot encoding)
+        assert label.max() <= len(self.CLASSES)
+        masks = [(label == v) for v in range(len(self.CLASSES))]
+        label = np.stack(masks, axis=0).astype('float')
+
+        if self.lidar_beams_step:
+            input = input[..., ::self.lidar_beams_step]
+            label = label[..., ::self.lidar_beams_step]
+
+        return input, label
+
+    def __len__(self):
+        return len(self.files)
+
+
+def semantic_laser_scan_demo(n_runs=1):
     split = np.random.choice(['test', 'train', 'val'])
     # split = 'test'
-    ds = Rellis3D(split=split)
-    image, gt_mask = ds[int(np.random.choice(range(len(ds))))]
 
-    if split in ['val', 'train']:
-        image = image.transpose([1, 2, 0])
+    ds = Rellis3DClouds(split=split, lidar_beams_step=2)
 
-    image_vis = np.uint8(255 * (image * ds.std + ds.mean))
+    model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
+    model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
+                       map_location='cpu').eval()
+    for _ in range(n_runs):
+        xyzid, label = ds[np.random.choice(range(len(ds)))]
 
-    CFG = yaml.safe_load(open(os.path.join(data_dir,  "../config/rellis.yaml"), 'r'))
+        # depth_img = {-1: no data, 0..1: for scaled distances}
+        power = 16
+        depth_img = np.copy(xyzid[-1])  # depth
+        depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
+        depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
+                                   (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
+
+        # semantic annotation of depth image
+        color_gt = ds.label_to_color(label)
+
+        # Apply inference preprocessing transforms
+        batch = torch.from_numpy(xyzid[-2:]).unsqueeze(0)  # model takes as input only intensity and depth image
+        with torch.no_grad():
+            pred = model(batch)['out']
+        pred = pred.squeeze(0).cpu().numpy()
+
+        color_pred = ds.label_to_color(pred)
+
+        plt.figure(figsize=(20, 10))
+        plt.subplot(3, 1, 1)
+        plt.imshow(depth_img)
+        plt.title('Depth image')
+        plt.subplot(3, 1, 2)
+        plt.imshow(color_gt)
+        plt.title('Semantics: GT')
+        plt.subplot(3, 1, 3)
+        plt.imshow(color_pred)
+        plt.title('Semantics: Pred')
+        plt.show()
+
+
+def semseg_test(n_runs=1):
+    from datasets.utils import visualize, convert_color, convert_label
+    import yaml
+
+    CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
     color_map = CFG["color_map"]
-    gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8) - 1
-    gt_arg = convert_label(gt_arg, inverse=True)
-    gt_color = convert_color(gt_arg, color_map)
 
-    visualize(
-        image=image_vis,
-        label=gt_color,
-    )
+    split = np.random.choice(['test', 'train', 'val'])
+    # split = 'val'
+    ds = Rellis3DImages(split=split)
+
+    for _ in range(n_runs):
+        image, gt_mask = ds[int(np.random.choice(range(len(ds))))]
+
+        if split in ['val', 'train']:
+            image = image.transpose([1, 2, 0])
+
+        image_vis = np.uint8(255 * (image * ds.std + ds.mean))
+
+        gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
+        gt_arg = convert_label(gt_arg, inverse=True)
+        gt_color = convert_color(gt_arg, color_map)
+
+        visualize(
+            image=image_vis,
+            label=gt_color,
+        )
+
+
+def colored_cloud_demo(n_runs=1):
+    import open3d as o3d
+
+    ds = Rellis3DClouds(split='test', lidar_beams_step=1)
+
+    model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
+    model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
+                       map_location='cpu')
+    model.eval()
+
+    for _ in range(n_runs):
+        i = np.random.choice(range(len(ds)))
+        xyzid, label = ds[i]
+
+        xyz = xyzid[:3, ...].reshape((3, -1))
+        xyz = xyz.T
+
+        color_gt = ds.label_to_color(label)
+
+        color_gt = color_gt.reshape((-1, 3))
+        assert xyz.shape == color_gt.shape
+
+        # Apply inference preprocessing transforms
+        batch = torch.from_numpy(xyzid[-2:]).unsqueeze(0)  # model takes as input only i and d
+
+        # Use the model and visualize the prediction
+        with torch.no_grad():
+            pred = model(batch)['out']
+        pred = pred.squeeze(0).cpu().numpy()
+
+        color_pred = ds.label_to_color(pred)
+
+        color_pred = color_pred.reshape((-1, 3))
+        assert xyz.shape == color_pred.shape
+
+        pcd_pred = o3d.geometry.PointCloud()
+        pcd_pred.points = o3d.utility.Vector3dVector(xyz)
+        pcd_pred.colors = o3d.utility.Vector3dVector(color_pred)
+
+        pcd_gt = o3d.geometry.PointCloud()
+        pcd_gt.points = o3d.utility.Vector3dVector(xyz + np.array([150, 0, 0]))
+        pcd_gt.colors = o3d.utility.Vector3dVector(color_gt)
+
+        o3d.visualization.draw_geometries([pcd_pred, pcd_gt])
 
 
 def lidar_map_demo():
@@ -324,7 +760,7 @@ def lidar_map_demo():
     import open3d as o3d
 
     name = np.random.choice(seq_names)
-    ds = Sequence(seq='rellis_3d/%s' % name)
+    ds = Rellis3DSequence(seq='rellis_3d/%s' % name)
 
     plt.figure()
     plt.title('Trajectory')
@@ -335,7 +771,7 @@ def lidar_map_demo():
 
     clouds = []
     for data in tqdm(ds[::100]):
-        cloud, pose, _, _ = data
+        cloud, _, pose, _, _ = data
         cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
         cloud = np.matmul(cloud, pose[:3, :3].T) + pose[:3, 3:].T
 
@@ -347,17 +783,17 @@ def lidar_map_demo():
     o3d.visualization.draw_geometries([pcd.voxel_down_sample(voxel_size=0.5)])
 
 
-def lidar2cam_demo():
+def lidar2cam_demo(n_runs=1):
     seq = np.random.choice(seq_names)
-    ds = Sequence(seq='rellis_3d/%s' % seq)
+    ds = Rellis3DSequence(seq='rellis_3d/%s' % seq)
 
     dist_coeff = ds.calibration['dist_coeff'].reshape((5, 1))
     K = ds.calibration['K']
     T_lid2cam = ds.calibration['lid2cam']
 
-    for _ in range(1):
+    for _ in range(n_runs):
         data = ds[int(np.random.choice(range(len(ds))))]
-        points, pose, rgb, semseg = data
+        points, points_label, pose, rgb, semseg = data
         points = structured_to_unstructured(points[['x', 'y', 'z']])
 
         img_height, img_width = rgb.shape[:2]
@@ -367,7 +803,7 @@ def lidar2cam_demo():
         t_lidar2cam = T_lid2cam[:3, 3]
         rvec, _ = cv2.Rodrigues(R_lidar2cam)
         tvec = t_lidar2cam.reshape(3, 1)
-        xyz_v, color = filter_camera_points(points, img_width, img_height, K, T_lid2cam)
+        xyz_v, color = filter_camera_points(points[..., :3], img_width, img_height, K, T_lid2cam)
 
         imgpoints, _ = cv2.projectPoints(xyz_v[:, :], rvec, tvec, K, dist_coeff)
         imgpoints = np.squeeze(imgpoints, 1)
@@ -384,16 +820,16 @@ def lidar2cam_demo():
         plt.show()
 
 
-def semseg_demo():
+def semseg_demo(n_runs=1):
     seq = np.random.choice(seq_names)
-    ds = Sequence(seq='rellis_3d/%s' % seq)
+    ds = Rellis3DSequence(seq='rellis_3d/%s' % seq)
 
-    for _ in range(1):
+    for _ in range(n_runs):
         id = int(np.random.choice(range(len(ds))))
         print('Data index:', id)
 
         data = ds[id]
-        _, _, rgb, semseg = data
+        _, _, _, rgb, semseg = data
 
         plt.figure(figsize=(20, 10))
         plt.subplot(1, 2, 1)
@@ -404,10 +840,12 @@ def semseg_demo():
 
 
 def main():
-    semseg_test()
+    colored_cloud_demo(1)
+    semantic_laser_scan_demo(1)
+    semseg_test(1)
     lidar_map_demo()
-    lidar2cam_demo()
-    semseg_demo()
+    lidar2cam_demo(1)
+    semseg_demo(1)
 
 
 if __name__ == '__main__':

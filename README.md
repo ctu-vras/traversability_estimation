@@ -1,6 +1,8 @@
 # [Traversability Estimation](https://docs.google.com/document/d/1ZKGbDJ3xky1IdwFRN3pk5FYKq3wiQ5QcbyBPlOGammw/edit?usp=sharing)
 
-Semantic Segmentation of Images for Traversability Estimation
+Semantic Segmentation of Images and Point Clouds for Traversability Estimation
+
+![](./docs/segmented_pc.png)
 
 ## <a name="rellis3d">RELLIS-3D Dataset</a>
 
@@ -19,6 +21,8 @@ high-precision GPS measurement, and IMU data.
     ├─ Rellis_3D
         ├── 00000
         │   ├── os1_cloud_node_color_ply
+        │   ├── os1_cloud_node_kitti_bin
+        │   ├── os1_cloud_node_semantickitti_label_id
         │   ├── pylon_camera_node
         │   ├── pylon_camera_node_label_color
         │   └── pylon_camera_node_label_id
@@ -50,10 +54,10 @@ Publish the RELLIS-3D data as ROS messages:
 
 ```bash
 source ~/catkin_ws/devel/setup.bash
-roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
+roslaunch traversability_estimation robot_data.launch data_sequence:='00000' rviz:=True
 ```
 
-### Semantic Segmentation Node
+### Images Semantic Segmentation Node
 
 - [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
 
@@ -64,15 +68,14 @@ roslaunch traversability_estimation robot_data.launch data_sequence:='00000'
 - [SMP](https://github.com/qubvel/segmentation_models.pytorch):
     [weights](https://drive.google.com/drive/folders/1WDbBEgDVPPBbWUka5zZKFoOfhAm-jTZr?usp=sharing)
 
-Put the weights to `./config/weights` folder:
+Put the [weights](https://drive.google.com/drive/folders/1w_Bv4H_DdcC1NJ9gdNoozWjc2r0FhLD7?usp=sharing)
+to `./config/weights` folder:
 
 ```bash
 ./config/weights/
   ├── hrnetv2_w48_imagenet_pretrained.pth
   ├── seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/
-  |   └── models
-  |       ├── ...
-  |       ...
+  ├── depth_cloud/
   └── smp/
       └── se_resnext50_32x4d_352x640_lr1e-4.pth
 ```
@@ -96,7 +99,13 @@ Put the weights to `./config/weights` folder:
 - Semantic segmentation of images from RELLIS-3D dataset with HRNet:
 
     ```bash
-    roslaunch traversability_estimation image_segmentation_demo.launch 
+    roslaunch traversability_estimation image_segmentation_demo.launch model_name:=hrnet
+    ```
+  
+- Semantic segmentation of point clouds from RELLIS-3D dataset with HRNet:
+
+    ```bash
+    roslaunch traversability_estimation cloud_segmentation_dataset_demo.launch
     ```
 
 - Coloring lidar cloud using calibrated cameras and semantic classes:
@@ -106,5 +115,5 @@ Put the weights to `./config/weights` folder:
     - Clone and build the [point_cloud_color](https://github.com/ctu-vras/point_cloud_color) package.
     - Run demo:
         ```bash
-        roslaunch traversability_estimation color_point_cloud_demo.launch
+        roslaunch traversability_estimation color_pc_bagfile_demo.launch
         ```

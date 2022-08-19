@@ -1,0 +1,148 @@
+#!/usr/bin/env python
+
+import rospy
+from sensor_msgs.msg import PointCloud2
+from ros_numpy import msgify, numpify
+import tf2_ros
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+from timeit import default_timer as timer
+import scipy.spatial
+
+
+def fuse_traversability(trav, eps=1e-6):
+    assert isinstance(trav, np.ndarray)
+    assert len(trav.shape) >= 2
+    n_pts = trav.shape[0]  # (n, >=2)
+    trav = trav.reshape([n_pts, -1])
+    trav = np.clip(trav, eps, 1 - eps)
+    lo = np.log(1. - trav)
+    lo = lo.sum(axis=1)
+    trav = 1. - np.exp(lo)
+    assert trav.shape == (n_pts,)
+    return trav
+
+
+def msgify_cloud(cloud, frame, stamp, names=None):
+    if not names:
+        # names = cloud.dtype.names
+        names = ['x', 'y', 'z', 'traversability']
+    cloud = unstructured_to_structured(cloud, names=names)
+    msg = msgify(PointCloud2, cloud)
+    msg.header.frame_id = frame
+    msg.header.stamp = stamp
+    return msg
+
+
+class TraversabilityMapping:
+    """
+    This ROS node subscribes to local map traversability cloud with PointCloud2 msgs
+    and concatenates them in one global PointCloud2 map.
+    Merging the points is done by determining firstly the new points by
+    proximity threshold to the points in existing map.
+    """
+    def __init__(self, cloud_topic='cloud'):
+        # Set the device
+        self.global_map = None
+        self.local_map = None
+        self.new_map = None
+        self.map_frame = rospy.get_param('~map_frame', 'odom')
+        self.map_step = rospy.get_param('~map_step', 10)
+
+        # any point that is farer than this threshold from points in existing pcl is considered as new
+        self.dist_th = rospy.get_param('~pts_proximity_th', 0.2)
+        self.max_age = rospy.get_param('~max_age', 10.0)
+
+        self.rate = rospy.get_param('~rate', 1.0)
+        self.trav_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
+
+        self.tf = tf2_ros.Buffer(cache_time=rospy.Duration(100))
+        self.tl = tf2_ros.TransformListener(self.tf)
+
+        self.local_map_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.accumulate_clouds_cb)
+        rospy.loginfo('Traversability fusion node is ready.')
+
+    def accumulate_clouds_cb(self, pc_msg):
+        assert isinstance(pc_msg, PointCloud2)
+
+        # Discard old messages.
+        msg_stamp = rospy.Time.now()
+        age = (msg_stamp - pc_msg.header.stamp).to_sec()
+        if age > self.max_age:
+            rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
+            return
+
+        try:
+            transform = self.tf.lookup_transform(self.map_frame, pc_msg.header.frame_id,
+                                                 pc_msg.header.stamp, rospy.Duration(1))
+        except (tf2_ros.LookupException, tf2_ros.ExtrapolationException):
+            rospy.logwarn('Map accumulator: No transform between %s and %s', pc_msg.header.frame_id, self.map_frame)
+            return
+
+        t0 = timer()
+        # Transform local map to ground truth localization frame
+        local_map = numpify(pc_msg)
+        local_map = structured_to_unstructured(local_map[['x', 'y', 'z', 'traversability']])
+        rospy.logdebug('Point cloud of shape %s is received', local_map.shape)
+        local_map = local_map[::self.map_step]
+        assert len(local_map.shape) == 2
+        assert local_map.shape[1] == 4
+
+        # transform points to map frame
+        pose = numpify(transform.transform)
+        local_map[..., :3] = np.matmul(local_map[..., :3], pose[:3, :3].T) + pose[:3, 3:].T
+        assert len(local_map.shape) == 2
+        assert local_map.shape[1] == 4
+        n_pts = local_map.shape[0]
+
+        if self.global_map is None:
+            self.global_map = local_map
+            self.local_map = local_map
+        assert len(self.global_map.shape) == 2
+        assert self.global_map.shape[1] == 4  # (N, 4)
+        rospy.logdebug('Global map shape %s', self.global_map.shape)
+
+        tree = scipy.spatial.cKDTree(self.global_map[..., :3])
+        dists, idxs = tree.query(local_map[..., :3], k=1)
+        common_pts_mask = dists <= self.dist_th
+
+        assert len(dists) == local_map.shape[0]
+        assert len(idxs) == local_map.shape[0]
+        self.new_map = local_map[~common_pts_mask, :]
+        self.local_map = local_map
+
+        rospy.logdebug('Adding %i new points', self.new_map.shape[0])
+        assert len(self.new_map.shape) == 2
+        assert self.new_map.shape[1] == 4  # (n, 4)
+
+        # and accumulate new points to global map
+        self.global_map = np.concatenate([self.global_map, self.new_map], axis=0)
+        assert len(self.global_map.shape) == 2
+        assert self.global_map.shape[1] == 4  # (N, 4)
+
+        # fuse traversability values
+        trav_prev = self.global_map[idxs, 3:4]
+        trav = self.local_map[..., 3:4]
+        trav = np.concatenate([trav_prev, trav], axis=1)
+        assert trav.shape[1] == 2
+        assert trav.shape[0] == n_pts  # (n x 2)
+        self.global_map[idxs, 3] = fuse_traversability(trav)
+
+        rospy.loginfo('Point cloud accumulation took: %.3f s', timer() - t0)
+
+    def spin(self):
+        rate = rospy.Rate(self.rate)
+        while not rospy.is_shutdown():
+            if self.global_map is None:
+                continue
+            # publish reward clouds
+            stamp = rospy.Time.now()
+            global_map_msg = msgify_cloud(self.global_map, frame=self.map_frame, stamp=stamp)
+            self.trav_cloud_pub.publish(global_map_msg)
+            rate.sleep()
+
+
+if __name__ == '__main__':
+    rospy.init_node('traversability_mapping', log_level=rospy.DEBUG)
+    proc = TraversabilityMapping(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
+    proc.spin()
