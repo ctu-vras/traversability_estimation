@@ -5,7 +5,6 @@ import yaml
 from PIL import Image, ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import matplotlib.pyplot as plt
-from timeit import default_timer as timer
 import torch
 
 

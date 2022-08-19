@@ -1,14 +1,17 @@
+from __future__ import absolute_import
 import os
-
-import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import pyplot as plt
+import cv2
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
-from .utils import *
+from traversability_estimation.utils import *
 from .base_dataset import BaseDatasetImages
 from copy import copy
 import torch
 from PIL import Image
+import yaml
+
 
 __all__ = [
     'data_dir',
@@ -687,7 +690,6 @@ def semantic_laser_scan_demo(n_runs=1):
 
 
 def semseg_test(n_runs=1):
-    from datasets.utils import visualize, convert_color, convert_label
     import yaml
 
     CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))

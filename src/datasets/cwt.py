@@ -1,7 +1,8 @@
 import os
 from os.path import dirname, join, realpath
-from .utils import *
+from utils import *
 from .base_dataset import BaseDatasetImages
+import numpy as np
 
 __all__ = [
     'data_dir',

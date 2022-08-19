@@ -5,7 +5,7 @@ import torch
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import datasets
-from datasets.utils import convert_label
+from traversability_estimation.utils import *
 import yaml
 import os
 

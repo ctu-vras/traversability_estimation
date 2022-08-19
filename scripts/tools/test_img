@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import cv2
 import numpy as np
 import torch
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import datasets
-from datasets.utils import convert_label, convert_color
+from traversability_estimation.utils import convert_label, convert_color
 import yaml
 import os
 
