@@ -3,7 +3,7 @@
 import os
 import cv2
 from datasets.rellis_3d import SemLaserScan
-from utils import convert_label
+from traversability_estimation.utils import convert_label
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify

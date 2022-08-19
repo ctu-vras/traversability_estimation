@@ -17,7 +17,7 @@ import segmentation_models_pytorch as smp
 from PIL import Image
 from hrnet import models
 from hrnet.config import config
-from datasets.traversability_dataset import TraversabilityDataset
+from datasets.traversability_dataset import TraversabilityImages
 from datasets.utils import visualize
 from torch.utils.data import DataLoader
 from datasets.rellis_3d import Rellis3DImages
@@ -66,8 +66,8 @@ class ModelEvaluator(object):
         if dataset == 'rellis3d':
             self.dataset = Rellis3DImages(crop_size=image_size[::-1], split='test')
         elif dataset == 'my-dataset':
-            self.dataset = TraversabilityDataset(MY_DATASET, MY_DATASET_DIR, image_size[::-1],
-                                                 {"train": 0.7, "test": 0.2, "val": 0.1})
+            self.dataset = TraversabilityImages(MY_DATASET, MY_DATASET_DIR, image_size[::-1],
+                                                {"train": 0.7, "test": 0.2, "val": 0.1})
         self.split = 'test'
         self.image_size = image_size
         self.cfg = yaml.safe_load(open(TRAVERSABILITY_CONFIG, 'r'))

@@ -8,7 +8,7 @@ import rospy
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from utils import convert_label, convert_color
+from traversability_estimation.utils import convert_label, convert_color
 from hrnet.utils.utils import draw_legend
 from time import time
 from threading import RLock
