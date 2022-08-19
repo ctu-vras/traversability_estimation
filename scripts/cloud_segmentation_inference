@@ -3,7 +3,7 @@
 import os
 import cv2
 from datasets.rellis_3d import SemLaserScan
-from datasets.utils import convert_color
+from datasets.utils import convert_label
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
@@ -87,6 +87,15 @@ class CloudProcessor:
         self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
         rospy.loginfo('Point cloud processing node is ready.')
 
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        label = convert_label(label, inverse=True)
+        color = self.scan.sem_color_lut[label]
+        return color
+
     def load_model(self):
         model = torch.load(self.model_path, map_location=self.device)
         model = model.eval()
@@ -130,6 +139,11 @@ class CloudProcessor:
                  'z': self.scan.proj_xyz.transpose([2, 0, 1])[2],  # (H x W)
                  'intensity': self.scan.proj_remission,            # (H x W)
                  'depth': self.scan.proj_range}                    # (H x W)
+
+        # normalize intensity to be in the same format as in Rellis 3D
+        if xyzid['intensity'].max() > 1.0:
+            xyzid['intensity'] /= 2**16
+
         input = np.concatenate([xyzid[f][None] for f in self.data_fields], axis=0)
         rospy.logdebug('Model input shape: %s', input.shape)
         assert input.shape == (len(self.data_fields), self.lidar_channels, self.lidar_beams)
@@ -153,17 +167,17 @@ class CloudProcessor:
         if isinstance(xyzid, dict):
             xyzid = np.concatenate([xyzid[f][None] for f in xyzid.keys()], axis=0)
 
-        colors = convert_color(labels, color_map=self.color_map)
-        # colors_vis = cv2.resize(colors.astype('float'),
-        #                         (colors.shape[1] // 2, colors.shape[0] // 2),
-        #                         interpolation=cv2.INTER_LINEAR) / 255.
-        # cv2.imshow('Predicted labels', colors_vis)
-        # cv2.waitKey(1)
+        colors = self.label_to_color(labels)
+        colors_vis = cv2.resize(colors.astype('float'),
+                                (colors.shape[1] // 2, colors.shape[0] // 2),
+                                interpolation=cv2.INTER_LINEAR) / colors.max()
+        cv2.imshow('Predicted labels', colors_vis)
+        cv2.waitKey(1)
 
         assert xyzid.shape[0] >= 3
         assert len(xyzid.shape) == 3  # 5 x H x W
         xyz = xyzid[:3, ...]
-        rgb = colors.transpose((2, 0, 1)) / 255.  # 3 x H x W
+        rgb = colors.transpose((2, 0, 1)) / colors.max()  # 3 x H x W
         assert xyz.shape == rgb.shape
         xyzrgb = np.concatenate([xyz, rgb], axis=0)
         C, H, W = xyzrgb.shape
