@@ -7,7 +7,6 @@ import fiftyone.utils.splits as fous
 # from .laserscan import LaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
-
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
 
 
@@ -26,6 +25,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.mean = np.array([0.0, 0.0, 0.0])
         self.std = np.array([1.0, 1.0, 1.0])
         self.class_values = self.mask_targets.keys()
+        self.split = split
 
     def __getitem__(self, idx):
         img_path = self.img_paths[idx]
@@ -36,7 +36,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         image = cv2.resize(image, self.crop_size, interpolation=cv2.INTER_LINEAR)
         image = self._input_transform(image)
 
-        if self.split is not 'test':
+        if self.split != 'test':
             image = image.transpose((2, 0, 1))
 
         # mask preprocessing
