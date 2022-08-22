@@ -76,6 +76,30 @@ if args.dataset == 'TraversabilityImages':
     n_classes = 3
 else:
     n_classes = len(train_dataset.class_values)
+# -----------------Train--------------------------------------------------------------------------
+# criterion = torch.nn.CrossEntropyLoss()  # Set loss function
+# min_loss = np.Inf
+# for e in range(args.n_epochs):
+#     for itr, sample in enumerate(train_loader):
+#         images, labels = sample
+#         print(images.shape)
+#         if torch.cuda.is_available():
+#             images, labels = images.cuda(), labels.cuda()
+#
+#         pred = model(images)['out']  # make prediction
+#         model.zero_grad()
+#
+#         loss = criterion(pred, labels)  # Calculate cross entropy loss
+#         loss.backward()  # Backpropagate loss
+#         optimizer.step()  # Apply gradient descent change to weight
+#
+#         print(itr, ") Loss=", loss.data.cpu().numpy())
+#         if min_loss > loss.data.cpu().numpy():  # Save model weight once every 60k steps permanent file
+#             min_loss = loss.data.cpu().numpy()
+#             name = "%s_%s.pth" % (args.model, args.encoder)
+#             print("Saving Model:", name)
+#             torch.save(model, os.path.join(os.path.dirname(__file__), name))
+
 n_inputs = train_dataset[0][0].shape[0]
 
 model = create_model(args.architecture, n_inputs, n_classes, pretrained=False)
@@ -135,27 +159,3 @@ for e in tqdm(range(args.n_epochs)):
     if e == 60:
         optimizer.param_groups[0]['lr'] /= 10.0
         print('Decrease decoder learning rate to %f !' % optimizer.param_groups[0]['lr'])
-
-# -----------------Train--------------------------------------------------------------------------
-# criterion = torch.nn.CrossEntropyLoss()  # Set loss function
-# min_loss = np.Inf
-# for e in range(args.n_epochs):
-#     for itr, sample in enumerate(train_loader):
-#         images, labels = sample
-#         print(images.shape)
-#         if torch.cuda.is_available():
-#             images, labels = images.cuda(), labels.cuda()
-#
-#         pred = model(images)['out']  # make prediction
-#         model.zero_grad()
-#
-#         loss = criterion(pred, labels)  # Calculate cross entropy loss
-#         loss.backward()  # Backpropagate loss
-#         optimizer.step()  # Apply gradient descent change to weight
-#
-#         print(itr, ") Loss=", loss.data.cpu().numpy())
-#         if min_loss > loss.data.cpu().numpy():  # Save model weight once every 60k steps permanent file
-#             min_loss = loss.data.cpu().numpy()
-#             name = "%s_%s.pth" % (args.model, args.encoder)
-#             print("Saving Model:", name)
-#             torch.save(model, os.path.join(os.path.dirname(__file__), name))

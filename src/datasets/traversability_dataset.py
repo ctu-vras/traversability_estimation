@@ -7,6 +7,7 @@ import fiftyone.utils.splits as fous
 # from .laserscan import LaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
+
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
 
 
@@ -21,7 +22,9 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.img_paths = self.samples.values("filepath")
         self.mask_targets = {255: "background",
                              1: "traversable",
-                             0: "non-traversable"}
+                             2: "non-traversable"}
+        self.mean = np.array([0.0, 0.0, 0.0])
+        self.std = np.array([1.0, 1.0, 1.0])
         self.class_values = self.mask_targets.keys()
 
     def __getitem__(self, idx):
@@ -32,7 +35,9 @@ class TraversabilityImages(torch.utils.data.Dataset):
         image = cv2.imread(img_path, cv2.IMREAD_COLOR)
         image = cv2.resize(image, self.crop_size, interpolation=cv2.INTER_LINEAR)
         image = self._input_transform(image)
-        image = image.transpose((2, 0, 1))
+
+        if self.split is not 'test':
+            image = image.transpose((2, 0, 1))
 
         # mask preprocessing
         mask = sample.polylines.to_segmentation(frame_size=(1920, 1200),
@@ -85,7 +90,7 @@ class TraversabilityClouds:
                  fov_down=-45.0,
                  ):
         if path is None:
-            path = os.path.join(data_dir, 'bags/traversability/marv/ugv_2022-08-12-15-18-34/')
+            path = os.path.join(data_dir, 'bags/traversability/marv/ugv_2022-08-12-16-37-03/')
         assert os.path.exists(path)
         self.path = path
         self.W = W
@@ -116,7 +121,7 @@ def images_demo():
 
     dataset = TraversabilityImages(crop_size=(1200, 1920), path=directory)
     length = len(dataset)
-    dataset.show_dataset()
+    # dataset.show_dataset()
     splits = torch.utils.data.random_split(dataset,
                                            [int(0.7 * length), int(0.2 * length), int(0.1 * length)],
                                            generator=torch.Generator().manual_seed(42))
@@ -128,7 +133,8 @@ def images_demo():
 def clouds_demo():
     from matplotlib import pyplot as plt
 
-    ds = TraversabilityClouds()
+    path = os.path.join(data_dir, 'bags/traversability/marv/ugv_2022-08-12-16-37-03/')
+    ds = TraversabilityClouds(path=path)
 
     cloud = ds[np.random.choice(len(ds))]
     xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
@@ -148,5 +154,5 @@ def clouds_demo():
 
 
 if __name__ == "__main__":
-    images_demo()
-    # clouds_demo()
+    # images_demo()
+    clouds_demo()
