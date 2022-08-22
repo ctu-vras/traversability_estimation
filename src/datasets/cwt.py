@@ -1,6 +1,6 @@
 import os
 from os.path import dirname, join, realpath
-from utils import *
+from traversability_estimation.utils import *
 from .base_dataset import BaseDatasetImages
 import numpy as np
 
@@ -96,8 +96,6 @@ class CWT(BaseDatasetImages):
 
 
 def demo():
-    from datasets.utils import visualize, convert_color
-
     # split = np.random.choice(['test', 'train', 'val'])
     split = 'train'
     ds = CWT(split=split)
