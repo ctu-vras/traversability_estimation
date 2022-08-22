@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import torch
 import fiftyone as fo
-from datasets.laserscan import LaserScan, SemLaserScan
+from datasets.laserscan import SemLaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
 
@@ -23,13 +23,14 @@ class TraversabilityImages(torch.utils.data.Dataset):
             self.path = os.path.join(data_dir, 'TraversabilityDataset')
         else:
             self.path = path
-        self.split = split
         self.samples = self._load_dataset(self.path)
         self.img_paths = self.samples.values("filepath")
         self.mask_targets = LABELS
         self.class_values = list(self.mask_targets.keys())
+
         self.mean = np.array([0.0, 0.0, 0.0])
         self.std = np.array([1.0, 1.0, 1.0])
+        self.split = split
 
     def __getitem__(self, idx):
         img_path = self.img_paths[idx]
