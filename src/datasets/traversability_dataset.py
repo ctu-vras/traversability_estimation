@@ -1,92 +1,78 @@
 import os
 import cv2
 import numpy as np
+import torch
 import fiftyone as fo
 import fiftyone.utils.splits as fous
-from .laserscan import LaserScan
+# from .laserscan import LaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
 
 
-class TraversabilityImages(object):
-    def __init__(self, dataset_name: str, dataset_dir: str, crop_size: tuple, split_dict: dict):
-        self.dataset_name = dataset_name
-        self.crop_size = crop_size
-        self.dataset = None
-        self.ids = {"train": [], "val": [], "test": []}
-        self.mean = None
-        self.std = None
+class TraversabilityImages(torch.utils.data.Dataset):
+    def __init__(self, crop_size: tuple = (1200, 1920), path=None, split=None):
+        self.crop_size = (crop_size[1], crop_size[0])
+        if not path:
+            self.path = os.path.join(data_dir, 'TraversabilityDataset')
+        else:
+            self.path = path
+        self.samples = self._load_dataset(self.path)
+        self.img_paths = self.samples.values("filepath")
+        self.mask_targets = {0: "background",
+                             1: "traversable",
+                             2: "non-traversable"}
+        self.class_values = [0, 1, 2]
 
-        # initialize dataset
-        self._load_data(dataset_name, dataset_dir, split_dict)
-        self._init_dataset()
+    def __getitem__(self, idx):
+        img_path = self.img_paths[idx]
+        sample = self.samples[img_path]
 
-    def _load_data(self, name: str, dataset_dir: str, split_dict: dict) -> None:
-        print(f"INFO: Loading data {name} from {dataset_dir}")
-        # if dataset exists, delete it and create a new one
-        if fo.dataset_exists(name):
-            self.dataset = fo.load_dataset(name)
-            self.dataset.delete()
-        self.dataset = fo.Dataset.from_dir(dataset_dir=dataset_dir, dataset_type=fo.types.CVATImageDataset, name=name)
-        fous.random_split(self.dataset, split_dict)
-        self.dataset.save()
+        # image preprocessing
+        image = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        image = cv2.resize(image, self.crop_size, interpolation=cv2.INTER_LINEAR)
+        image = self._input_transform(image)
+        image = image.transpose((2, 0, 1))
 
-    def _init_dataset(self) -> None:
-        print("INFO: Initializing dataset")
-        channels_sum, channels_squared_sum, num_batches = 0, 0, 0
-        for idx, sample in enumerate(self.dataset):
-            # print percentage of progress
-            print(f"\rINFO: Initialization progress - {idx / len(self.dataset) * 100:.2f}%", end="")
-            # append id to list of ids and convert polyline to segmentation mask
-            for tag in sample.tags:
-                if tag in ["train", "val", "test"]:
-                    self.ids[tag].append(sample.id)
-            mask = sample.polylines.to_segmentation(frame_size=(1920, 1200),
-                                                    mask_targets={1: "traversable", 2: "untraversable"})
-            sample["ground_truth"] = mask
-            sample.save()
+        # mask preprocessing
+        mask = sample.polylines.to_segmentation(frame_size=(1920, 1200),
+                                                mask_targets=self.mask_targets)["mask"]
+        mask = cv2.resize(mask, self.crop_size, interpolation=cv2.INTER_NEAREST)
+        mask = mask.astype(np.long)
 
-            # calculate mean and std for normalization
-            image = cv2.imread(sample.filepath, cv2.IMREAD_COLOR)
-            channels_sum += np.mean(image, axis=(0, 1))
-            image_squared = image.astype(np.float32) ** 2
-            channels_squared_sum += np.mean(image_squared, axis=(0, 1))
-            num_batches += 1
+        # extract certain classes from mask
+        masks = [(mask == v) for v in self.class_values]
+        mask = np.stack(masks, axis=0).astype('float')
 
-        self.mean = (channels_sum / num_batches) / 255.0
-        self.std = np.sqrt(np.abs((channels_squared_sum / num_batches) / 255.0 - self.mean ** 2))
-        print("\nINFO: Dataset initialized")
-
-    def save_prediction(self, prediction, idx):
-        sample = self.dataset[self.ids[idx]]
-        sample["prediction"] = fo.Segmentation(mask=prediction)
-        sample.save()
-
-    def show_dataset(self):
-        session = fo.launch_app(self.dataset)
-        session.wait()
-
-    def get_item(self, idx, split: str):
-        assert split in ["train", "val", "test"]
-        image = cv2.imread(self.dataset[self.ids[split][idx]].filepath, cv2.IMREAD_COLOR)
-        new_h, new_w = self.crop_size
-        image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-        image = self.input_transform(image)
-        mask = self.dataset[self.ids[split][idx]]["ground_truth"]["mask"]
         return image, mask
 
-    def input_transform(self, image):
-        image = image.astype(np.float32)  # [:, :, ::-1]
+    def __len__(self):
+        return len(self.img_paths)
+
+    def _input_transform(self, image):
+        image = image.astype(np.float32)[:, :, ::-1]
         image = image / 255.0
-        image -= self.mean / 255.0
-        image /= self.std / 255.0
+        # image -= self.mean / 255.0
+        # image /= self.std / 255.0
         return image
 
-    def get_length(self, split: str):
-        assert split in ["train", "val", "test"]
-        return len(self.ids[split])
+    @staticmethod
+    def _load_dataset(dataset_path: str):
+        name = "traversability-dataset"
+        if fo.dataset_exists(name):
+            dataset = fo.load_dataset(name)
+            dataset.delete()
+        dataset = fo.Dataset.from_dir(dataset_dir=dataset_path,
+                                      dataset_type=fo.types.CVATImageDataset,
+                                      name=name,
+                                      data_path="images",
+                                      labels_path="annotations.xml")
+        return dataset
+
+    def show_dataset(self):
+        session = fo.launch_app(self.samples)
+        session.wait()
 
 
 class TraversabilityClouds:
@@ -126,17 +112,18 @@ class TraversabilityClouds:
 
 
 def images_demo():
-    name = "traversability_dataset"
+    name = "TraversabilityDataset"
     directory = os.path.join(data_dir, name)
-    dataset = TraversabilityImages(name, directory, (320, 192), {"train": 0.7, "test": 0.2, "val": 0.1})
 
-    # train_split = dataset.dataset.match_tags(["train"])
-    # Print the first few samples in the dataset
-    for i in range(dataset.get_length("train")):
-        print(dataset.get_item(i, "train"))
-        pass
-
+    dataset = TraversabilityImages(crop_size=(1200, 1920), path=directory)
+    length = len(dataset)
     dataset.show_dataset()
+    splits = torch.utils.data.random_split(dataset,
+                                           [int(0.7 * length), int(0.2 * length), int(0.1 * length)],
+                                           generator=torch.Generator().manual_seed(42))
+    # show first images from each split
+    for split in splits:
+        print(len(split))
 
 
 def clouds_demo():
@@ -162,5 +149,5 @@ def clouds_demo():
 
 
 if __name__ == "__main__":
-    # images_demo()
-    clouds_demo()
+    images_demo()
+    # clouds_demo()

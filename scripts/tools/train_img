@@ -1,93 +1,161 @@
 #!/usr/bin/env python
 
 import os
-import datasets
-from torch.utils.data import DataLoader
+import numpy as np
+import torchvision.models.segmentation
 import torch
-import segmentation_models_pytorch as smp
+from torch.utils.data import DataLoader
 from argparse import ArgumentParser
+import datasets
+from tqdm import tqdm
+import segmentation_models_pytorch as smp
 
 
-def main():
-    parser = ArgumentParser()
-    parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--dataset', type=str, default='Rellis3DImages')
-    parser.add_argument('--model', type=str, default='Unet')
-    parser.add_argument('--encoder', type=str, default='resnet34')
-    parser.add_argument('--encoder_weights', type=str, default='imagenet')
-    parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--img_size', nargs='+', type=int, default=(1184, 1920))
-    parser.add_argument('--n_epochs', type=int, default=100)
-    parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--n_workers', type=int, default=os.cpu_count())
-    parser.add_argument('--num_samples', type=int, default=None)
-    args = parser.parse_args()
+def create_model(architecture, n_inputs, n_outputs, pretrained=True):
+    assert architecture in ['fcn_resnet50', 'fcn_resnet101', 'deeplabv3_resnet50', 'deeplabv3_resnet101',
+                            'deeplabv3_mobilenet_v3_large', 'lraspp_mobilenet_v3_large']
 
+    print('Creating model %s with %i inputs and %i outputs' % (architecture, n_inputs, n_outputs))
+    Architecture = eval('torchvision.models.segmentation.%s' % architecture)
+    model = Architecture(pretrained=pretrained)
+
+    arch = architecture.split('_')[0]
+    encoder = '_'.join(architecture.split('_')[1:])
+
+    # Change input layer to accept n_inputs
+    if encoder == 'mobilenet_v3_large':
+        model.backbone['0'][0] = torch.nn.Conv2d(n_inputs, 16,
+                                                 kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    else:
+        model.backbone['conv1'] = torch.nn.Conv2d(n_inputs, 64,
+                                                  kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+
+    # Change final layer to output n classes
+    if arch == 'lraspp':
+        model.classifier.low_classifier = torch.nn.Conv2d(40, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+        model.classifier.high_classifier = torch.nn.Conv2d(128, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+    elif arch == 'fcn':
+        model.classifier[-1] = torch.nn.Conv2d(512, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+    elif arch == 'deeplabv3':
+        model.classifier[-1] = torch.nn.Conv2d(256, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+
+    return model
+
+
+parser = ArgumentParser()
+parser.add_argument('--lr', type=float, default=1e-5)
+parser.add_argument('--dataset', type=str, default='TraversabilityImages')
+# parser.add_argument('--dataset', type=str, default='Rellis3DImages')
+parser.add_argument('--architecture', type=str, default='fcn_resnet50')
+parser.add_argument('--batch_size', type=int, default=6)
+parser.add_argument('--img_size', nargs='+', default=(320, 512))
+parser.add_argument('--n_epochs', type=int, default=10)
+parser.add_argument('--n_workers', type=int, default=2)
+args = parser.parse_args()
+args.img_size = tuple(args.img_size)
+
+if args.dataset == 'TraversabilityImages':
     Dataset = eval('datasets.%s' % args.dataset)
-    train_dataset = Dataset(crop_size=args.img_size, split='train', num_samples=args.num_samples)
-    valid_dataset = Dataset(crop_size=(1184, 1920), split='val', num_samples=args.num_samples)
+    dataset = Dataset(crop_size=args.img_size)
+    length = len(dataset)
+    train_dataset, valid_dataset = torch.utils.data.random_split(dataset,
+                                                                 [int(0.8 * length), int(0.2 * length)],
+                                                                 generator=torch.Generator().manual_seed(42))
+else:
+    Dataset = eval('datasets.%s' % args.dataset)
+    train_dataset = Dataset(crop_size=args.img_size, split='train')
+    valid_dataset = Dataset(crop_size=args.img_size, split='val')
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
-    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 3)
 
-    # create segmentation model with pretrained encoder
-    architecture = eval('smp.%s' % args.model)
-    model = architecture(
-        encoder_name=args.encoder,
-        encoder_weights=args.encoder_weights,
-        in_channels=3,
-        classes=len(train_dataset.CLASSES),
-        activation='sigmoid' if len(train_dataset.CLASSES) == 1 else 'softmax2d',
-    )
+# --------------Load and set model and optimizer-------------------------------------
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+if args.dataset == 'TraversabilityImages':
+    n_classes = 3
+else:
+    n_classes = len(train_dataset.class_values)
+n_inputs = train_dataset[0][0].shape[0]
+
+model = create_model(args.architecture, n_inputs, n_classes, pretrained=False)
+model = model.to(device)
+
+optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create adam optimizer
+
+# ----------------Train--------------------------------------------------------------------------
+# Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+# IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
+criterion_fn = smp.losses.DiceLoss(mode='multilabel', from_logits=True, ignore_index=0)
+metric_fn = smp.utils.metrics.IoU(threshold=0.5, activation='softmax2d')
+
+max_metric = -np.Inf
+for e in tqdm(range(args.n_epochs)):
+    # train epoch
     model = model.train()
+    for itr, sample in tqdm(enumerate(train_loader)):
+        images, labels = sample
+        images, labels = images.to(device), labels.to(device)
 
-    # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-    loss_fn = smp.utils.losses.DiceLoss(activation='softmax2d')
+        pred = model(images)['out']  # make prediction
 
-    # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    metrics = [smp.utils.metrics.IoU(threshold=0.5)]
+        optimizer.zero_grad()
+        loss = criterion_fn(pred, labels.long())  # Calculate loss
+        loss.backward()  # Backpropagate loss
+        optimizer.step()  # Apply gradient descent change to weight
 
-    optimizer = torch.optim.Adam([dict(params=model.parameters(), lr=args.lr)])
+    # validation epoch
+    metrics = []
+    model = model.eval()
+    for itr, sample in tqdm(enumerate(valid_loader)):
+        images, labels = sample
+        images, labels = images.to(device), labels.to(device)
 
-    # create epoch runners
-    # it is a simple loop of iterating over dataloader`s samples
-    train_epoch = smp.utils.train.TrainEpoch(
-        model,
-        loss=loss_fn,
-        metrics=metrics,
-        optimizer=optimizer,
-        device=args.device,
-        verbose=True,
-    )
+        with torch.no_grad():
+            pred = model(images)['out']  # make prediction
 
-    valid_epoch = smp.utils.train.ValidEpoch(
-        model,
-        loss=loss_fn,
-        metrics=metrics,
-        device=args.device,
-        verbose=True,
-    )
+            metric1 = metric_fn(pred, labels)
+        metrics.append(metric1.cpu().numpy())
 
-    # train model
-    max_score = 0
-    for i in range(0, args.n_epochs):
-        print('\nEpoch: {}'.format(i))
-        train_logs = train_epoch.run(train_loader)
-        valid_logs = valid_epoch.run(valid_loader)
+    metric = np.mean(metrics)
 
-        # do something (save model, change lr, etc.)
-        if max_score < valid_logs['iou_score']:
-            max_score = valid_logs['iou_score']
-            best_model_name = './%s_%s_%dx%d_lr%g_bs%d_epoch%d_%s_iou_%.2f.pth' %\
-                              (args.model, args.encoder, args.img_size[0], args.img_size[1],
-                               args.lr, args.batch_size, i, args.dataset, max_score)
-            torch.save(model, best_model_name)
-            print('Model %s saved!' % best_model_name)
+    # save better model
+    if max_metric < metric:  # Save model weight
+        max_metric = metric
+        name = '%s_lr_%g_bs_%d_epoch_%d_%s_iou_%.2f.pth' % \
+               (args.architecture,
+                args.lr, args.batch_size, e, args.dataset, float(max_metric))
+        print("Saving Model:", name)
+        torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
-        if i == 25:
-            optimizer.param_groups[0]['lr'] = args.lr / 10.0
-            print('Decrease decoder learning rate!')
+    print("Epoch: %i" % e)
+    print('Train loss: %f' % loss.data.cpu().numpy())
+    print('Validation metric: %.3f' % metric)
 
+    if e == 60:
+        optimizer.param_groups[0]['lr'] /= 10.0
+        print('Decrease decoder learning rate to %f !' % optimizer.param_groups[0]['lr'])
 
-if __name__ == '__main__':
-    main()
+# -----------------Train--------------------------------------------------------------------------
+# criterion = torch.nn.CrossEntropyLoss()  # Set loss function
+# min_loss = np.Inf
+# for e in range(args.n_epochs):
+#     for itr, sample in enumerate(train_loader):
+#         images, labels = sample
+#         print(images.shape)
+#         if torch.cuda.is_available():
+#             images, labels = images.cuda(), labels.cuda()
+#
+#         pred = model(images)['out']  # make prediction
+#         model.zero_grad()
+#
+#         loss = criterion(pred, labels)  # Calculate cross entropy loss
+#         loss.backward()  # Backpropagate loss
+#         optimizer.step()  # Apply gradient descent change to weight
+#
+#         print(itr, ") Loss=", loss.data.cpu().numpy())
+#         if min_loss > loss.data.cpu().numpy():  # Save model weight once every 60k steps permanent file
+#             min_loss = loss.data.cpu().numpy()
+#             name = "%s_%s.pth" % (args.model, args.encoder)
+#             print("Saving Model:", name)
+#             torch.save(model, os.path.join(os.path.dirname(__file__), name))
