@@ -3,11 +3,17 @@ import cv2
 import numpy as np
 import torch
 import fiftyone as fo
-from datasets.laserscan import LaserScan
+from datasets.laserscan import LaserScan, SemLaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
+LABELS = {255: "background",
+          1: "traversable",
+          0: "non-traversable"}
+COLOR_MAP = {255: [0, 0, 0],
+             1: [0, 255, 0],
+             0: [255, 0, 0]}
 
 
 class TraversabilityImages(torch.utils.data.Dataset):
@@ -20,10 +26,8 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.split = split
         self.samples = self._load_dataset(self.path)
         self.img_paths = self.samples.values("filepath")
-        self.mask_targets = {0: "background",
-                             1: "traversable",
-                             2: "non-traversable"}
-        self.class_values = [0, 1, 2]
+        self.mask_targets = LABELS
+        self.class_values = list(self.mask_targets.keys())
         self.mean = np.array([0.0, 0.0, 0.0])
         self.std = np.array([1.0, 1.0, 1.0])
 
@@ -36,12 +40,11 @@ class TraversabilityImages(torch.utils.data.Dataset):
         image = cv2.resize(image, self.crop_size, interpolation=cv2.INTER_LINEAR)
         image = self._input_transform(image)
 
-        if self.split is not 'test':
+        if self.split != 'test':
             image = image.transpose((2, 0, 1))
 
         # mask preprocessing
-        mask = sample.polylines.to_segmentation(frame_size=(1920, 1200),
-                                                mask_targets=self.mask_targets)["mask"]
+        mask = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)["mask"]
         mask = cv2.resize(mask, self.crop_size, interpolation=cv2.INTER_NEAREST)
         mask = mask.astype(np.long)
 
