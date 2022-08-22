@@ -7,7 +7,6 @@ import fiftyone.utils.splits as fous
 # from .laserscan import LaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
-
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
 
 
@@ -20,10 +19,10 @@ class TraversabilityImages(torch.utils.data.Dataset):
             self.path = path
         self.samples = self._load_dataset(self.path)
         self.img_paths = self.samples.values("filepath")
-        self.mask_targets = {0: "background",
+        self.mask_targets = {255: "background",
                              1: "traversable",
-                             2: "non-traversable"}
-        self.class_values = [0, 1, 2]
+                             0: "non-traversable"}
+        self.class_values = self.mask_targets.keys()
 
     def __getitem__(self, idx):
         img_path = self.img_paths[idx]
