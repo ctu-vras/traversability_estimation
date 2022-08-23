@@ -194,28 +194,28 @@ class SemLaserScan(LaserScan):
         # force zero to a gray-ish color
         self.inst_color_lut[0] = np.full((3), 0.1)
 
-    def reset(self):
+    def reset(self, fill_value=0):
         """ Reset scan members. """
         super(SemLaserScan, self).reset()
 
         # semantic labels
-        self.sem_label = np.zeros((0, 1), dtype=np.uint32)  # [m, 1]: label
-        self.sem_label_color = np.zeros((0, 3), dtype=np.float32)  # [m ,3]: color
+        self.sem_label = np.full((0, 1), fill_value, dtype=np.uint32)  # [m, 1]: label
+        self.sem_label_color = np.full((0, 3), fill_value, dtype=np.float32)  # [m ,3]: color
 
         # instance labels
-        self.inst_label = np.zeros((0, 1), dtype=np.uint32)  # [m, 1]: label
-        self.inst_label_color = np.zeros((0, 3), dtype=np.float32)  # [m ,3]: color
+        self.inst_label = np.full((0, 1), fill_value, dtype=np.uint32)  # [m, 1]: label
+        self.inst_label_color = np.full((0, 3), fill_value, dtype=np.float32)  # [m ,3]: color
 
         # projection color with semantic labels
-        self.proj_sem_label = np.zeros((self.proj_H, self.proj_W),
+        self.proj_sem_label = np.full((self.proj_H, self.proj_W), fill_value,
                                        dtype=np.int32)  # [H,W]  label
-        self.proj_sem_color = np.zeros((self.proj_H, self.proj_W, 3),
+        self.proj_sem_color = np.full((self.proj_H, self.proj_W, 3), fill_value,
                                        dtype=float)  # [H,W,3] color
 
         # projection color with instance labels
-        self.proj_inst_label = np.zeros((self.proj_H, self.proj_W),
-                                        dtype=np.int32)  # [H,W]  label
-        self.proj_inst_color = np.zeros((self.proj_H, self.proj_W, 3),
+        self.proj_inst_label = np.full((self.proj_H, self.proj_W), fill_value,
+                                      dtype=np.int32)  # [H,W]  label
+        self.proj_inst_color = np.full((self.proj_H, self.proj_W, 3), fill_value,
                                         dtype=float)  # [H,W,3] color
 
     def open_label(self, filename):

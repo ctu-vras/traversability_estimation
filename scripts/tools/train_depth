@@ -46,8 +46,9 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=6)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
@@ -58,14 +59,17 @@ def main():
 
     Dataset = eval('datasets.%s' % args.dataset)
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
-    train_dataset = Dataset(split='train', lidar_beams_step=2, fields=args.data_fields, num_samples=args.num_samples)
-    valid_dataset = Dataset(split='val', lidar_beams_step=2, fields=args.data_fields, num_samples=args.num_samples)
+    train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
+                            fields=args.data_fields, num_samples=args.num_samples)
+    valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
+                            fields=args.data_fields, num_samples=args.num_samples)
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
 
     # --------------Load and set model and optimizer-------------------------------------
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    # device = torch.device('cpu')
     # Change input layer to n inputs
     n_inputs = train_dataset[0][0].shape[0]
     n_classes = len(train_dataset.CLASSES)
@@ -79,8 +83,10 @@ def main():
 
     # ----------------Train--------------------------------------------------------------------------
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
+    loss_mode = 'multilabel' if train_dataset[0][1].ndim == 3 else 'multiclass'  # (n_cl, H, W) or (H, W)
+    criterion_fn = smp.losses.DiceLoss(mode=loss_mode, log_loss=True,
+                                       from_logits=True, ignore_index=0)
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    criterion_fn = smp.losses.DiceLoss(mode='multilabel', from_logits=True, ignore_index=0)
     metric_fn = smp.utils.metrics.IoU(threshold=0.5, activation='softmax2d')
 
     max_metric = -np.Inf
@@ -120,13 +126,13 @@ def main():
             max_metric = metric
             name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_iou_%.2f.pth' % \
                    (args.architecture,
-                    args.lr, args.batch_size, e, args.dataset, '_'.join(args.data_fields), float(max_metric))
+                    args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields), float(max_metric))
             print("Saving Model:", name)
             torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
         print("Epoch: %i" % e)
         print('Train loss: %f' % loss.data.cpu().numpy())
-        print('Validation metric: %.3f' % metric)
+        print('Validation metric: %f' % metric)
 
         if e == 60:
             optimizer.param_groups[0]['lr'] /= 10.0
