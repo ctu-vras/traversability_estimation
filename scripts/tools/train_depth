@@ -85,7 +85,7 @@ def main():
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     loss_mode = 'multilabel' if train_dataset[0][1].ndim == 3 else 'multiclass'  # (n_cl, H, W) or (H, W)
     criterion_fn = smp.losses.DiceLoss(mode=loss_mode, log_loss=True,
-                                       from_logits=True, ignore_index=0)
+                                       from_logits=True, ignore_index=255)
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
     metric_fn = smp.utils.metrics.IoU(threshold=0.5, activation='softmax2d')
 

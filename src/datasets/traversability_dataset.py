@@ -7,11 +7,12 @@ from datasets.laserscan import SemLaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
-LABELS = {1: "traversable",
+LABELS = {255: "background",
+          1: "traversable",
           2: "non-traversable"}
-COLOR_MAP = {0: [0, 0, 0],
-             1: [0, 255, 0],
-             2: [255, 0, 0]}
+COLOR_MAP = {255: [0, 0, 0],
+             1:   [0, 255, 0],
+             2:   [255, 0, 0]}
 
 
 class TraversabilityImages(torch.utils.data.Dataset):
@@ -170,7 +171,6 @@ class TraversabilityClouds:
 
         depth_img = self.scan.proj_range[None]  # (1, H, W)
         label = self.scan.proj_sem_label
-        label[label == self.mask_targets["background"]] = len(self.CLASSES) - 1
 
         # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
         if self.labels_mode == 'masks':
