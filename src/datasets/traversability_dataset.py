@@ -69,7 +69,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
 
     @staticmethod
     def _load_dataset(dataset_path: str):
-        name = "traversability-dataset"
+        name = "TraversabilityDataset"
         if fo.dataset_exists(name):
             dataset = fo.load_dataset(name)
             dataset.delete()
@@ -134,10 +134,10 @@ class TraversabilityClouds:
 
         all_files = [os.path.join(clouds_path, f) for f in os.listdir(clouds_path)]
         if self.split == 'train':
-            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)))
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
             files = train_files
         elif self.split in ['val', 'test']:
-            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)))
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
             val_files = list(set(all_files) - set(train_files))
             # It is a good practice to check datasets don`t intersects with each other
             assert set(train_files).isdisjoint(set(val_files))
@@ -184,7 +184,7 @@ def images_demo():
     name = "TraversabilityDataset"
     directory = os.path.join(data_dir, name)
 
-    dataset = TraversabilityImages(crop_size=(1200, 1920), path=directory)
+    dataset = TraversabilityImages(crop_size=(1200, 1920), path=directory, split='val')
     length = len(dataset)
     # dataset.show_dataset()
     splits = torch.utils.data.random_split(dataset,

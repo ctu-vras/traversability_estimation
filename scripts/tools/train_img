@@ -54,15 +54,14 @@ parser.add_argument('--n_workers', type=int, default=2)
 args = parser.parse_args()
 args.img_size = tuple(args.img_size)
 
+Dataset = eval('datasets.%s' % args.dataset)
 if args.dataset == 'TraversabilityImages':
-    Dataset = eval('datasets.%s' % args.dataset)
     dataset = Dataset(crop_size=args.img_size)
     length = len(dataset)
     train_dataset, valid_dataset = torch.utils.data.random_split(dataset,
                                                                  [int(0.8 * length), int(0.2 * length)],
                                                                  generator=torch.Generator().manual_seed(42))
 else:
-    Dataset = eval('datasets.%s' % args.dataset)
     train_dataset = Dataset(crop_size=args.img_size, split='train')
     valid_dataset = Dataset(crop_size=args.img_size, split='val')
 
