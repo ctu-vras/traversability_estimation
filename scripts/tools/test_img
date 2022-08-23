@@ -41,7 +41,8 @@ def preprocessing(image, input_size, input_scale=1.0,
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='TraversabilityImages')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityImages')
+    parser.add_argument('--dataset', type=str, default='Rellis3DImages')
     parser.add_argument('--img_size', nargs='+', default=(704, 960))
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
