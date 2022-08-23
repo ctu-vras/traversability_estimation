@@ -18,7 +18,7 @@ COLOR_MAP = {255: [0, 0, 0],
 class TraversabilityImages(torch.utils.data.Dataset):
     CLASSES = ["background", "traversable", "non-traversable"]
 
-    def __init__(self, crop_size: tuple = (1200, 1920), path=None, split=None):
+    def __init__(self, crop_size=(1200, 1920), path=None, split=None):
         self.crop_size = (crop_size[1], crop_size[0])
         if not path:
             self.path = os.path.join(data_dir, 'TraversabilityDataset')
@@ -71,7 +71,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         return image
 
     @staticmethod
-    def _load_dataset(dataset_path: str):
+    def _load_dataset(dataset_path):
         name = "TraversabilityDataset"
         if fo.dataset_exists(name):
             dataset = fo.load_dataset(name)
@@ -87,7 +87,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         session = fo.launch_app(self.samples)
         session.wait()
 
-    def save_prediction(self, mask: np.ndarray, i: int) -> None:
+    def save_prediction(self, maski, i):
         sample = self.samples[self.img_paths[i]]
         mask = mask.astype(np.uint8)
         sample["prediction"] = fo.Segmentation(mask=mask)
