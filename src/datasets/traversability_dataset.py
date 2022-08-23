@@ -6,14 +6,12 @@ import fiftyone as fo
 from datasets.laserscan import SemLaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
-
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
-LABELS = {255: "background",
-          1: "traversable",
-          0: "non-traversable"}
-COLOR_MAP = {255: [0, 0, 0],
+LABELS = {1: "traversable",
+          2: "non-traversable"}
+COLOR_MAP = {0: [0, 0, 0],
              1: [0, 255, 0],
-             0: [255, 0, 0]}
+             2: [255, 0, 0]}
 
 
 class TraversabilityImages(torch.utils.data.Dataset):
@@ -28,7 +26,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.samples = self._load_dataset(self.path)
         self.img_paths = self.samples.values("filepath")
         self.mask_targets = LABELS
-        self.class_values = list(self.mask_targets.keys())
+        self.class_values = [0, 1, 2]
 
         # TODO: calculate mean and std for images in the dataset
         self.mean = np.array([0.0, 0.0, 0.0])
@@ -48,7 +46,10 @@ class TraversabilityImages(torch.utils.data.Dataset):
             image = image.transpose((2, 0, 1))
 
         # mask preprocessing
-        mask = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)["mask"]
+        segmentation = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)
+        mask = segmentation["mask"]
+        sample["ground_truth"] = segmentation
+        sample.save()
         mask = cv2.resize(mask, self.crop_size, interpolation=cv2.INTER_NEAREST)
         mask = mask.astype(np.long)
 
@@ -84,6 +85,12 @@ class TraversabilityImages(torch.utils.data.Dataset):
     def show_dataset(self):
         session = fo.launch_app(self.samples)
         session.wait()
+
+    def save_prediction(self, mask: np.ndarray, i: int) -> None:
+        sample = self.samples[self.img_paths[i]]
+        mask = mask.astype(np.uint8)
+        sample["prediction"] = fo.Segmentation(mask=mask)
+        sample.save()
 
 
 class TraversabilityClouds:
@@ -158,7 +165,7 @@ class TraversabilityClouds:
         self.scan.set_points(points=xyz)
         bg_value = self.mask_targets["background"]
         self.scan.proj_sem_label = np.full((self.scan.proj_H, self.scan.proj_W), bg_value,
-                                            dtype=np.uint8)  # [H,W]  label
+                                           dtype=np.uint8)  # [H,W]  label
         self.scan.set_label(label=traversability)
 
         depth_img = self.scan.proj_range[None]  # (1, H, W)
@@ -209,7 +216,8 @@ def clouds_demo(run_times=1):
         depth_img_vis = np.copy(depth_img).squeeze()  # depth
         depth_img_vis[depth_img_vis > 0] = depth_img_vis[depth_img_vis > 0] ** (1 / power)
         depth_img_vis[depth_img_vis > 0] = (depth_img_vis[depth_img_vis > 0] - depth_img_vis[depth_img_vis > 0].min()) / \
-                                           (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[depth_img_vis > 0].min())
+                                           (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[
+                                               depth_img_vis > 0].min())
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
