@@ -30,6 +30,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.mask_targets = LABELS
         self.class_values = list(self.mask_targets.keys())
 
+        # TODO: calculate mean and std for images in the dataset
         self.mean = np.array([0.0, 0.0, 0.0])
         self.std = np.array([1.0, 1.0, 1.0])
         self.split = split
@@ -63,8 +64,8 @@ class TraversabilityImages(torch.utils.data.Dataset):
     def _input_transform(self, image):
         image = image.astype(np.float32)[:, :, ::-1]
         image = image / 255.0
-        # image -= self.mean / 255.0
-        # image /= self.std / 255.0
+        image -= self.mean
+        image /= self.std
         return image
 
     @staticmethod
@@ -195,11 +196,11 @@ def images_demo():
         print(len(split))
 
 
-def clouds_demo(run_times=5):
+def clouds_demo(run_times=1):
     from matplotlib import pyplot as plt
     import open3d as o3d
 
-    ds = TraversabilityClouds(split='val')
+    ds = TraversabilityClouds(split='test', labels_mode='labels')
 
     for _ in range(run_times):
         depth_img, label = ds[np.random.choice(len(ds))]
@@ -212,12 +213,11 @@ def clouds_demo(run_times=5):
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
-        label_trav = label == 1
+        label_trav = label == ds.mask_targets['traversable']
+        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
 
         plt.figure(figsize=(20, 10))
-        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
         plt.imshow(result)
-        # plt.imshow(depth_img_vis)
         plt.title('Depth image with traversable points')
         plt.tight_layout()
         plt.show()
@@ -232,5 +232,5 @@ def clouds_demo(run_times=5):
 
 
 if __name__ == "__main__":
-    # images_demo()
+    images_demo()
     clouds_demo()
