@@ -12,36 +12,10 @@ import yaml
 import os
 
 
-# Initialize the inference transforms
-def preprocessing(image, input_size, input_scale=1.0,
-                  mean=np.array([0.485, 0.456, 0.406]),
-                  std=np.array([0.229, 0.224, 0.225])):
-    image = cv2.resize(image, input_size, fx=input_scale, fy=input_scale,
-                       interpolation=cv2.INTER_AREA)
-    # image shape should be divisible by 32
-    h, w = image.shape[:2]
-    image = cv2.resize(image, (32 * (w // 32), 32 * (h // 32)),
-                       interpolation=cv2.INTER_AREA)
-    image = image.astype(np.float32)
-    image = image[..., ::-1]  # BGR to RGB
-    image = image / 255.0
-
-    # Re-scaled training data mean and std.
-    intensity_ratio = image.mean() / mean.mean()
-    mean = intensity_ratio * mean
-    # std = intensity_ratio * std
-    std = image.std()
-
-    image -= mean
-    image /= std
-
-    image = image.transpose((2, 0, 1))  # HxWxC tp CxHxW
-    return image
-
-
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='TraversabilityImages')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityImages')
+    parser.add_argument('--dataset', type=str, default='Rellis3DImages')
     parser.add_argument('--img_size', nargs='+', default=(704, 960))
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
@@ -51,8 +25,9 @@ def main():
     ds = Dataset(crop_size=args.img_size, split='test')
 
     # Initialize model with the best available weights
-    model_path = os.path.join('../../config/weights/smp/',
-                              'Unet_resnet34_1184x1920_lr0.0001_bs1_epoch2_Rellis3DImages_iou_0.77.pth')
+    # model_name = 'fcn_resnet50_lr_1e-05_bs_2_epoch_44_TraversabilityImages_iou_0.86.pth'
+    model_name = 'Unet_resnet34_1184x1920_lr0.0001_bs1_epoch2_Rellis3DImages_iou_0.77.pth'
+    model_path = os.path.join('../../config/weights/image/', model_name)
     model = torch.load(model_path, map_location=args.device).eval()
 
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
@@ -61,11 +36,11 @@ def main():
 
     for _ in range(5):
         # Apply inference preprocessing transforms
-        img_raw, _ = ds[np.random.choice(range(len(ds)))]
-        img_vis = np.uint8(255 * (img_raw * ds.std + ds.mean))
-        size = (args.img_size[1], args.img_size[0])
-        input = preprocessing(img_raw, input_size=size)
-        batch = torch.from_numpy(input).unsqueeze(0).to(args.device)
+        img, _ = ds[np.random.choice(range(len(ds)))]
+        img_vis = np.uint8(255 * (img * ds.std + ds.mean))
+        if ds.split == 'test':
+            img = img.transpose((2, 0, 1))  # (H x W x C) -> (C x H x W)
+        batch = torch.from_numpy(img).unsqueeze(0).to(args.device)
 
         # Use the model and visualize the prediction
         with torch.no_grad():
@@ -73,6 +48,7 @@ def main():
         pred = pred.squeeze(0).cpu().numpy()
         mask = np.argmax(pred, axis=0)
         mask = convert_label(mask, inverse=True)
+        size = (args.img_size[1], args.img_size[0])
         mask = cv2.resize(mask.astype('float32'), size, interpolation=cv2.INTER_LINEAR).astype('int8')
 
         result = convert_color(mask, data_cfg['color_map'])
