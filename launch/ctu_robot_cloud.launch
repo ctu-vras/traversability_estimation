@@ -11,11 +11,11 @@
         <remap from="output" to="/os_cloud_node/destaggered_points"/>
     </node>
 
-    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference">
+    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
-            max_age: 2.0
+            max_age: 5.0
             lidar_channels: 128
             lidar_beams: 1024
             lidar_fov_up: 45.0
