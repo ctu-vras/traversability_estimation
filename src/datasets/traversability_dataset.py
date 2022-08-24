@@ -2,7 +2,10 @@ import os
 import cv2
 import numpy as np
 import torch
-import fiftyone as fo
+try:
+    import fiftyone as fo
+except:
+    print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
