@@ -11,7 +11,7 @@
         <remap from="output" to="/os_cloud_node/destaggered_points"/>
     </node>
 
-    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
+    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
