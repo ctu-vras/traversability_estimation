@@ -111,6 +111,7 @@ class TraversabilityClouds:
                  split='train',
                  fields=None,
                  lidar_beams_step=1,
+                 traversability_labels=None,
                  ):
         if fields is None:
             fields = ['depth']
@@ -129,16 +130,25 @@ class TraversabilityClouds:
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
+        self.traversability_labels = True
 
         self.W = W
         self.H = H
         self.color_map = COLOR_MAP
-        self.scan = SemLaserScan(nclasses=len(LABELS), sem_color_dict=self.color_map,
+        self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
                                  project=True, H=self.H, W=self.W, fov_up=fov_up, fov_down=fov_down)
 
         self.files = self.read_files()
         if num_samples:
             self.files = self.files[:num_samples]
+
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        color = self.scan.sem_color_lut[label]
+        return color
 
     def read_files(self, train_ratio=0.8):
         clouds_path = os.path.join(self.path, 'os_cloud_node/destaggered_points/')

@@ -22,6 +22,7 @@ __all__ = [
     'Rellis3DClouds',
 ]
 
+VOID_VALUE = 255
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
 
 seq_names = [
@@ -275,6 +276,7 @@ class Rellis3DClouds:
                  fields=None,
                  num_samples=None,
                  color_map=None,
+                 traversability_labels=False,
                  lidar_beams_step=1,
                  ):
         if path is None:
@@ -290,11 +292,30 @@ class Rellis3DClouds:
         # make sure the input fields are supported
         assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
 
-        if not color_map:
-            CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
-            color_map = CFG["color_map"]
+        self.traversability_labels = traversability_labels
+        if not traversability_labels:
+            self.label_map = None
+            if not color_map:
+                CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+                color_map = CFG["color_map"]
+        else:
+            label_map = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis_to_obstacles.yaml"), 'r'))
+            assert isinstance(label_map, (dict, list))
+            if isinstance(label_map, dict):
+                label_map = dict((int(k), int(v)) for k, v in label_map.items())
+                n = max(label_map) + 1
+                self.label_map = np.zeros((n,), dtype=np.uint8)
+                for k, v in label_map.items():
+                    self.label_map[k] = v
+            elif isinstance(label_map, list):
+                self.label_map = np.asarray(label_map)
+            # traversability label map is assumed (0: non-traversable, 1: traversable objects)
+            color_map = {0: [0, 255, 0], 1: [255, 0, 0], VOID_VALUE: [0, 0, 0]}
+            self.CLASSES = ["traversable", "non-traversable"]
+
         self.color_map = color_map
-        n_classes = len(color_map)
+        n_classes = len(self.CLASSES)
+        self.class_values = [0, 1, VOID_VALUE] if self.traversability_labels else list(range(n_classes))
         self.scan = SemLaserScan(n_classes, self.color_map, project=True)
 
         self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
@@ -323,7 +344,8 @@ class Rellis3DClouds:
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        label = convert_label(label, inverse=True)
+        if not self.traversability_labels:
+            label = convert_label(label, inverse=True)
         color = self.scan.sem_color_lut[label]
         return color
 
@@ -344,15 +366,16 @@ class Rellis3DClouds:
         n_inputs, H, W = input.shape
 
         label = self.scan.proj_sem_label.copy()
+        if self.label_map is not None:
+            label = self.label_map[label]
         label = convert_label(label, inverse=False)
         assert input.shape[1:] == label.shape  # (N, H, W) and (H, W)
 
         # extract certain classes from mask (one hot encoding)
-        n_classes = len(self.CLASSES)
-        assert label.max() <= n_classes
-        masks = [(label == v) for v in range(n_classes)]
+        masks = [(label == v) for v in self.class_values]
         label = np.stack(masks, axis=0).astype('float')
 
+        n_classes = len(self.class_values)
         assert label.shape == (n_classes, H, W)
         assert input.shape == (n_inputs, H, W)
 
@@ -371,13 +394,17 @@ def semantic_laser_scan_demo(n_runs=1):
     # split = 'test'
 
     ds = Rellis3DClouds(split=split, lidar_beams_step=2)
+    ds_trav = Rellis3DClouds(split=split, lidar_beams_step=2, traversability_labels=True)
 
     # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
                        map_location='cpu').eval()
     for _ in range(n_runs):
-        xyzid, label = ds[np.random.choice(range(len(ds)))]
+        ind = np.random.choice(range(len(ds)))
+
+        xyzid, label = ds[ind]
+        label_trav = ds_trav[ind][1]
 
         # depth_img = {-1: no data, 0..1: for scaled distances}
         power = 16
@@ -388,6 +415,7 @@ def semantic_laser_scan_demo(n_runs=1):
 
         # semantic annotation of depth image
         color_gt = ds.label_to_color(label)
+        color_trav_gt = ds_trav.label_to_color(label_trav)
 
         # Apply inference preprocessing transforms
         batch = torch.from_numpy(xyzid[-2:]).unsqueeze(0)  # model takes as input only intensity and depth image
@@ -398,15 +426,18 @@ def semantic_laser_scan_demo(n_runs=1):
         color_pred = ds.label_to_color(pred)
 
         plt.figure(figsize=(20, 10))
-        plt.subplot(3, 1, 1)
+        plt.subplot(4, 1, 1)
         plt.imshow(depth_img)
         plt.title('Depth image')
-        plt.subplot(3, 1, 2)
+        plt.subplot(4, 1, 2)
         plt.imshow(color_gt)
         plt.title('Semantics: GT')
-        plt.subplot(3, 1, 3)
+        plt.subplot(4, 1, 3)
         plt.imshow(color_pred)
         plt.title('Semantics: Pred')
+        plt.subplot(4, 1, 4)
+        plt.imshow(color_trav_gt)
+        plt.title('Traversability labels')
         plt.show()
 
 
@@ -483,6 +514,30 @@ def colored_cloud_demo(n_runs=1):
         pcd_gt.colors = o3d.utility.Vector3dVector(color_gt)
 
         o3d.visualization.draw_geometries([pcd_pred, pcd_gt])
+
+
+def trav_cloud_demo(n_runs=1):
+    import open3d as o3d
+
+    ds = Rellis3DClouds(split='test', traversability_labels=True)
+
+    for _ in range(n_runs):
+        i = np.random.choice(range(len(ds)))
+        xyzid, label = ds[i]
+
+        xyz = xyzid[:3, ...].reshape((3, -1))
+        xyz = xyz.T
+
+        color_gt = ds.label_to_color(label)
+
+        color_gt = color_gt.reshape((-1, 3))
+        assert xyz.shape == color_gt.shape
+
+        pcd_gt = o3d.geometry.PointCloud()
+        pcd_gt.points = o3d.utility.Vector3dVector(xyz + np.array([150, 0, 0]))
+        pcd_gt.colors = o3d.utility.Vector3dVector(color_gt)
+
+        o3d.visualization.draw_geometries([pcd_gt])
 
 
 def lidar_map_demo():
