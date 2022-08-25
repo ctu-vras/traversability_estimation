@@ -110,20 +110,20 @@ def depth_color(val, min_d=0, max_d=120):
 def filter_camera_points(points, img_width, img_height, K, RT):
     assert points.shape[1] == 3
     ctl = np.array(RT)
-    fov_x = 2 * np.arctan2(img_width, 2 * K[0, 0]) * 180 / 3.1415926 + 10
-    fov_y = 2 * np.arctan2(img_height, 2 * K[1, 1]) * 180 / 3.1415926 + 10
-    p_l = np.ones((points.shape[0], points.shape[1]+1))
+    fov_x = 2 * np.arctan2(img_width, 2 * K[0, 0]) * 180 / np.pi + 10
+    fov_y = 2 * np.arctan2(img_height, 2 * K[1, 1]) * 180 / np.pi + 10
+    p_l = np.ones((points.shape[0], points.shape[1] + 1))
     p_l[:, :3] = points
     p_c = np.matmul(ctl, p_l.T)
     p_c = p_c.T
     x = p_c[:, 0]
     y = p_c[:, 1]
     z = p_c[:, 2]
-    xangle = np.arctan2(x, z)*180 / np.pi
-    yangle = np.arctan2(y, z)*180 / np.pi
+    xangle = np.arctan2(x, z) * 180 / np.pi
+    yangle = np.arctan2(y, z) * 180 / np.pi
     flag2 = (xangle > -fov_x/2) & (xangle < fov_x/2)
     flag3 = (yangle > -fov_y/2) & (yangle < fov_y/2)
-    points_res = p_l[flag2&flag3, :3]
+    points_res = p_l[flag2 & flag3, :3]
     points_res = np.array(points_res)
     x = points_res[:, 0]
     y = points_res[:, 1]
