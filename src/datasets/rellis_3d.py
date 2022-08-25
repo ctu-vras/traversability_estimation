@@ -6,8 +6,8 @@ import cv2
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from traversability_estimation.utils import *
-from .base_dataset import BaseDatasetImages
-from .laserscan import LaserScan, SemLaserScan
+from .base_dataset import BaseDatasetImages, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from .laserscan import SemLaserScan
 from copy import copy
 import torch
 from PIL import Image
@@ -22,7 +22,6 @@ __all__ = [
     'Rellis3DClouds',
 ]
 
-VOID_VALUE = 255
 data_dir = realpath(join(dirname(__file__), '..', '..', 'data'))
 
 seq_names = [
@@ -309,13 +308,15 @@ class Rellis3DClouds:
                     self.label_map[k] = v
             elif isinstance(label_map, list):
                 self.label_map = np.asarray(label_map)
-            # traversability label map is assumed (0: non-traversable, 1: traversable objects)
-            color_map = {0: [0, 255, 0], 1: [255, 0, 0], VOID_VALUE: [0, 0, 0]}
-            self.CLASSES = ["traversable", "non-traversable"]
+            # traversability label map is assumed (0: traversable, 1: obstacle)
+            color_map = TRAVERSABILITY_COLOR_MAP
+            self.CLASSES = ["traversable", "obstacle"]
 
         self.color_map = color_map
         n_classes = len(self.CLASSES)
-        self.class_values = [0, 1, VOID_VALUE] if self.traversability_labels else list(range(n_classes))
+        # TRAVERSABILITY_LABELS = [0, 1, 255]
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]) if self.traversability_labels \
+                                                                               else list(range(n_classes))
         self.scan = SemLaserScan(n_classes, self.color_map, project=True)
 
         self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]

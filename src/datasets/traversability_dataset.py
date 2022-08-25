@@ -8,19 +8,14 @@ try:
 except:
     print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
+from datasets.base_dataset import VOID_VALUE, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
 from numpy.lib.recfunctions import structured_to_unstructured
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
-LABELS = {255: "background",
-          1: "traversable",
-          2: "non-traversable"}
-COLOR_MAP = {255: [0, 0, 0],
-             1: [0, 255, 0],
-             2: [255, 0, 0]}
 
 
 class TraversabilityImages(torch.utils.data.Dataset):
-    CLASSES = ["background", "traversable", "non-traversable"]
+    CLASSES = ["traversable", "non-traversable", "background",]
 
     def __init__(self, crop_size=(1200, 1920), path=None, split=None):
         self.crop_size = (crop_size[1], crop_size[0])
@@ -29,9 +24,9 @@ class TraversabilityImages(torch.utils.data.Dataset):
         else:
             self.path = path
         self.samples = self._load_dataset(self.path)
-        self.img_paths = self.samples.values("filepath")
-        self.mask_targets = LABELS
-        self.class_values = [0, 1, 2]
+        self.files = self.samples.values("filepath")
+        self.mask_targets = TRAVERSABILITY_LABELS
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()])  # [0, 1, 255]
 
         # TODO: calculate mean and std for images in the dataset
         self.mean = np.array([0.0, 0.0, 0.0])
@@ -39,7 +34,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.split = split
 
     def __getitem__(self, idx):
-        img_path = self.img_paths[idx]
+        img_path = self.files[idx]
         sample = self.samples[img_path]
 
         # image preprocessing
@@ -65,7 +60,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         return image, mask
 
     def __len__(self):
-        return len(self.img_paths)
+        return len(self.files)
 
     def _input_transform(self, image):
         image = image.astype(np.float32)[:, :, ::-1]
@@ -92,13 +87,13 @@ class TraversabilityImages(torch.utils.data.Dataset):
         session.wait()
 
     def save_prediction(self, mask, i):
-        sample = self.samples[self.img_paths[i]]
+        sample = self.samples[self.files[i]]
         mask = mask.astype(np.uint8)
         sample["prediction"] = fo.Segmentation(mask=mask)
         sample.save()
 
     def get_mask(self, image_name: str) -> np.ndarray:
-        for path in self.img_paths:
+        for path in self.files:
             if image_name in path:
                 sample = self.samples[path]
                 segmentation = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)
@@ -129,8 +124,9 @@ class TraversabilityClouds:
         assert os.path.exists(path)
         self.path = path
         self.rng = np.random.default_rng(42)
-        self.mask_targets = {val: key for key, val in LABELS.items()}
-        self.class_values = list(self.mask_targets.values())
+        self.mask_targets = {val: key for key, val in TRAVERSABILITY_LABELS.items()}
+        # self.class_values = list(self.mask_targets.values())
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()])
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode  # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
 
@@ -143,7 +139,7 @@ class TraversabilityClouds:
 
         self.W = W
         self.H = H
-        self.color_map = COLOR_MAP
+        self.color_map = TRAVERSABILITY_COLOR_MAP
         self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
                                  project=True, H=self.H, W=self.W, fov_up=fov_up, fov_down=fov_down)
 
@@ -184,7 +180,7 @@ class TraversabilityClouds:
         cloud = np.load(cloud_path, allow_pickle=True)['arr_0'].item()['cloud']
 
         xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
-        traversability = cloud['empty']
+        traversability = 1 - cloud['empty']
 
         self.scan.set_points(points=xyz)
         bg_value = self.mask_targets["background"]

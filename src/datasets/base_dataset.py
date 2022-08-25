@@ -10,6 +10,15 @@ import random
 from torch.utils import data
 
 
+VOID_VALUE = 255
+TRAVERSABILITY_LABELS = {0: "traversable",
+                         1: "non-traversable",
+                         VOID_VALUE: "background"}
+TRAVERSABILITY_COLOR_MAP = {0:          [0, 255, 0],
+                            1:          [255, 0, 0],
+                            VOID_VALUE: [0, 0, 0]}
+
+
 class BaseDatasetImages(data.Dataset):
     def __init__(self,
                  ignore_label=0,
