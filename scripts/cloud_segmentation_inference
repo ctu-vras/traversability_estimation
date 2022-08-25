@@ -18,6 +18,7 @@ pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 
 
 def msgify_cloud(cloud, frame, stamp, names):
+    assert cloud.ndim == 2
     cloud = unstructured_to_structured(cloud, names=names)
     msg = msgify(PointCloud2, cloud)
     msg.header.frame_id = frame
@@ -133,16 +134,16 @@ class CloudProcessor:
 
         self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3] if cloud.shape[-1] >= 4 else None)
         # rospy.logdebug('Depth image shape: %s', self.scan.proj_range.shape)
-        xyzid = {'x': self.scan.proj_xyz.transpose([2, 0, 1])[0],  # (H x W)
-                 'y': self.scan.proj_xyz.transpose([2, 0, 1])[1],  # (H x W)
-                 'z': self.scan.proj_xyz.transpose([2, 0, 1])[2],  # (H x W)
+        xyzid = {'x': self.scan.proj_xyz[..., 0],  # (H x W)
+                 'y': self.scan.proj_xyz[..., 1],  # (H x W)
+                 'z': self.scan.proj_xyz[..., 2],  # (H x W)
                  'intensity': self.scan.proj_remission,            # (H x W)
                  'depth': self.scan.proj_range}                    # (H x W)
 
         # normalize intensity to be in the same format as in Rellis 3D
         if xyzid['intensity'].max() > 1.0:
-            xyzid['intensity'] /= 2**16
-
+            xyzid['intensity'] /= 2.0**16
+        
         input = np.concatenate([xyzid[f][None] for f in self.data_fields], axis=0)
         rospy.logdebug('Model input shape: %s', input.shape)
         assert input.shape == (len(self.data_fields), self.lidar_channels, self.lidar_beams)
@@ -165,7 +166,7 @@ class CloudProcessor:
         labels = np.argmax(pred, axis=0)
 
         if isinstance(xyzid, dict):
-            xyzid = np.concatenate([xyzid[f][None] for f in xyzid.keys()], axis=0)
+            xyzid = np.concatenate([xyzid[f][None] for f in ['x', 'y', 'z', 'intensity', 'depth']], axis=0)
 
         assert labels.max() <= n_classes
         labels = convert_label(labels, inverse=True)
@@ -237,6 +238,6 @@ class CloudProcessor:
 
 
 if __name__ == '__main__':
-    rospy.init_node('cloud_segmentation', log_level=rospy.INFO)
+    rospy.init_node('cloud_segmentation', log_level=rospy.DEBUG)
     proc = CloudProcessor(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
     rospy.spin()

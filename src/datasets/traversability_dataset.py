@@ -2,22 +2,26 @@ import os
 import cv2
 import numpy as np
 import torch
-import fiftyone as fo
+try:
+    import fiftyone as fo
+except:
+    print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
 from numpy.lib.recfunctions import structured_to_unstructured
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
-LABELS = {1: "traversable",
+LABELS = {255: "background",
+          1: "traversable",
           2: "non-traversable"}
-COLOR_MAP = {0: [0, 0, 0],
-             1: [0, 255, 0],
-             2: [255, 0, 0]}
+COLOR_MAP = {255: [0, 0, 0],
+             1:   [0, 255, 0],
+             2:   [255, 0, 0]}
 
 
 class TraversabilityImages(torch.utils.data.Dataset):
     CLASSES = ["background", "traversable", "non-traversable"]
 
-    def __init__(self, crop_size: tuple = (1200, 1920), path=None, split=None):
+    def __init__(self, crop_size=(1200, 1920), path=None, split=None):
         self.crop_size = (crop_size[1], crop_size[0])
         if not path:
             self.path = os.path.join(data_dir, 'TraversabilityDataset')
@@ -28,6 +32,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.mask_targets = LABELS
         self.class_values = [0, 1, 2]
 
+        # TODO: calculate mean and std for images in the dataset
         self.mean = np.array([0.0, 0.0, 0.0])
         self.std = np.array([1.0, 1.0, 1.0])
         self.split = split
@@ -64,12 +69,12 @@ class TraversabilityImages(torch.utils.data.Dataset):
     def _input_transform(self, image):
         image = image.astype(np.float32)[:, :, ::-1]
         image = image / 255.0
-        # image -= self.mean / 255.0
-        # image /= self.std / 255.0
+        image -= self.mean
+        image /= self.std
         return image
 
     @staticmethod
-    def _load_dataset(dataset_path: str):
+    def _load_dataset(dataset_path):
         name = "TraversabilityDataset"
         if fo.dataset_exists(name):
             dataset = fo.load_dataset(name)
@@ -85,7 +90,7 @@ class TraversabilityImages(torch.utils.data.Dataset):
         session = fo.launch_app(self.samples)
         session.wait()
 
-    def save_prediction(self, mask: np.ndarray, i: int) -> None:
+    def save_prediction(self, maski, i):
         sample = self.samples[self.img_paths[i]]
         mask = mask.astype(np.uint8)
         sample["prediction"] = fo.Segmentation(mask=mask)
@@ -114,6 +119,7 @@ class TraversabilityClouds:
                  split='train',
                  fields=None,
                  lidar_beams_step=1,
+                 traversability_labels=None,
                  ):
         if fields is None:
             fields = ['depth']
@@ -132,16 +138,25 @@ class TraversabilityClouds:
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
+        self.traversability_labels = True
 
         self.W = W
         self.H = H
         self.color_map = COLOR_MAP
-        self.scan = SemLaserScan(nclasses=len(LABELS), sem_color_dict=self.color_map,
+        self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
                                  project=True, H=self.H, W=self.W, fov_up=fov_up, fov_down=fov_down)
 
         self.files = self.read_files()
         if num_samples:
             self.files = self.files[:num_samples]
+
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        color = self.scan.sem_color_lut[label]
+        return color
 
     def read_files(self, train_ratio=0.8):
         clouds_path = os.path.join(self.path, 'os_cloud_node/destaggered_points/')
@@ -177,7 +192,6 @@ class TraversabilityClouds:
 
         depth_img = self.scan.proj_range[None]  # (1, H, W)
         label = self.scan.proj_sem_label
-        label[label == self.mask_targets["background"]] = len(self.CLASSES) - 1
 
         # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
         if self.labels_mode == 'masks':
@@ -210,11 +224,11 @@ def images_demo():
         print(len(split))
 
 
-def clouds_demo(run_times=5):
+def clouds_demo(run_times=1):
     from matplotlib import pyplot as plt
     import open3d as o3d
 
-    ds = TraversabilityClouds(split='val')
+    ds = TraversabilityClouds(split='test', labels_mode='labels')
 
     for _ in range(run_times):
         depth_img, label = ds[np.random.choice(len(ds))]
@@ -228,12 +242,11 @@ def clouds_demo(run_times=5):
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
-        label_trav = label == 1
+        label_trav = label == ds.mask_targets['traversable']
+        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
 
         plt.figure(figsize=(20, 10))
-        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
         plt.imshow(result)
-        # plt.imshow(depth_img_vis)
         plt.title('Depth image with traversable points')
         plt.tight_layout()
         plt.show()
@@ -248,5 +261,5 @@ def clouds_demo(run_times=5):
 
 
 if __name__ == "__main__":
-    # images_demo()
+    images_demo()
     clouds_demo()

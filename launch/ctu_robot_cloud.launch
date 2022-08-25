@@ -15,7 +15,7 @@
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
-            max_age: 2.0
+            max_age: 5.0
             lidar_channels: 128
             lidar_beams: 1024
             lidar_fov_up: 45.0

@@ -44,13 +44,13 @@ def create_model(architecture, n_inputs, n_outputs, pretrained=True):
 
 parser = ArgumentParser()
 parser.add_argument('--lr', type=float, default=1e-5)
-parser.add_argument('--dataset', type=str, default='TraversabilityImages')
-# parser.add_argument('--dataset', type=str, default='Rellis3DImages')
+# parser.add_argument('--dataset', type=str, default='TraversabilityImages')
+parser.add_argument('--dataset', type=str, default='Rellis3DImages')
 parser.add_argument('--architecture', type=str, default='fcn_resnet50')
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--img_size', nargs='+', default=(320, 512))
 parser.add_argument('--n_epochs', type=int, default=10)
-parser.add_argument('--n_workers', type=int, default=2)
+parser.add_argument('--n_workers', type=int, default=os.cpu_count())
 args = parser.parse_args()
 args.img_size = tuple(args.img_size)
 
@@ -65,8 +65,8 @@ else:
     train_dataset = Dataset(crop_size=args.img_size, split='train')
     valid_dataset = Dataset(crop_size=args.img_size, split='val')
 
-train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
-valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 3)
+train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers // 2)
+valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers // 2)
 
 # --------------Load and set model and optimizer-------------------------------------
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -75,29 +75,6 @@ if args.dataset == 'TraversabilityImages':
     n_classes = 3
 else:
     n_classes = len(train_dataset.class_values)
-# -----------------Train--------------------------------------------------------------------------
-# criterion = torch.nn.CrossEntropyLoss()  # Set loss function
-# min_loss = np.Inf
-# for e in range(args.n_epochs):
-#     for itr, sample in enumerate(train_loader):
-#         images, labels = sample
-#         print(images.shape)
-#         if torch.cuda.is_available():
-#             images, labels = images.cuda(), labels.cuda()
-#
-#         pred = model(images)['out']  # make prediction
-#         model.zero_grad()
-#
-#         loss = criterion(pred, labels)  # Calculate cross entropy loss
-#         loss.backward()  # Backpropagate loss
-#         optimizer.step()  # Apply gradient descent change to weight
-#
-#         print(itr, ") Loss=", loss.data.cpu().numpy())
-#         if min_loss > loss.data.cpu().numpy():  # Save model weight once every 60k steps permanent file
-#             min_loss = loss.data.cpu().numpy()
-#             name = "%s_%s.pth" % (args.model, args.encoder)
-#             print("Saving Model:", name)
-#             torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
 n_inputs = train_dataset[0][0].shape[0]
 
@@ -109,7 +86,7 @@ optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create ad
 # ----------------Train--------------------------------------------------------------------------
 # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
 # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-criterion_fn = smp.losses.DiceLoss(mode='multilabel', from_logits=True, ignore_index=0)
+criterion_fn = smp.losses.DiceLoss(mode='multilabel', from_logits=True, ignore_index=255)
 metric_fn = smp.utils.metrics.IoU(threshold=0.5, activation='softmax2d')
 
 max_metric = -np.Inf

@@ -13,6 +13,7 @@ import os
 def main():
     parser = ArgumentParser()
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
     print(args)
@@ -24,6 +25,8 @@ def main():
     # model_name = 'fcn_resnet50_lr_0.0001_bs_24_epoch_9_Rellis3DClouds_z_depth_iou_0.61.pth'
     # model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_5_Rellis3DClouds_intensity_z_depth_iou_0.63.pth'
     # model_name = 'lraspp_mobilenet_v3_large_lr_0.0001_bs_80_epoch_48_Rellis3DClouds_depth_iou_0.62.pth'
+    # model_name = 'fcn_resnet50_lr_0.0001_bs_6_epoch_17_TraversabilityClouds_depth_travTrue_iou_1.00.pth'
+    assert args.dataset in model_name
     model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud', model_name), map_location=args.device)
     # model = torch.load(model_name, map_location=args.device)
     model.eval()
@@ -31,9 +34,9 @@ def main():
     data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_name]
     print('Model takes as input: %s' % ','.join(data_fields))
     Dataset = eval('datasets.%s' % args.dataset)
-    ds = Dataset(split='test', fields=data_fields)
+    ds = Dataset(split='test', fields=data_fields, traversability_labels='travTrue' in model_name)
 
-    for _ in range(1):
+    for _ in range(5):
         # Apply inference preprocessing transforms
         xyzir, label = ds[np.random.choice(range(len(ds)))]
         batch = torch.from_numpy(xyzir).unsqueeze(0).to(args.device)
@@ -43,19 +46,9 @@ def main():
             pred = model(batch)['out']
         pred = pred.squeeze(0).cpu().numpy()
 
-        if len(pred.shape) == 3:
-            C, H, W = pred.shape
-            pred = np.argmax(pred, axis=0)
-            assert pred.shape == (H, W)
-        pred = convert_label(pred, inverse=True)
-        color_pred = ds.scan.sem_color_lut[pred]
+        color_pred = ds.label_to_color(pred)
 
-        if len(label.shape) == 3:
-            C, H, W = label.shape
-            label = np.argmax(label, axis=0)
-            assert label.shape == (H, W)
-        label = convert_label(label, inverse=True)
-        color_gt = ds.scan.sem_color_lut[label]
+        color_gt = ds.label_to_color(label)
 
         plt.figure(figsize=(20, 10))
         plt.subplot(2, 1, 1)
