@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import torch
+
 try:
     import fiftyone as fo
 except:
@@ -14,8 +15,8 @@ LABELS = {255: "background",
           1: "traversable",
           2: "non-traversable"}
 COLOR_MAP = {255: [0, 0, 0],
-             1:   [0, 255, 0],
-             2:   [255, 0, 0]}
+             1: [0, 255, 0],
+             2: [255, 0, 0]}
 
 
 class TraversabilityImages(torch.utils.data.Dataset):
@@ -90,11 +91,19 @@ class TraversabilityImages(torch.utils.data.Dataset):
         session = fo.launch_app(self.samples)
         session.wait()
 
-    def save_prediction(self, maski, i):
+    def save_prediction(self, mask, i):
         sample = self.samples[self.img_paths[i]]
         mask = mask.astype(np.uint8)
         sample["prediction"] = fo.Segmentation(mask=mask)
         sample.save()
+
+    def get_mask(self, image_name: str) -> np.ndarray:
+        for path in self.img_paths:
+            if image_name in path:
+                sample = self.samples[path]
+                segmentation = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)
+                mask = segmentation["mask"]
+                return mask
 
 
 class TraversabilityClouds:
