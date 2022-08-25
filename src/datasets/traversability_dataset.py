@@ -10,6 +10,7 @@ except:
     print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from traversability_estimation.utils import convert_color
 from numpy.lib.recfunctions import structured_to_unstructured
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
@@ -26,8 +27,12 @@ class TraversabilityImages(torch.utils.data.Dataset):
             self.path = path
         self.samples = self._load_dataset(self.path)
         self.files = self.samples.values("filepath")
-        self.mask_targets = TRAVERSABILITY_LABELS
-        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()])  # [0, 1, 255]
+        # self.mask_targets = TRAVERSABILITY_LABELS
+        self.mask_targets = {1: "traversable", 2: "non-traversable", 0: "background"}
+        # self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()])  # [0, 1, 255]
+        self.class_values = [0, 1, 2]
+        # self.color_map = TRAVERSABILITY_COLOR_MAP
+        self.color_map = {1: [0, 255, 0], 2: [255, 0, 0], 0: [0, 0, 0]}
 
         self.mean = np.array([123.11457109, 126.84649579, 124.37909438])
         self.std = np.array([47.46125817, 47.14161698, 47.70375418])
@@ -335,8 +340,8 @@ def label_cloud_from_img():
 
     i = np.random.choice(range(len(close_files['img'])))
     img = plt.imread(close_files['img'][i])
-    mask = ds_img.get_mask(close_files['img'][i])
-    print(mask.shape, np.unique(mask))
+    label = ds_img.get_mask(close_files['img'][i])
+    mask = convert_color(label, ds_img.color_map)
     cloud = ds_depth.read_cloud(close_files['depth'][i])
     points = structured_to_unstructured(cloud[['x', 'y', 'z']])
 
@@ -350,6 +355,12 @@ def label_cloud_from_img():
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
     o3d.visualization.draw_geometries([pcd])
+
+    # TODO: get camera intrinsics
+    # TODO: get extrinsics: T_lid2cam
+    # TODO: get lidar points which are in camera FoV
+    # TODO: colorize these points, the rest points are without label (background)
+    # TODO: save labelled point clouds (add them to TraversabilityDataset)
 
 
 if __name__ == "__main__":
