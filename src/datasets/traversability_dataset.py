@@ -339,7 +339,7 @@ def label_cloud_from_img(n_runs=1):
     print('Found %i labelled images from bag file %s' % (len(bag_file_images), bag_file))
 
     # find closest in timestamp point clouds for each image
-    dt = 1.0  # [sec]
+    dt = 0.2  # [sec]
     correspond_data = {'depth': [], 'img': [], 'camera_frame': []}
     for depth_path in ds_depth.files:
         depth_file = depth_path.split('/')[-1]
@@ -359,6 +359,9 @@ def label_cloud_from_img(n_runs=1):
 
     assert len(correspond_data['img']) == len(correspond_data['depth'])
     assert len(correspond_data['camera_frame']) == len(correspond_data['img'])
+    print('%i images and corresponding clouds for annotation with allowed time error %f'
+          % (len(correspond_data['img']), dt))
+
     # choose corresponding data samples: img, point cloud, calibration and find points in camera FoV
     for _ in range(n_runs):
         i = np.random.choice(range(len(correspond_data['img'])))
