@@ -108,7 +108,7 @@ class TraversabilityClouds:
                  fov_up=45.0,
                  fov_down=-45.0,
                  labels_mode='masks',
-                 split='train',
+                 split=None,
                  fields=None,
                  lidar_beams_step=1,
                  traversability_labels=None,
@@ -125,7 +125,7 @@ class TraversabilityClouds:
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode  # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
 
-        assert split in ['train', 'val', 'test']
+        assert split in [None, 'train', 'val', 'test']
         self.split = split
 
         self.fields = fields
@@ -165,7 +165,8 @@ class TraversabilityClouds:
             assert set(train_files).isdisjoint(set(val_files))
             files = val_files
         else:
-            raise ValueError('Split must be one of train, val, test')
+            # raise ValueError('Split must be one of train, val, test')
+            files = all_files
 
         return files
 
@@ -252,6 +253,14 @@ def clouds_demo(run_times=1):
         o3d.visualization.draw_geometries([pcd])
 
 
+def demo():
+    ds_img = TraversabilityImages()
+    ds_depth = TraversabilityClouds()
+
+    print(len(ds_img), len(ds_depth))
+
+
 if __name__ == "__main__":
-    images_demo()
-    clouds_demo()
+    # images_demo()
+    # clouds_demo()
+    demo()
