@@ -28,9 +28,8 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.mask_targets = TRAVERSABILITY_LABELS
         self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()])  # [0, 1, 255]
 
-        # TODO: calculate mean and std for images in the dataset
-        self.mean = np.array([0.0, 0.0, 0.0])
-        self.std = np.array([1.0, 1.0, 1.0])
+        self.mean = np.array([123.11457109, 126.84649579, 124.37909438])
+        self.std = np.array([47.46125817, 47.14161698, 47.70375418])
         self.split = split
 
     def __getitem__(self, idx):
@@ -99,6 +98,22 @@ class TraversabilityImages(torch.utils.data.Dataset):
                 segmentation = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)
                 mask = segmentation["mask"]
                 return mask
+
+    def calculate_mean_and_std(self):
+        mean = np.zeros(3)
+        std = np.zeros(3)
+        for i in range(len(self.img_paths)):
+            img_path = self.img_paths[i]
+            image = cv2.imread(img_path, cv2.IMREAD_COLOR)[:, :, ::-1]
+            mean += image.mean(axis=(0, 1))
+            std += image.std(axis=(0, 1))
+        mean /= len(self.img_paths)
+        std /= len(self.img_paths)
+        self.mean = mean
+        self.std = std
+        print(mean)
+        print(std)
+        return mean, std
 
 
 class TraversabilityClouds:
@@ -267,5 +282,6 @@ def demo():
 
 if __name__ == "__main__":
     # images_demo()
-    # clouds_demo()
+    clouds_demo()
     demo()
+
