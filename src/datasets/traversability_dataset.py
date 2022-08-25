@@ -91,6 +91,14 @@ class TraversabilityImages(torch.utils.data.Dataset):
         sample["prediction"] = fo.Segmentation(mask=mask)
         sample.save()
 
+    def get_mask(self, image_name: str) -> np.ndarray:
+        for path in self.img_paths:
+            if image_name in path:
+                sample = self.samples[path]
+                segmentation = sample.polylines.to_segmentation(frame_size=(1920, 1200), mask_targets=self.mask_targets)
+                mask = segmentation["mask"]
+                return mask
+
 
 class TraversabilityClouds:
     CLASSES = ["background", "traversable", "non-traversable"]
