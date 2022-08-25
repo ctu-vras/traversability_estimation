@@ -2,13 +2,14 @@ import os
 import cv2
 import numpy as np
 import torch
-
 try:
+    # it's hard to install the lib on jetson
+    # we are not importing it since it is not needed for inference tasks on robots
     import fiftyone as fo
 except:
     print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
-from datasets.base_dataset import VOID_VALUE, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
 from numpy.lib.recfunctions import structured_to_unstructured
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
@@ -32,12 +33,16 @@ class TraversabilityImages(torch.utils.data.Dataset):
         self.std = np.array([47.46125817, 47.14161698, 47.70375418])
         self.split = split
 
+    def read_img(self, path):
+        image = cv2.imread(path, cv2.IMREAD_COLOR)
+        return image
+
     def __getitem__(self, idx):
         img_path = self.files[idx]
         sample = self.samples[img_path]
 
         # image preprocessing
-        image = cv2.imread(img_path, cv2.IMREAD_COLOR)
+        image = self.read_img(img_path)
         image = cv2.resize(image, self.crop_size, interpolation=cv2.INTER_LINEAR)
         image = self._input_transform(image)
 
@@ -91,7 +96,8 @@ class TraversabilityImages(torch.utils.data.Dataset):
         sample["prediction"] = fo.Segmentation(mask=mask)
         sample.save()
 
-    def get_mask(self, image_name: str) -> np.ndarray:
+    def get_mask(self, image_name):
+        assert isinstance(image_name, str)
         for path in self.files:
             if image_name in path:
                 sample = self.samples[path]
@@ -120,6 +126,7 @@ class TraversabilityClouds:
     CLASSES = ["background", "traversable", "non-traversable"]
 
     def __init__(self,
+                 sequence='ugv_2022-08-12-15-30-22',
                  path=None,
                  num_samples=None,
                  H=128,
@@ -135,9 +142,9 @@ class TraversabilityClouds:
         if fields is None:
             fields = ['depth']
         if path is None:
-            path = os.path.join(data_dir, 'bags/traversability/marv/ugv_2022-08-12-15-30-22/')
+            path = os.path.join(data_dir, 'bags/traversability/marv/')
         assert os.path.exists(path)
-        self.path = path
+        self.path = os.path.join(path, sequence)
         self.rng = np.random.default_rng(42)
         self.mask_targets = {val: key for key, val in TRAVERSABILITY_LABELS.items()}
         # self.class_values = list(self.mask_targets.values())
@@ -190,9 +197,13 @@ class TraversabilityClouds:
 
         return files
 
+    def read_cloud(self, path):
+        cloud = np.load(path, allow_pickle=True)['arr_0'].item()['cloud']
+        return cloud
+
     def __getitem__(self, index):
         cloud_path = self.files[index]
-        cloud = np.load(cloud_path, allow_pickle=True)['arr_0'].item()['cloud']
+        cloud = self.read_cloud(cloud_path)
 
         xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
         traversability = 1 - cloud['empty']
@@ -273,15 +284,75 @@ def clouds_demo(run_times=1):
         o3d.visualization.draw_geometries([pcd])
 
 
-def demo():
-    ds_img = TraversabilityImages()
-    ds_depth = TraversabilityClouds()
+def label_cloud_from_img():
+    import yaml
+    import open3d as o3d
+    import matplotlib.pyplot as plt
 
-    print(len(ds_img), len(ds_depth))
+    seq = 'ugv_2022-08-12-15-30-22'
+
+    ds_img = TraversabilityImages()
+    ds_depth = TraversabilityClouds(sequence=seq)
+
+    # find labelled images from bag file
+    bag_file_images = []
+    bag_file_ts_imgs = []
+    bag_file = '%s.bag' % seq
+
+    file_to_bag = yaml.safe_load(open(os.path.join(data_dir, 'TraversabilityDataset', 'correspondences.yaml'), 'r'))
+    for img_path in ds_img.files:
+        img_file = img_path.split('/')[-1]
+
+        bag_files = file_to_bag[bag_file]
+
+        for frame_id in bag_files.keys():
+            if img_file in bag_files[frame_id]:
+                # print('Img file %s was recorded in bag file %s with sensor %s' % (img_file, bag_file, frame_id))
+                bag_file_images.append(img_path)
+                ts_img = float(img_file.split('_')[1].replace('s', '')) +\
+                         float(img_file.split('_')[2].replace('n', '').replace('.jpg', '')) / 10.0**9
+                bag_file_ts_imgs.append(ts_img)
+
+    print('Found %i labelled images from bag file %s' % (len(bag_file_images), bag_file))
+
+    # find closest in timestamp point clouds for each image
+    dt = 1.0  # [sec]
+    close_files = {'depth': [], 'img': []}
+    for depth_path in ds_depth.files:
+        depth_file = depth_path.split('/')[-1]
+        ts_depth = float(depth_file.split('_')[0]) + float(depth_file.split('_')[1].replace('.npz', '')) / 10.0**9
+
+        ts_imgs = np.asarray(bag_file_ts_imgs)
+        time_diff = np.abs(ts_imgs - ts_depth)
+        idx = time_diff.argmin()
+
+        if time_diff[idx] <= dt:
+            # print('For depth cloud %s found closest labelled image %s'
+            #       'with time difference %f [sec]'
+            #       % (depth_file, bag_file_images[idx], time_diff[idx]))
+            close_files['depth'].append(depth_path)
+            close_files['img'].append(bag_file_images[idx])
+
+    i = np.random.choice(range(len(close_files['img'])))
+    img = plt.imread(close_files['img'][i])
+    mask = ds_img.get_mask(close_files['img'][i])
+    print(mask.shape, np.unique(mask))
+    cloud = ds_depth.read_cloud(close_files['depth'][i])
+    points = structured_to_unstructured(cloud[['x', 'y', 'z']])
+
+    plt.figure(figsize=(20, 10))
+    plt.subplot(1, 2, 1)
+    plt.imshow(img)
+    plt.subplot(1, 2, 2)
+    plt.imshow(mask)
+    plt.show()
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    o3d.visualization.draw_geometries([pcd])
 
 
 if __name__ == "__main__":
     # images_demo()
-    clouds_demo()
-    demo()
-
+    # clouds_demo()
+    label_cloud_from_img()
