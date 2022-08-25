@@ -28,7 +28,7 @@ from hrnet.core.function import convert_label, convert_color
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 SMP_MODEL = os.path.join(pkg_path, "config/weights/smp/"
                                    "PSPNet_resnext50_32x4d_704x960_lr0.0001_bs6_epoch18_Rellis3D_iou_0.73.pth")
-RESNEXT_MODEL = os.path.join(pkg_path, "config/weights/smp/"
+RESNEXT_MODEL = os.path.join(pkg_path, "config/weights/image/"
                                        "fcn_resnet50_lr_1e-05_bs_1_epoch_3_TraversabilityImages_iou_0.71.pth")
 HRNET_MODEL = os.path.join(pkg_path, "config/weights/"
                                      "seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/best.pth")
@@ -167,13 +167,15 @@ class ModelEvaluator(object):
                 pred = pred.squeeze().cpu().numpy()
                 mask = np.argmax(pred, axis=0).astype(np.uint8)
             elif self.model_name == 'resnext':
-                pred = self.model.forward(image)["out"]
+                with torch.no_grad():
+                    pred = self.model(image)["out"]
+                # pred = self.model.forward(image)["out"]
                 pred = torch.softmax(pred, dim=1)
-                pred = pred.squeeze().cpu().numpy()
-                mask = np.argmax(pred, axis=0).astype(np.uint8)
+                pred = pred.squeeze(0).cpu().numpy()
+                mask = np.argmax(pred, axis=0)
             else:
                 raise ValueError(f'Unknown model: {self.model_name}')
-            mask = cv2.resize(mask, self.image_size, interpolation=cv2.INTER_LINEAR)
+            mask = cv2.resize(mask.astype('float32'), self.image_size, interpolation=cv2.INTER_LINEAR).astype(np.uint8)
         return mask
 
     def prepare_image(self, image: np.ndarray):
@@ -197,11 +199,11 @@ class ModelEvaluator(object):
         train_dataset, valid_dataset = torch.utils.data.random_split(self.dataset,
                                                                      [int(0.8 * length), int(0.2 * length)],
                                                                      generator=torch.Generator().manual_seed(42))
-        for i in range(len(valid_dataset)):
-            image, _ = valid_dataset[i]
+        for i in range(len(self.dataset)):
+            image, _ = self.dataset[i]
             x_tensor = self.prepare_image(image)
             mask = self.model_predict(x_tensor)
-            if self.model != 'resnext':
+            if self.model_name != 'resnext':
                 mask = map_labels(mask)
             self.dataset.save_prediction(mask, i)
 
