@@ -9,7 +9,7 @@ try:
 except:
     print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
-from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, BaseDatasetImages
+from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, BaseDatasetImages, VOID_VALUE
 from numpy.lib.recfunctions import structured_to_unstructured
 from PIL import Image
 
@@ -135,7 +135,7 @@ class TraversabilityImages(BaseDatasetImages):
                  num_samples=None,
                  multi_scale=True,
                  flip=True,
-                 ignore_label=255,
+                 ignore_label=VOID_VALUE,
                  base_size=2048,
                  crop_size=(1200, 1920),
                  downsample_rate=1,
@@ -172,7 +172,7 @@ class TraversabilityImages(BaseDatasetImages):
         if num_samples:
             self.files = self.files[:num_samples]
 
-    def read_files(self, train_ratio=0.8):
+    def read_files(self):
         path = os.path.join(self.path, 'images/')
         assert os.path.exists(path)
 
@@ -270,6 +270,7 @@ class TraversabilityClouds(torch.utils.data.Dataset):
                                  fov_up=lidar_fov_up, fov_down=lidar_fov_down)
 
         self.files = self.read_files()
+        self.generate_split(train_ratio=0.8)
         if num_samples:
             self.files = self.files[:num_samples]
 
@@ -281,24 +282,38 @@ class TraversabilityClouds(torch.utils.data.Dataset):
         color = self.scan.sem_color_lut[label]
         return color
 
-    def read_files(self, train_ratio=0.8):
-        clouds_path = os.path.join(self.path, 'destaggered_points/')
-        assert os.path.exists(clouds_path)
+    def read_files(self):
+        path = os.path.join(self.path)
+        assert os.path.exists(path)
 
-        all_files = [os.path.join(clouds_path, f) for f in os.listdir(clouds_path)]
+        files = []
+        pts_files = [os.path.join(path, 'destaggered_points', f)
+                     for f in os.listdir(os.path.join(path, 'destaggered_points'))]
+        for f in pts_files:
+            label_f = f.replace('destaggered_points', 'label_id')
+            files.append(
+                {
+                    'pts': f,
+                    'label': label_f if os.path.exists(label_f) else None
+                }
+            )
+        return files
+
+    def generate_split(self, train_ratio=0.8):
+        all_files = self.files.copy()
         if self.split == 'train':
             train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
             files = train_files
         elif self.split in ['val', 'test']:
             train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
-            val_files = list(set(all_files) - set(train_files))
-            # It is a good practice to check datasets don`t intersects with each other
-            assert set(train_files).isdisjoint(set(val_files))
+            val_files = all_files.copy()
+            for x in train_files:
+                if x in val_files:
+                    val_files.remove(x)
             files = val_files
         else:
-            # raise ValueError('Split must be one of train, val, test')
             files = all_files
-
+        self.files = files
         return files
 
     def read_cloud(self, path):
@@ -306,7 +321,7 @@ class TraversabilityClouds(torch.utils.data.Dataset):
         return cloud
 
     def __getitem__(self, index):
-        cloud_path = self.files[index]
+        cloud_path = self.files[index]['pts']
         cloud = self.read_cloud(cloud_path)
 
         xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
@@ -414,11 +429,51 @@ def clouds_demo(run_times=1):
         o3d.visualization.draw_geometries([pcd])
 
 
-def label_cloud_from_img(dt=0.2):
+def labeled_clouds_demo():
+    from matplotlib import pyplot as plt
+    import open3d as o3d
+
+    ds = TraversabilityClouds(split=None,)
+
+    for i in range(len(ds)):
+        if ds.files[i]['label'] is None:
+            continue
+
+        depth_img, _ = ds[np.random.choice(len(ds))]
+        label = np.load(ds.files[i]['label'])['arr_0'].reshape((ds.depth_img_H, ds.depth_img_W))
+
+        power = 16
+        depth_img_vis = np.copy(depth_img).squeeze()  # depth
+        depth_img_vis[depth_img_vis > 0] = depth_img_vis[depth_img_vis > 0] ** (1 / power)
+        depth_img_vis[depth_img_vis > 0] = (depth_img_vis[depth_img_vis > 0] - depth_img_vis[depth_img_vis > 0].min()) / \
+                                           (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[
+                                               depth_img_vis > 0].min())
+        depth_img_vis[depth_img_vis < 0] = 0.5
+        assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
+
+        label_trav = label == ds.mask_targets['traversable']
+        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
+
+        plt.figure(figsize=(20, 10))
+        plt.imshow(result)
+        plt.title('Depth image with traversable points')
+        plt.tight_layout()
+        plt.show()
+
+        xyz = ds.scan.proj_xyz
+        color = ds.scan.sem_color_lut[label.astype('uint8')]
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
+        pcd.colors = o3d.utility.Vector3dVector(color.reshape((-1, 3)))
+        o3d.visualization.draw_geometries([pcd])
+
+
+def label_cloud_from_img(dt=0.1):
     import yaml
     import open3d as o3d
     import matplotlib.pyplot as plt
-    from traversability_estimation.utils import filter_camera_points, convert_color, draw_points_on_image
+    from traversability_estimation.utils import filter_camera_points, convert_color, draw_points_on_image, convert_label
     from scipy.spatial.transform import Rotation
     from tqdm import tqdm
 
@@ -472,7 +527,7 @@ def label_cloud_from_img(dt=0.2):
     """
     correspond_data = {'depth': [], 'img': [], 'camera_frame': []}
     for depth_path in ds_depth.files:
-        depth_file = depth_path.split('/')[-1]
+        depth_file = depth_path['pts'].split('/')[-1]
         ts_depth = float(depth_file.split('_')[0]) + float(depth_file.split('_')[1].replace('.npz', '')) / 10.0**9
 
         ts_imgs = np.asarray(bag_file_ts_imgs)
@@ -494,12 +549,15 @@ def label_cloud_from_img(dt=0.2):
 
     # choose corresponding data samples: img, point cloud, calibration and find points in camera FoV
     print('\nSaving point cloud labels...')
+    label_mapping = {0: 255,
+                     1: 0,
+                     2: 1}
     for img_i in range(len(correspond_data['img'])):
 
         img = cv2.imread(correspond_data['img'][img_i])
         img_label = ds_img.get_mask(correspond_data['img'][img_i])
 
-        cloud = ds_depth.read_cloud(correspond_data['depth'][img_i])
+        cloud = ds_depth.read_cloud(correspond_data['depth'][img_i]['pts'])
         points = structured_to_unstructured(cloud[['x', 'y', 'z']])
 
         """
@@ -542,7 +600,8 @@ def label_cloud_from_img(dt=0.2):
                 assert label_id < len(depth_label)
                 depth_label[label_id] = int(l)
 
-        depth_color = convert_color(depth_label, ds_img.color_map)
+        depth_label = convert_label(depth_label, label_mapping=label_mapping, inverse=False)
+        depth_color = convert_color(depth_label, ds_depth.color_map)
         semseg_mask = convert_color(img_label, ds_img.color_map)
         img_with_pts = draw_points_on_image(points=img_points, color=color, image=img)
 
@@ -573,16 +632,16 @@ def label_cloud_from_img(dt=0.2):
         # pcd.points = o3d.utility.Vector3dVector(points[camera_pts_ids])
         # o3d.visualization.draw_geometries([pcd])
 
-        """
-        save labelled point clouds (add them to TraversabilityDataset)
-        """
+        # """
+        # save labelled point clouds (add them to TraversabilityDataset)
+        # """
         # if not os.path.exists(os.path.join(ds_depth.path, 'label_color')):
         #     os.mkdir(os.path.join(ds_depth.path, 'label_color'))
         # if not os.path.exists(os.path.join(ds_depth.path, 'label_id')):
         #     os.mkdir(os.path.join(ds_depth.path, 'label_id'))
         #
-        # np.savez(correspond_data['depth'][img_i].replace('destaggered_points', 'label_id'), depth_label)
-        # np.savez(correspond_data['depth'][img_i].replace('destaggered_points', 'label_color'), depth_color)
+        # np.savez(correspond_data['depth'][img_i]['pts'].replace('destaggered_points', 'label_id'), depth_label)
+        # np.savez(correspond_data['depth'][img_i]['pts'].replace('destaggered_points', 'label_color'), depth_color)
 
 
 def images_demo():
@@ -602,9 +661,10 @@ def images_demo():
 
 
 def main():
-    images_demo()
+    # images_demo()
     # images_save_labels()
-    # clouds_demo()
+    # clouds_demo(5)
+    labeled_clouds_demo()
     # label_cloud_from_img(dt=0.1)
 
 
