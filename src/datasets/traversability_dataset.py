@@ -131,7 +131,7 @@ class TraversabilityImages(BaseDatasetImages):
 
     def __init__(self,
                  path=None,
-                 split='train',
+                 split=None,
                  num_samples=None,
                  multi_scale=True,
                  flip=True,
@@ -147,7 +147,7 @@ class TraversabilityImages(BaseDatasetImages):
         if path is None:
             path = os.path.join(data_dir, 'TraversabilityDataset')
         assert os.path.exists(path)
-        assert split in ['train', 'val', 'test']
+        assert split in [None, 'train', 'val', 'test']
         self.path = path
         self.split = split
 
@@ -168,6 +168,7 @@ class TraversabilityImages(BaseDatasetImages):
         self.rng = np.random.default_rng(42)
 
         self.files = self.read_files()
+        self.generate_split(train_ratio=0.8)
         if num_samples:
             self.files = self.files[:num_samples]
 
@@ -175,32 +176,32 @@ class TraversabilityImages(BaseDatasetImages):
         path = os.path.join(self.path, 'images/')
         assert os.path.exists(path)
 
-        files1 = {'rgb': [], 'label_id': []}
-        for key in files1.keys():
-            all_files = [os.path.join(path, key, f) for f in os.listdir(os.path.join(path, key))]
-            if self.split == 'train':
-                train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)),
-                                              replace=False).tolist()
-                files_key = train_files
-            elif self.split in ['val', 'test']:
-                train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)),
-                                              replace=False).tolist()
-                val_files = list(set(all_files) - set(train_files))
-                # It is a good practice to check datasets don`t intersects with each other
-                assert set(train_files).isdisjoint(set(val_files))
-                files_key = val_files
-            else:
-                # raise ValueError('Split must be one of train, val, test')
-                files_key = all_files
-            files1[key] = files_key
-
-        # convert to desirable format
         files = []
-        for i in range(len(files1['rgb'])):
-            files.append({
-                          'img': files1['rgb'][i],
-                          'label': files1['label_id'][i],
-                          })
+        rgb_files = [os.path.join(path, 'rgb', f) for f in os.listdir(os.path.join(path, 'rgb'))]
+        for f in rgb_files:
+            files.append(
+                {
+                    'img': f,
+                    'label': f.replace('rgb', 'label_id').replace('.jpg', '.png')
+                }
+            )
+        return files
+
+    def generate_split(self, train_ratio=0.8):
+        all_files = self.files.copy()
+        if self.split == 'train':
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
+            files = train_files
+        elif self.split in ['val', 'test']:
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
+            val_files = all_files.copy()
+            for x in train_files:
+                if x in val_files:
+                    val_files.remove(x)
+            files = val_files
+        else:
+            files = all_files
+        self.files = files
         return files
 
     def __getitem__(self, index):
@@ -587,7 +588,7 @@ def label_cloud_from_img(dt=0.2):
 def images_demo():
     from traversability_estimation.utils import visualize, convert_color
 
-    ds = TraversabilityImages()
+    ds = TraversabilityImages(split='val')
 
     for _ in range(5):
         i = np.random.choice(range(len(ds)))
