@@ -71,11 +71,9 @@ to `./config/weights` folder:
       └── se_resnext50_32x4d_352x640_lr1e-4.pth
 ```
 
-- [RGB Traversability Dataset](https://drive.google.com/drive/folders/1RI00nTeDx2MsUrYUVGWouwmwBMvLYx2j?usp=sharing):
-    RGB images with segmentation labels (traversable, non-traversable area).
-    
-- [Depth Traversability Dataset](http://subtdata.felk.cvut.cz/robingas/data/22-08-12-cimicky_haj/marv/):
-    Point clouds with self-supervised annotations of traversable area from robot's trajectories.
+- [Traversability Dataset](https://drive.google.com/drive/folders/10uOtvGhUcdaCTigC99WlPW0kQL1H9a6J?usp=sharing):
+    - RGB images with segmentation labels (traversable, non-traversable area).
+    - Point clouds with self-supervised annotations of traversable area from robot's trajectories.
     
 
 ### RELLIS-3D demo
