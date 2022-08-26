@@ -14,8 +14,8 @@ import os
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='TraversabilityImages')
-    # parser.add_argument('--dataset', type=str, default='Rellis3DImages')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityImagesFiftyone')
+    parser.add_argument('--dataset', type=str, default='Rellis3DImages')
     parser.add_argument('--img_size', nargs='+', default=(192, 320))
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
@@ -25,9 +25,8 @@ def main():
     ds = Dataset(crop_size=args.img_size, split='test')
 
     # Initialize model with the best available weights
-    # model_name = 'fcn_resnet50_lr_1e-05_bs_2_epoch_44_TraversabilityImages_iou_0.86.pth'
-    # model_name = 'Unet_resnet34_1184x1920_lr0.0001_bs1_epoch2_Rellis3DImages_iou_0.77.pth'
-    model_name = 'fcn_resnet50_lr_1e-05_bs_1_epoch_3_TraversabilityImages_iou_0.71.pth'
+    model_name = 'fcn_resnet50_lr_1e-05_bs_2_epoch_44_TraversabilityImages_iou_0.86.pth'
+    # model_name = 'fcn_resnet50_lr_1e-05_bs_1_epoch_3_TraversabilityImages_iou_0.71.pth'
     model_path = os.path.join('../../config/weights/image/', model_name)
     model = torch.load(model_path, map_location=args.device).eval()
 
