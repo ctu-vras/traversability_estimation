@@ -595,8 +595,8 @@ def lidar2cam_demo(n_runs=1):
         imgpoints = np.squeeze(imgpoints, 1)
         imgpoints = imgpoints.T
 
-        res_rgb = print_projection_plt(points=imgpoints, color=color, image=rgb)
-        res_semseg = print_projection_plt(points=imgpoints, color=color, image=semseg)
+        res_rgb = draw_points_on_image(points=imgpoints, color=color, image=rgb)
+        res_semseg = draw_points_on_image(points=imgpoints, color=color, image=semseg)
 
         plt.figure(figsize=(20, 10))
         plt.subplot(1, 2, 1)
