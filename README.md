@@ -11,7 +11,7 @@ for 13,556 LiDAR scans and 6,235 images (semantic segmentation).
 Data in ROS bag format, including RGB camera images, LiDAR point clouds, a pair of stereo images,
 high-precision GPS measurement, and IMU data.
 
-#### Installation instruction
+### Installation instruction
 
 - Go to the dataset [webpage](https://unmannedlab.github.io/research/RELLIS-3D).
 - Download the data to the relative path `./data`.
@@ -48,16 +48,7 @@ cd ~/catkin_ws/
 catkin_make
 ```
 
-### RELLIS-3D demo
-
-Publish the RELLIS-3D data as ROS messages:
-
-```bash
-source ~/catkin_ws/devel/setup.bash
-roslaunch traversability_estimation robot_data.launch data_sequence:='00000' rviz:=True
-```
-
-### Images Semantic Segmentation Node
+### Links to data and networks weights
 
 - [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
 
@@ -79,6 +70,24 @@ to `./config/weights` folder:
   └── smp/
       └── se_resnext50_32x4d_352x640_lr1e-4.pth
 ```
+
+- [RGB Traversability Dataset](https://drive.google.com/drive/folders/1RI00nTeDx2MsUrYUVGWouwmwBMvLYx2j?usp=sharing):
+    RGB images with segmentation labels (traversable, non-traversable area).
+    
+- [Depth Traversability Dataset](http://subtdata.felk.cvut.cz/robingas/data/22-08-12-cimicky_haj/marv/):
+    Point clouds with self-supervised annotations of traversable area from robot's trajectories.
+    
+
+### RELLIS-3D demo
+
+Publish the RELLIS-3D data as ROS messages:
+
+```bash
+source ~/catkin_ws/devel/setup.bash
+roslaunch traversability_estimation robot_data.launch data_sequence:='00000' rviz:=True
+```
+
+### Images Semantic Segmentation Node
 
 #### Topics:
 
