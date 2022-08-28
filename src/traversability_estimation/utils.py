@@ -3,6 +3,7 @@ from numpy.lib.recfunctions import unstructured_to_structured
 import cv2
 import yaml
 from PIL import Image, ImageFile
+
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import matplotlib.pyplot as plt
 import torch
@@ -121,8 +122,8 @@ def filter_camera_points(points, img_width, img_height, K, RT, give_mask=False):
     z = p_c[:, 2]
     xangle = np.arctan2(x, z) * 180 / np.pi
     yangle = np.arctan2(y, z) * 180 / np.pi
-    mask_x = (xangle > -fov_x/2) & (xangle < fov_x/2)
-    mask_y = (yangle > -fov_y/2) & (yangle < fov_y/2)
+    mask_x = (xangle > -fov_x / 2) & (xangle < fov_x / 2)
+    mask_y = (yangle > -fov_y / 2) & (yangle < fov_y / 2)
     mask = mask_x & mask_y
     points_res = p_l[mask, :3]
     points_res = np.array(points_res)
@@ -137,26 +138,26 @@ def filter_camera_points(points, img_width, img_height, K, RT, give_mask=False):
 
 
 color_palette = {
-    0: {"color": [0, 0, 0],  "name": "void"},
-    1: {"color": [108, 64, 20],   "name": "dirt"},
-    3: {"color": [0, 102, 0],   "name": "grass"},
-    4: {"color": [0, 255, 0],  "name": "tree"},
-    5: {"color": [0, 153, 153],  "name": "pole"},
-    6: {"color": [0, 128, 255],  "name": "water"},
-    7: {"color": [0, 0, 255],  "name": "sky"},
-    8: {"color": [255, 255, 0],  "name": "vehicle"},
-    9: {"color": [255, 0, 127],  "name": "object"},
-    10: {"color": [64, 64, 64],  "name": "asphalt"},
-    12: {"color": [255, 0, 0],  "name": "building"},
-    15: {"color": [102, 0, 0],  "name": "log"},
-    17: {"color": [204, 153, 255],  "name": "person"},
-    18: {"color": [102, 0, 204],  "name": "fence"},
-    19: {"color": [255, 153, 204],  "name": "bush"},
-    23: {"color": [170, 170, 170],  "name": "concrete"},
-    27: {"color": [41, 121, 255],  "name": "barrier"},
-    31: {"color": [134, 255, 239],  "name": "puddle"},
-    33: {"color": [99, 66, 34],  "name": "mud"},
-    34: {"color": [110, 22, 138],  "name": "rubble"}
+    0: {"color": [0, 0, 0], "name": "void"},
+    1: {"color": [108, 64, 20], "name": "dirt"},
+    3: {"color": [0, 102, 0], "name": "grass"},
+    4: {"color": [0, 255, 0], "name": "tree"},
+    5: {"color": [0, 153, 153], "name": "pole"},
+    6: {"color": [0, 128, 255], "name": "water"},
+    7: {"color": [0, 0, 255], "name": "sky"},
+    8: {"color": [255, 255, 0], "name": "vehicle"},
+    9: {"color": [255, 0, 127], "name": "object"},
+    10: {"color": [64, 64, 64], "name": "asphalt"},
+    12: {"color": [255, 0, 0], "name": "building"},
+    15: {"color": [102, 0, 0], "name": "log"},
+    17: {"color": [204, 153, 255], "name": "person"},
+    18: {"color": [102, 0, 204], "name": "fence"},
+    19: {"color": [255, 153, 204], "name": "bush"},
+    23: {"color": [170, 170, 170], "name": "concrete"},
+    27: {"color": [41, 121, 255], "name": "barrier"},
+    31: {"color": [134, 255, 239], "name": "puddle"},
+    33: {"color": [99, 66, 34], "name": "mud"},
+    34: {"color": [110, 22, 138], "name": "rubble"}
 }
 
 

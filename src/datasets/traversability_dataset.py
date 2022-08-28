@@ -2,6 +2,7 @@ import os
 import cv2
 import numpy as np
 import torch
+
 try:
     # it's hard to install the lib on jetson
     # we are not importing it since it is not needed for inference tasks on robots
@@ -433,7 +434,7 @@ def labeled_clouds_demo():
     from matplotlib import pyplot as plt
     import open3d as o3d
 
-    ds = TraversabilityClouds(split=None,)
+    ds = TraversabilityClouds(split=None, )
 
     for i in range(len(ds)):
         if ds.files[i]['label'] is None:
@@ -515,8 +516,8 @@ def label_cloud_from_img(dt=0.1):
             if img_file in bag_files[camera_frame]:
                 # print('Img file %s was recorded in bag file %s with sensor %s' % (img_file, bag_file, frame_id))
                 bag_file_images.append(img_path)
-                ts_img = float(img_file.split('_')[1].replace('s', '')) +\
-                         float(img_file.split('_')[2].replace('n', '').replace('.jpg', '')) / 10.0**9
+                ts_img = float(img_file.split('_')[1].replace('s', '')) + \
+                         float(img_file.split('_')[2].replace('n', '').replace('.jpg', '')) / 10.0 ** 9
                 bag_file_ts_imgs.append(ts_img)
                 frame_ids.append(camera_frame)
 
@@ -528,7 +529,7 @@ def label_cloud_from_img(dt=0.1):
     correspond_data = {'depth': [], 'img': [], 'camera_frame': []}
     for depth_path in ds_depth.files:
         depth_file = depth_path['pts'].split('/')[-1]
-        ts_depth = float(depth_file.split('_')[0]) + float(depth_file.split('_')[1].replace('.npz', '')) / 10.0**9
+        ts_depth = float(depth_file.split('_')[0]) + float(depth_file.split('_')[1].replace('.npz', '')) / 10.0 ** 9
 
         ts_imgs = np.asarray(bag_file_ts_imgs)
         time_diff = np.abs(ts_imgs - ts_depth)

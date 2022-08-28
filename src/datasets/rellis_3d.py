@@ -6,13 +6,12 @@ import cv2
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from traversability_estimation.utils import *
-from .base_dataset import BaseDatasetImages, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
-from .laserscan import SemLaserScan
+from base_dataset import BaseDatasetImages, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from laserscan import SemLaserScan
 from copy import copy
 import torch
 from PIL import Image
 import yaml
-
 
 __all__ = [
     'data_dir',
@@ -31,6 +30,8 @@ seq_names = [
     '00003',
     '00004',
 ]
+
+
 # seq_names = ['%05d' % i for i in range(5)]
 
 
@@ -195,6 +196,7 @@ class Rellis3DImages(BaseDatasetImages):
                  crop_size=(1200, 1920),
                  downsample_rate=1,
                  scale_factor=16,
+                 traversability_labels=False,
                  mean=np.asarray([0.54218053, 0.64250553, 0.56620195]),
                  std=np.asarray([0.54218052, 0.64250552, 0.56620194])):
         super(Rellis3DImages, self).__init__(ignore_label, base_size,
@@ -207,8 +209,16 @@ class Rellis3DImages(BaseDatasetImages):
         self.path = path
         self.split = split
 
-        # convert str names to class values on masks
-        self.class_values = list(range(len(self.CLASSES)))
+        self.traversability_labels = traversability_labels
+        if not traversability_labels:
+            self.label_map = None
+            # convert str names to class values on masks
+            self.class_values = list(range(len(self.CLASSES)))
+        else:
+            label_map = yaml.safe_load(
+                open(os.path.join(data_dir, "../config/rellis_to_traversability.yaml"), 'r'))
+            self.label_map = {int(k): int(v) for k, v in label_map.items()}
+            self.class_values = [0, 1, 255]
 
         self.base_size = base_size
         self.crop_size = crop_size
@@ -248,7 +258,10 @@ class Rellis3DImages(BaseDatasetImages):
         image = cv2.imread(item["img"], cv2.IMREAD_COLOR)
 
         mask = np.array(Image.open(item["label"]))
-        mask = convert_label(mask, inverse=False)
+        if self.label_map is not None:
+            mask = convert_label(mask, inverse=False, label_mapping=self.label_map)
+        else:
+            mask = convert_label(mask, inverse=False)
 
         if 'test' in self.split:
             new_h, new_w = self.crop_size
@@ -316,7 +329,7 @@ class Rellis3DClouds:
         n_classes = len(self.CLASSES)
         # TRAVERSABILITY_LABELS = [0, 1, 255]
         self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]) if self.traversability_labels \
-                                                                               else list(range(n_classes))
+            else list(range(n_classes))
         self.scan = SemLaserScan(n_classes, self.color_map, project=True)
 
         self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
@@ -625,13 +638,34 @@ def semseg_demo(n_runs=1):
         plt.show()
 
 
+def traversability_mapping_demo(n_runs=1):
+    color_map = {0: [0, 255, 0],
+                 1: [255, 0, 0],
+                 255: [0, 0, 0]}
+
+    split = np.random.choice(['test', 'train', 'val'])
+    ds = Rellis3DImages(split=split, traversability_labels=True)
+
+    for _ in range(n_runs):
+        image, gt_mask = ds[int(np.random.choice(range(len(ds))))]
+
+        if split in ['val', 'train']:
+            image = image.transpose([1, 2, 0])
+
+        image_vis = np.uint8(255 * (image * ds.std + ds.mean))
+        gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
+        gt_color = convert_color(gt_arg, color_map)
+        visualize(image=image_vis, label=gt_color)
+
+
 def main():
-    colored_cloud_demo(1)
-    semantic_laser_scan_demo(1)
-    semseg_test(1)
-    lidar_map_demo()
-    lidar2cam_demo(1)
-    semseg_demo(1)
+    # colored_cloud_demo(1)
+    # semantic_laser_scan_demo(1)
+    # semseg_test(1)
+    # lidar_map_demo()
+    # lidar2cam_demo(1)
+    # semseg_demo(1)
+    traversability_mapping_demo(1)
 
 
 if __name__ == '__main__':
