@@ -24,6 +24,7 @@ class CloudToDepth:
         depth_msg = msgify(Image, depth, 'mono16')
         self.image_pub.publish(depth_msg)
 
+
 if __name__ == '__main__':
     rospy.init_node('depth_to_cloud', log_level=rospy.INFO)
     node = CloudToDepth()

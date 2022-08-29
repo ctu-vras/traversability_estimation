@@ -5,7 +5,7 @@
     <!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34.bag"/>-->
 <!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17.bag"/>-->
 <!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-16-08-17.bag"/>
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
 
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>

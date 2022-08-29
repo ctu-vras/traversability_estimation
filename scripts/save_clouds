@@ -1,0 +1,50 @@
+#!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+import rospy
+from sensor_msgs.msg import PointCloud2
+import yaml
+from ros_numpy import msgify, numpify
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+import os
+
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+class PointsProcessor:
+    def __init__(self, pc_topic='/points'):
+        self.pc_frame = None
+
+        self.pc_topic = rospy.get_param('~pointcloud_topic', pc_topic)
+        rospy.loginfo("Subscribed to " + self.pc_topic)
+        self.get_time_stamps('ugv_2022-08-12-15-30-22.bag')
+        pc_sub = rospy.Subscriber(pc_topic, PointCloud2, self.pc_callback)
+
+    def get_time_stamps(self, bag_file):
+        file_to_bag = yaml.safe_load(
+            open(os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'correspondencies.yaml'), 'r'))
+
+        data = file_to_bag[bag_file]
+
+        for camera_frame in data.keys():
+            for i, t in enumerate(data[camera_frame]):
+                fname = data[camera_frame][i]
+                data[camera_frame][i] = float(fname.split('_')[1].replace('s', '')) + \
+                                        float(fname.split('_')[2].replace('n', '').replace('.jpg', '')) / 10.0 ** 9
+        print(data)
+
+    def pc_callback(self, pc_msg):
+        assert isinstance(pc_msg, PointCloud2)
+        now = rospy.Time.now()
+
+        cloud_lid = numpify(pc_msg)
+
+        points = structured_to_unstructured(cloud_lid[['x', 'y', 'z']])
+        print(points.shape)
+
+
+if __name__ == '__main__':
+    rospy.init_node('pc_saving_node', log_level=rospy.DEBUG)
+    # proc = PointsProcessor(pc_topic='/os_cloud_node/points')
+    proc = PointsProcessor(pc_topic='/os_cloud_node/destaggered_points')
+    rospy.spin()
