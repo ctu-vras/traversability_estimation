@@ -6,8 +6,8 @@ import cv2
 from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from traversability_estimation.utils import *
-from base_dataset import BaseDatasetImages, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
-from laserscan import SemLaserScan
+from datasets.base_dataset import BaseDatasetImages, TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from datasets.laserscan import SemLaserScan
 from copy import copy
 import torch
 from PIL import Image
@@ -290,6 +290,7 @@ class Rellis3DClouds:
                  color_map=None,
                  traversability_labels=False,
                  lidar_beams_step=1,
+                 labels_mode='labels'
                  ):
         if path is None:
             path = join(data_dir, 'Rellis_3D')
@@ -303,6 +304,8 @@ class Rellis3DClouds:
         self.fields = fields
         # make sure the input fields are supported
         assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
+        assert labels_mode in ['masks', 'labels']
+        self.labels_mode = labels_mode
 
         self.traversability_labels = traversability_labels
         if not traversability_labels:
@@ -328,7 +331,7 @@ class Rellis3DClouds:
         self.color_map = color_map
         n_classes = len(self.CLASSES)
         # TRAVERSABILITY_LABELS = [0, 1, 255]
-        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]) if self.traversability_labels \
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist() if self.traversability_labels \
             else list(range(n_classes))
         self.scan = SemLaserScan(n_classes, self.color_map, project=True)
 
@@ -365,7 +368,6 @@ class Rellis3DClouds:
 
     def __getitem__(self, index):
         item = self.files[index]
-
         self.scan.open_scan(item["depth"])
         self.scan.open_label(item["label"])
         self.scan.colorize()
@@ -384,14 +386,17 @@ class Rellis3DClouds:
             label = self.label_map[label]
         label = convert_label(label, inverse=False)
         assert input.shape[1:] == label.shape  # (N, H, W) and (H, W)
+        assert set(np.unique(label)) <= set(self.class_values)  # label should contain only valid class values
 
-        # extract certain classes from mask (one hot encoding)
-        masks = [(label == v) for v in self.class_values]
-        label = np.stack(masks, axis=0).astype('float')
+        # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
+        if self.labels_mode == 'masks':
+            # extract certain classes from mask (one hot encoding)
+            masks = [(label == v) for v in self.class_values]
+            label = np.stack(masks, axis=0).astype('float')
 
-        n_classes = len(self.class_values)
-        assert label.shape == (n_classes, H, W)
-        assert input.shape == (n_inputs, H, W)
+            n_classes = len(self.class_values)
+            assert label.shape == (n_classes, H, W)
+            assert input.shape == (n_inputs, H, W)
 
         if self.lidar_beams_step:
             input = input[..., ::self.lidar_beams_step]
@@ -639,9 +644,7 @@ def semseg_demo(n_runs=1):
 
 
 def traversability_mapping_demo(n_runs=1):
-    color_map = {0: [0, 255, 0],
-                 1: [255, 0, 0],
-                 255: [0, 0, 0]}
+    color_map = TRAVERSABILITY_COLOR_MAP
 
     split = np.random.choice(['test', 'train', 'val'])
     ds = Rellis3DImages(split=split, traversability_labels=True)
@@ -653,7 +656,7 @@ def traversability_mapping_demo(n_runs=1):
             image = image.transpose([1, 2, 0])
 
         image_vis = np.uint8(255 * (image * ds.std + ds.mean))
-        gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
+        gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)  # [0, 1, 2]
         gt_color = convert_color(gt_arg, color_map)
         visualize(image=image_vis, label=gt_color)
 

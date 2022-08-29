@@ -237,7 +237,7 @@ class TraversabilityClouds(torch.utils.data.Dataset):
                  depth_img_W=1024,
                  lidar_fov_up=45.0,
                  lidar_fov_down=-45.0,
-                 labels_mode='masks',
+                 labels_mode='labels',
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
@@ -251,10 +251,7 @@ class TraversabilityClouds(torch.utils.data.Dataset):
         self.path = os.path.join(path, 'clouds', sequence, 'os_cloud_node')
         self.rng = np.random.default_rng(42)
         self.mask_targets = {val: key for key, val in TRAVERSABILITY_LABELS.items()}
-        # self.class_values = list(self.mask_targets.values())
-        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()])
-        assert labels_mode in ['masks', 'labels']
-        self.labels_mode = labels_mode  # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
@@ -262,6 +259,8 @@ class TraversabilityClouds(torch.utils.data.Dataset):
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
         self.traversability_labels = True
+        assert labels_mode in ['masks', 'labels']
+        self.labels_mode = labels_mode
 
         self.depth_img_W = depth_img_W
         self.depth_img_H = depth_img_H
@@ -280,7 +279,7 @@ class TraversabilityClouds(torch.utils.data.Dataset):
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        color = self.scan.sem_color_lut[label]
+        color = self.scan.sem_color_lut[label.astype('int')]
         return color
 
     def read_files(self):
@@ -326,7 +325,8 @@ class TraversabilityClouds(torch.utils.data.Dataset):
         cloud = self.read_cloud(cloud_path)
 
         xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
-        traversability = 1 - cloud['empty']
+        traversability = cloud['empty'].copy()
+        traversability[traversability == 1] = 0
 
         self.scan.set_points(points=xyz)
         bg_value = self.mask_targets["background"]
@@ -336,6 +336,7 @@ class TraversabilityClouds(torch.utils.data.Dataset):
 
         depth_img = self.scan.proj_range[None]  # (1, H, W)
         label = self.scan.proj_sem_label
+        assert set(np.unique(label)) <= set(self.class_values)
 
         # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
         if self.labels_mode == 'masks':
