@@ -1,13 +1,10 @@
-# ------------------------------------------------------------------------------
-# Copyright (c) Microsoft
-# Licensed under the MIT License.
-# Written by Ke Sun (sunk@mail.ustc.edu.cn)
-# ------------------------------------------------------------------------------
-
 import cv2
 import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import random
 from torch.utils import data
+from datasets.laserscan import SemLaserScan
+import os
 
 
 VOID_VALUE = 255
@@ -181,3 +178,79 @@ class BaseDatasetImages(data.Dataset):
         encoded_labelmap = labelmap - 1
 
         return encoded_labelmap
+
+
+class BaseDatasetClouds(data.Dataset):
+    CLASSES = []
+
+    def __init__(self,
+                 path=None,
+                 num_samples=None,
+                 depth_img_H=128,
+                 depth_img_W=1024,
+                 lidar_fov_up=45.0,
+                 lidar_fov_down=-45.0,
+                 labels_mode='labels',
+                 split=None,
+                 fields=None,
+                 lidar_beams_step=1,
+                 traversability_labels=None,
+                 ):
+        if fields is None:
+            fields = ['depth']
+        self.path = path
+        self.rng = np.random.default_rng(42)
+        self.mask_targets = {val: key for key, val in TRAVERSABILITY_LABELS.items()}
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
+
+        assert split in [None, 'train', 'val', 'test']
+        self.split = split
+
+        self.fields = fields
+        self.lidar_beams_step = lidar_beams_step
+        self.traversability_labels = traversability_labels
+        assert labels_mode in ['masks', 'labels']
+        self.labels_mode = labels_mode
+
+        self.depth_img_W = depth_img_W
+        self.depth_img_H = depth_img_H
+        self.color_map = TRAVERSABILITY_COLOR_MAP
+        self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
+                                 project=True, H=self.depth_img_H, W=self.depth_img_W,
+                                 fov_up=lidar_fov_up, fov_down=lidar_fov_down)
+
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        color = self.scan.sem_color_lut[label.astype('int')]
+        return color
+
+    def read_files(self):
+        files = []
+        return files
+
+    def generate_split(self, train_ratio=0.8):
+        all_files = self.files.copy()
+        if self.split == 'train':
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
+            files = train_files
+        elif self.split in ['val', 'test']:
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
+            val_files = all_files.copy()
+            for x in train_files:
+                if x in val_files:
+                    val_files.remove(x)
+            files = val_files
+        else:
+            files = all_files
+        self.files = files
+        return files
+
+    def read_cloud(self, path):
+        cloud = np.load(path)['arr_0']
+        return cloud
+
+    def __len__(self):
+        return len(self.files)
