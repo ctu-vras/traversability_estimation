@@ -18,7 +18,7 @@ import segmentation_models_pytorch as smp
 from PIL import Image
 from hrnet import models
 from hrnet.config import config
-from datasets.traversability_dataset import TraversabilityImagesFiftyone
+from datasets.traversability_dataset import TraversabilityImages51
 from torch.utils.data import DataLoader
 from datasets.rellis_3d import Rellis3DImages
 from hrnet.core.function import convert_label, convert_color
@@ -72,7 +72,7 @@ class ModelEvaluator(object):
         if dataset == 'rellis3d':
             self.dataset = Rellis3DImages(crop_size=self.image_size[::-1], split=self.split)
         elif dataset == 'TraversabilityImages':
-            self.dataset = TraversabilityImagesFiftyone(crop_size=self.image_size[::-1], split=self.split)
+            self.dataset = TraversabilityImages51(crop_size=self.image_size[::-1], split=self.split)
         self.cfg = yaml.safe_load(open(TRAVERSABILITY_CONFIG, 'r'))
 
     def load_hrnet(self) -> torch.nn.Module:
