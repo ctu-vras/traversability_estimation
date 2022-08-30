@@ -59,8 +59,6 @@ def main():
     parser.add_argument('--num_samples', type=int, default=None)
     args = parser.parse_args()
 
-    pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../..'))
-
     Dataset = eval('datasets.%s' % args.dataset)
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
@@ -91,13 +89,14 @@ def main():
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     loss_mode = 'multilabel' if train_dataset[0][1].ndim == 3 else 'multiclass'  # (n_cl, H, W) or (H, W)
     criterion_fn = smp.losses.DiceLoss(mode=loss_mode, log_loss=True,
-                                       from_logits=True, ignore_index=VOID_VALUE)
+                                       from_logits=True, ignore_index=0 if not VOID_VALUE in train_dataset.class_values \
+                                                                        else VOID_VALUE)
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    background_index = None if not VOID_VALUE in valid_dataset.class_values \
-        else [valid_dataset.class_values.index(VOID_VALUE)]
+    background_index = 0 if not VOID_VALUE in valid_dataset.class_values \
+        else valid_dataset.class_values.index(VOID_VALUE)
     metric_fn = smp.utils.metrics.IoU(threshold=0.5,
                                       activation='softmax2d',
-                                      ignore_channels=background_index)
+                                      ignore_channels=[background_index])
 
     max_metric = -np.Inf
     for e in tqdm(range(args.n_epochs)):

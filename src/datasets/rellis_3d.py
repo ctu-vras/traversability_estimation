@@ -662,12 +662,12 @@ def traversability_mapping_demo(n_runs=1):
 
 
 def main():
-    # colored_cloud_demo(1)
-    # semantic_laser_scan_demo(1)
-    # semseg_test(1)
+    colored_cloud_demo(1)
+    semantic_laser_scan_demo(1)
+    semseg_test(1)
     # lidar_map_demo()
-    # lidar2cam_demo(1)
-    # semseg_demo(1)
+    lidar2cam_demo(1)
+    semseg_demo(1)
     traversability_mapping_demo(1)
 
 
