@@ -9,6 +9,7 @@ from argparse import ArgumentParser
 import datasets
 from tqdm import tqdm
 import segmentation_models_pytorch as smp
+import matplotlib.pyplot as plt
 
 
 VOID_VALUE = 255
@@ -50,13 +51,14 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
-    parser.add_argument('--trav_labels', type=bool, default=True)
+    parser.add_argument('--trav_labels', type=bool, default=False)
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
     parser.add_argument('--batch_size', type=int, default=6)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
     parser.add_argument('--num_samples', type=int, default=None)
+    parser.add_argument('--visualize_preds', type=bool, default=True)
     args = parser.parse_args()
 
     Dataset = eval('datasets.%s' % args.dataset)
@@ -146,6 +148,27 @@ def main():
         if e == 60:
             optimizer.param_groups[0]['lr'] /= 10.0
             print('Decrease decoder learning rate to %f !' % optimizer.param_groups[0]['lr'])
+
+        if args.visualize_preds:
+            # Use the current trained model and visualize a prediction
+            model = model.eval()
+            inpt, label = next(iter(valid_loader))
+            with torch.no_grad():
+                pred = model(inpt.to(device))['out']
+            pred = pred.squeeze(0).cpu().numpy()
+            label = label.squeeze(0).cpu().numpy()
+
+            color_pred = valid_dataset.label_to_color(pred)
+            color_gt = valid_dataset.label_to_color(label)
+
+            plt.figure(figsize=(20, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(color_pred)
+            plt.title('Prediction')
+            plt.subplot(2, 1, 2)
+            plt.imshow(color_gt)
+            plt.title('Ground truth')
+            plt.show()
 
 
 if __name__ == '__main__':
