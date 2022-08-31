@@ -132,7 +132,7 @@ def main():
         metric = np.mean(metrics)
 
         # save better model
-        if max_metric < metric:  # Save model weight
+        if max_metric < metric or e % 10 == 0:  # Save model weights
             max_metric = metric
             name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
                    (args.architecture,
