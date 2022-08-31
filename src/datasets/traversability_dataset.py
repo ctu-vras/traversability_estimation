@@ -570,7 +570,7 @@ def labeled_clouds_self_supervised():
         o3d.visualization.draw_geometries([pcd])
 
 
-def label_cloud_from_img(dt=0.1):
+def label_cloud_from_img(visualize=False, save_clouds=True):
     import yaml
     import open3d as o3d
     import matplotlib.pyplot as plt
@@ -578,10 +578,8 @@ def label_cloud_from_img(dt=0.1):
     from scipy.spatial.transform import Rotation
     from tqdm import tqdm
 
-    seq = 'ugv_2022-08-12-15-30-22'
-
     ds_img = TraversabilityImages51()
-    ds_depth = TraversabilityClouds_SelfSupervised(sequence=seq)
+    ds_depth = TraversabilityClouds()
 
     # get camera intrinsics
     intrinsics = {"camera_front": [1179.41625, 0.0, 983.9155, 0.0, 1178.90431, 596.74537, 0.0, 0.0, 1.0],
@@ -598,73 +596,46 @@ def label_cloud_from_img(dt=0.1):
                   "camera_left": [-0.228789, 0.071791, 0.000209, -0.000356, 0.0],
                   "camera_right": [-0.223299, 0.068371, 0.000216, -0.000206, 0.0]}
 
-    """
-    find labelled images from bag file
-    """
-    bag_file = '%s.bag' % seq
-    bag_file_images = []
-    bag_file_ts_imgs = []
-    frame_ids = []
-
-    file_to_bag = yaml.safe_load(open(os.path.join(data_dir, 'TraversabilityDataset', 'correspondencies.yaml'), 'r'))
-    for img_path in ds_img.files:
-        img_file = img_path.split('/')[-1]
-
-        bag_files = file_to_bag[bag_file]
-
-        for camera_frame in bag_files.keys():
-            if img_file in bag_files[camera_frame]:
-                # print('Img file %s was recorded in bag file %s with sensor %s' % (img_file, bag_file, frame_id))
-                bag_file_images.append(img_path)
-                ts_img = float(img_file.split('_')[1].replace('s', '')) + \
-                         float(img_file.split('_')[2].replace('n', '').replace('.jpg', '')) / 10.0 ** 9
-                bag_file_ts_imgs.append(ts_img)
-                frame_ids.append(camera_frame)
-
-    print('\nFound %i labelled images from bag file %s' % (len(bag_file_images), bag_file))
-
-    """
-    find closest in timestamp point clouds for each image
-    """
-    correspond_data = {'depth': [], 'img': [], 'camera_frame': []}
-    for depth_path in ds_depth.files:
-        depth_file = depth_path['pts'].split('/')[-1]
-        ts_depth = float(depth_file.split('_')[0]) + float(depth_file.split('_')[1].replace('.npz', '')) / 10.0 ** 9
-
-        ts_imgs = np.asarray(bag_file_ts_imgs)
-        time_diff = np.abs(ts_imgs - ts_depth)
-        idx = time_diff.argmin()
-
-        if time_diff[idx] <= dt:
-            # print('For depth cloud %s found closest labelled image %s'
-            #       'from frame % s with time difference %f [sec]'
-            #       % (depth_file, bag_file_images[idx], frame_ids[idx], time_diff[idx]))
-            correspond_data['depth'].append(depth_path)
-            correspond_data['img'].append(bag_file_images[idx])
-            correspond_data['camera_frame'].append(frame_ids[idx])
-
-    assert len(correspond_data['img']) == len(correspond_data['depth'])
-    assert len(correspond_data['camera_frame']) == len(correspond_data['img'])
-    print('\nFound %i images and corresponding clouds for annotation with allowed synchronization threshold %f [sec]'
-          % (len(correspond_data['img']), dt))
-
-    # choose corresponding data samples: img, point cloud, calibration and find points in camera FoV
-    print('\nSaving point cloud labels...')
+    file_to_bag = yaml.safe_load(open(os.path.join(data_dir, 'TraversabilityDataset',
+                                                   'supervised', 'correspondencies.yaml'), 'r'))
     label_mapping = {0: 255,
                      1: 0,
                      2: 1}
-    for img_i in range(len(correspond_data['img'])):
 
-        img = cv2.imread(correspond_data['img'][img_i])
-        img_label = ds_img.get_mask(correspond_data['img'][img_i])
+    camera_frames = []
+    img_files = []
+    cloud_files = []
+    for file in ds_depth.files:
+            cloud_file = file['pts']
+            img_file = cloud_file.replace('.npz', '.jpg').replace('clouds', 'images').replace('destaggered_points', 'rgb')
 
-        cloud = ds_depth.read_cloud(correspond_data['depth'][img_i]['pts'])
-        points = structured_to_unstructured(cloud[['x', 'y', 'z']])
+            for bag_file in ['ugv_2022-08-12-15-18-34.bag', 'ugv_2022-08-12-15-30-22.bag']:
+                imgs_in_bag = file_to_bag[bag_file]
+
+                for camera_frame in imgs_in_bag.keys():
+                    if img_file.split('/')[-1] in imgs_in_bag[camera_frame]:
+                        img_files.append(img_file)
+                        camera_frames.append(camera_frame)
+                        cloud_files.append(cloud_file)
+
+    assert len(img_files) == len(camera_frames) == len(ds_depth) == len(cloud_files)
+
+    if not os.path.exists(os.path.join(ds_depth.path, 'label_color')):
+        os.mkdir(os.path.join(ds_depth.path, 'label_color'))
+    if not os.path.exists(os.path.join(ds_depth.path, 'label_id')):
+        os.mkdir(os.path.join(ds_depth.path, 'label_id'))
+
+    for i in tqdm(range(len(img_files))):
+        img = cv2.imread(img_files[i])
+        img_label = ds_img.get_mask(img_files[i])
+
+        cloud = ds_depth.read_cloud(cloud_files[i]).reshape((-1, 4))
+        points = cloud[..., :3]
 
         """
         get lidar points which are in camera FoV
         """
-        camera_frame = correspond_data['camera_frame'][img_i]
+        camera_frame = camera_frames[i]
 
         T_cam2lid = np.eye(4)
         T_cam2lid[:3, :3] = Rotation.from_quat(extrinsics[camera_frame]['quat']).as_matrix()
@@ -692,7 +663,7 @@ def label_cloud_from_img(dt=0.1):
         """
         depth_label = np.zeros_like(camera_pts_mask, dtype=np.int32)
         assert img_points.shape[0] == 2
-        for pt_id, pt_pxl in tqdm(enumerate(img_points.T)):
+        for pt_id, pt_pxl in enumerate(img_points.T):
             assert pt_pxl.shape == (2,)
             w, h = np.int32(pt_pxl)
             if 0 <= w < img_width and 0 <= h < img_height:
@@ -706,43 +677,40 @@ def label_cloud_from_img(dt=0.1):
         semseg_mask = convert_color(img_label, ds_img.color_map)
         img_with_pts = draw_points_on_image(points=img_points, color=color, image=img)
 
-        plt.figure(figsize=(20, 10))
-        plt.subplot(1, 3, 1)
-        plt.imshow(img[..., (2, 1, 0)])
-        plt.subplot(1, 3, 2)
-        plt.imshow(img_with_pts[..., (2, 1, 0)])
-        plt.subplot(1, 3, 3)
-        plt.tight_layout()
-        plt.imshow(semseg_mask)
+        if visualize:
+            plt.figure(figsize=(20, 10))
+            plt.subplot(1, 3, 1)
+            plt.imshow(img[..., (2, 1, 0)])
+            plt.title('Frame: %s' % camera_frame)
+            plt.subplot(1, 3, 2)
+            plt.imshow(img_with_pts[..., (2, 1, 0)])
+            plt.subplot(1, 3, 3)
+            plt.tight_layout()
+            plt.imshow(semseg_mask)
 
-        plt.figure(figsize=(20, 10))
-        plt.subplot(2, 1, 1)
-        plt.imshow(depth_color.reshape((ds_depth.depth_img_H, ds_depth.depth_img_W, 3)))
-        plt.subplot(2, 1, 2)
-        plt.imshow(depth_label.reshape((ds_depth.depth_img_H, ds_depth.depth_img_W)))
-        plt.tight_layout()
-        plt.show()
+            plt.figure(figsize=(20, 10))
+            plt.subplot(2, 1, 1)
+            plt.imshow(depth_color.reshape((ds_depth.depth_img_H, ds_depth.depth_img_W, 3)))
+            plt.subplot(2, 1, 2)
+            plt.imshow(depth_label.reshape((ds_depth.depth_img_H, ds_depth.depth_img_W)))
+            plt.tight_layout()
+            plt.show()
 
-        assert depth_color.shape == points.shape
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(points)
-        pcd.colors = o3d.utility.Vector3dVector(depth_color)
-        o3d.visualization.draw_geometries([pcd])
+            assert depth_color.shape == points.shape
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(points)
+            pcd.colors = o3d.utility.Vector3dVector(depth_color)
 
-        # pcd = o3d.geometry.PointCloud()
-        # pcd.points = o3d.utility.Vector3dVector(points[camera_pts_ids])
-        # o3d.visualization.draw_geometries([pcd])
+            pcd_cam = o3d.geometry.PointCloud()
+            pcd_cam.points = o3d.utility.Vector3dVector(points[camera_pts_ids] + np.asarray([50, 0, 0]))
+            o3d.visualization.draw_geometries([pcd, pcd_cam])
 
-        # """
-        # save labelled point clouds (add them to TraversabilityDataset)
-        # """
-        # if not os.path.exists(os.path.join(ds_depth.path, 'label_color')):
-        #     os.mkdir(os.path.join(ds_depth.path, 'label_color'))
-        # if not os.path.exists(os.path.join(ds_depth.path, 'label_id')):
-        #     os.mkdir(os.path.join(ds_depth.path, 'label_id'))
-        #
-        # np.savez(correspond_data['depth'][img_i]['pts'].replace('destaggered_points', 'label_id'), depth_label)
-        # np.savez(correspond_data['depth'][img_i]['pts'].replace('destaggered_points', 'label_color'), depth_color)
+        if save_clouds:
+            """
+            save labelled point clouds (add them to TraversabilityDataset)
+            """
+            np.savez(cloud_files[i].replace('destaggered_points', 'label_id'), depth_label)
+            np.savez(cloud_files[i].replace('destaggered_points', 'label_color'), depth_color)
 
 
 def images_demo():
@@ -766,8 +734,8 @@ def main():
     # images_save_labels()
     # clouds_demo(5)
     # labeled_clouds_self_supervised()
-    labeled_clouds()
-    # label_cloud_from_img(dt=0.1)
+    # labeled_clouds(5)
+    label_cloud_from_img(visualize=True)
 
 
 if __name__ == "__main__":
