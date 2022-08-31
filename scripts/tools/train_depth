@@ -51,14 +51,14 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
-    parser.add_argument('--trav_labels', type=bool, default=False)
+    parser.add_argument('--trav_labels', action='store_true')
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
     parser.add_argument('--batch_size', type=int, default=6)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
     parser.add_argument('--num_samples', type=int, default=None)
-    parser.add_argument('--visualize_preds', type=bool, default=True)
+    parser.add_argument('--vis_preds', action='store_true')
     args = parser.parse_args()
 
     Dataset = eval('datasets.%s' % args.dataset)
@@ -149,7 +149,7 @@ def main():
             optimizer.param_groups[0]['lr'] /= 10.0
             print('Decrease decoder learning rate to %f !' % optimizer.param_groups[0]['lr'])
 
-        if args.visualize_preds:
+        if args.vis_preds:
             # Use the current trained model and visualize a prediction
             model = model.eval()
             inpt, label = next(iter(valid_loader))
