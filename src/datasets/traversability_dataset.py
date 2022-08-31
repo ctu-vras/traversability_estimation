@@ -294,8 +294,8 @@ class TraversabilityClouds(BaseDatasetClouds):
         return cloud
 
     def __getitem__(self, index):
-        cloud_path = self.files[index]['pts']
-        cloud = self.read_cloud(cloud_path).reshape((-1, 4))
+        cloud = self.read_cloud(self.files[index]['pts']).reshape((-1, 4))
+        label = self.read_cloud(self.files[index]['label'])
 
         xyz = cloud[..., :3]
         intensity = cloud[..., 3]
@@ -303,11 +303,10 @@ class TraversabilityClouds(BaseDatasetClouds):
         self.scan.set_points(points=xyz, remissions=intensity)
 
         depth_img = self.scan.proj_range[None]  # (1, H, W)
+        label = label.reshape((self.depth_img_H, self.depth_img_W))[None]  # (1, H, W)
 
-        # TODO: create and read labels
-        label = None
-
-        return depth_img.astype('float32'), label
+        assert depth_img.shape == label.shape
+        return depth_img, label
 
 
 class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
@@ -500,10 +499,12 @@ def labeled_clouds(num_runs=1):
 
     for i in range(num_runs):
 
-        depth_img, _ = ds[np.random.choice(len(ds))]
+        depth_img, label = ds[np.random.choice(len(ds))]
 
         power = 16
         depth_img_vis = np.copy(depth_img).squeeze()  # depth
+        label = label.squeeze()
+
         depth_img_vis[depth_img_vis > 0] = depth_img_vis[depth_img_vis > 0] ** (1 / power)
         depth_img_vis[depth_img_vis > 0] = (depth_img_vis[depth_img_vis > 0] - depth_img_vis[depth_img_vis > 0].min()) / \
                                            (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[
@@ -511,16 +512,21 @@ def labeled_clouds(num_runs=1):
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
+        label_trav = label == ds.mask_targets['traversable']
+        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float32")
+
         plt.figure(figsize=(20, 10))
-        plt.imshow(depth_img_vis)
+        plt.imshow(result)
         plt.title('Depth image with traversable points')
         plt.tight_layout()
         plt.show()
 
         xyz = ds.scan.proj_xyz
+        color = ds.scan.sem_color_lut[label.astype('uint8')]
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
+        pcd.colors = o3d.utility.Vector3dVector(color.reshape((-1, 3)))
         o3d.visualization.draw_geometries([pcd])
 
 
