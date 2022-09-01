@@ -31,10 +31,12 @@ class CloudProcessor:
         self.local_map = None
         self.new_map = None
         self.lidar_frame = None
-        self.lidar_channels = rospy.get_param('~lidar_channels', 64)
-        self.lidar_beams = rospy.get_param('~lidar_beams', 2048)
-        self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 22.5)
-        self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -22.5)
+        self.lidar_channels = rospy.get_param('~lidar_channels', 128)
+        self.lidar_beams = rospy.get_param('~lidar_beams', 1024)
+        self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 45.0)
+        self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -45.0)
+        self.lidar_height_above_ground = rospy.get_param('~lidar_height_above_ground', 0.0)
+
         self.lock = RLock()
 
         label_map = rospy.get_param('~label_map', None)
@@ -86,7 +88,7 @@ class CloudProcessor:
         self.depth_pub = rospy.Publisher('depth', Image, queue_size=1)
 
         self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
-        rospy.loginfo('Point cloud processing node is ready.')
+        rospy.loginfo('Point cloud segmentation node is ready.')
 
     def label_to_color(self, label):
         if len(label.shape) == 3:

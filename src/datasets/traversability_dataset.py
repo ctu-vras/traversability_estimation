@@ -226,89 +226,6 @@ class TraversabilityImages(BaseDatasetImages):
         return image.copy(), mask.copy()
 
 
-class TraversabilityClouds(BaseDatasetClouds):
-
-    CLASSES = ["background", "traversable", "non-traversable"]
-
-    def __init__(self,
-                 sequence='ugv_2022-08-12-15-30-22',
-                 path=None,
-                 num_samples=None,
-                 depth_img_H=128,
-                 depth_img_W=1024,
-                 lidar_fov_up=45.0,
-                 lidar_fov_down=-45.0,
-                 labels_mode='labels',
-                 split=None,
-                 fields=None,
-                 lidar_beams_step=1,
-                 traversability_labels=True,
-                 ):
-        super(TraversabilityClouds, self).__init__(path, num_samples, depth_img_H, depth_img_W,
-                                                   lidar_fov_up, lidar_fov_down, labels_mode, split,
-                                                   fields, lidar_beams_step, traversability_labels)
-        if fields is None:
-            fields = ['depth']
-        if path is None:
-            path = os.path.join(data_dir, 'TraversabilityDataset', 'supervised')
-        assert os.path.exists(path)
-        self.path = os.path.join(path, 'clouds')
-        self.rng = np.random.default_rng(42)
-        self.mask_targets = {val: key for key, val in TRAVERSABILITY_LABELS.items()}
-        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
-
-        assert split in [None, 'train', 'val', 'test']
-        self.split = split
-
-        self.fields = fields
-        self.lidar_beams_step = lidar_beams_step
-        assert traversability_labels == True
-        self.traversability_labels = traversability_labels
-        assert labels_mode in ['masks', 'labels']
-        self.labels_mode = labels_mode
-
-        self.files = self.read_files()
-        self.generate_split(train_ratio=0.8)
-        if num_samples:
-            self.files = self.files[:num_samples]
-
-    def read_files(self):
-        path = os.path.join(self.path)
-        assert os.path.exists(path)
-
-        files = []
-        pts_files = [os.path.join(path, 'destaggered_points', f)
-                     for f in os.listdir(os.path.join(path, 'destaggered_points'))]
-        for f in pts_files:
-            label_f = f.replace('destaggered_points', 'label_id')
-            files.append(
-                {
-                    'pts': f,
-                    'label': label_f if os.path.exists(label_f) else None
-                }
-            )
-        return files
-
-    def read_cloud(self, path):
-        cloud = np.load(path)['arr_0']
-        return cloud
-
-    def __getitem__(self, index):
-        cloud = self.read_cloud(self.files[index]['pts']).reshape((-1, 4))
-        label = self.read_cloud(self.files[index]['label'])
-
-        xyz = cloud[..., :3]
-        intensity = cloud[..., 3]
-
-        self.scan.set_points(points=xyz, remissions=intensity)
-
-        depth_img = self.scan.proj_range[None]  # (1, H, W)
-        label = label.reshape((self.depth_img_H, self.depth_img_W))[None]  # (1, H, W)
-
-        assert depth_img.shape == label.shape
-        return depth_img, label
-
-
 class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
     """
     Traversability dataset, where the traversable area is generated using real robot poses.
@@ -324,19 +241,19 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
                  sequence='ugv_2022-08-12-15-30-22',
                  path=None,
                  num_samples=None,
-                 depth_img_H=128,
-                 depth_img_W=1024,
-                 lidar_fov_up=45.0,
-                 lidar_fov_down=-45.0,
                  labels_mode='labels',
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
                  traversability_labels=True,
+                 color_map=None
                  ):
-        super(TraversabilityClouds_SelfSupervised, self).__init__(path, num_samples, depth_img_H, depth_img_W,
-                                                                  lidar_fov_up, lidar_fov_down, labels_mode, split,
-                                                                  fields, lidar_beams_step, traversability_labels)
+        super(TraversabilityClouds_SelfSupervised, self).__init__(path=path, fields=fields,
+                                                                  depth_img_H=128, depth_img_W=1024,
+                                                                  lidar_fov_up=45.0, lidar_fov_down=-45.0,
+                                                                  lidar_beams_step=lidar_beams_step,
+                                                                  traversability_labels=traversability_labels,
+                                                                  color_map=color_map)
         if fields is None:
             fields = ['depth']
         if path is None:
@@ -356,6 +273,9 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
         self.traversability_labels = traversability_labels
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
+
+        self.update_color_map(color_map)
+        self.get_scan()
 
         self.files = self.read_files()
         self.generate_split(train_ratio=0.8)
@@ -412,6 +332,87 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
             label = label[..., ::self.lidar_beams_step]
 
         return depth_img.astype('float32'), label.astype('float32')
+
+
+class TraversabilityClouds(BaseDatasetClouds):
+
+    CLASSES = ["background", "traversable", "non-traversable"]
+
+    def __init__(self,
+                 path=None,
+                 num_samples=None,
+                 labels_mode='labels',
+                 split=None,
+                 fields=None,
+                 lidar_beams_step=1,
+                 traversability_labels=True,
+                 color_map=None
+                 ):
+        super(TraversabilityClouds, self).__init__(path=path, fields=fields,
+                                                   depth_img_H=128, depth_img_W=1024,
+                                                   lidar_fov_up=45.0, lidar_fov_down=-45.0,
+                                                   lidar_beams_step=lidar_beams_step,
+                                                   traversability_labels=traversability_labels, color_map=color_map)
+        if fields is None:
+            fields = ['depth']
+        if path is None:
+            path = os.path.join(data_dir, 'TraversabilityDataset', 'supervised')
+        assert os.path.exists(path)
+        self.path = os.path.join(path, 'clouds')
+        self.rng = np.random.default_rng(42)
+
+        assert split in [None, 'train', 'val', 'test']
+        self.split = split
+
+        self.fields = fields
+        self.lidar_beams_step = lidar_beams_step
+
+        self.traversability_labels = True
+
+        self.update_color_map(color_map)
+        self.get_scan()
+
+        assert labels_mode in ['masks', 'labels']
+        self.labels_mode = labels_mode
+
+        self.files = self.read_files()
+        self.generate_split(train_ratio=0.8)
+        if num_samples:
+            self.files = self.files[:num_samples]
+
+    def read_files(self):
+        path = os.path.join(self.path)
+        assert os.path.exists(path)
+
+        files = []
+        pts_files = [os.path.join(path, 'destaggered_points', f)
+                     for f in os.listdir(os.path.join(path, 'destaggered_points'))]
+        for f in pts_files:
+            label_f = f.replace('destaggered_points', 'label_id')
+            files.append(
+                {
+                    'pts': f,
+                    'label': label_f if os.path.exists(label_f) else None
+                }
+            )
+        return files
+
+    def read_cloud(self, path):
+        cloud = np.load(path)['arr_0']
+        return cloud
+
+    def __getitem__(self, index):
+        cloud = self.read_cloud(self.files[index]['pts']).reshape((-1, 4))
+        label = self.read_cloud(self.files[index]['label']).reshape((self.depth_img_H, self.depth_img_W))
+
+        xyz = cloud[..., :3]
+        intensity = cloud[..., 3]
+
+        self.scan.set_points(points=xyz, remissions=intensity)
+
+        data, label = self.create_sample(label=label)
+
+        return data, label
 
 
 def images_save_labels():
@@ -512,7 +513,7 @@ def labeled_clouds(num_runs=1):
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
-        label_trav = label == ds.mask_targets['traversable']
+        label_trav = label == 0  # ds.mask_targets['traversable']
         result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float32")
 
         plt.figure(figsize=(20, 10))
@@ -530,15 +531,19 @@ def labeled_clouds(num_runs=1):
         o3d.visualization.draw_geometries([pcd])
 
 
-def labeled_clouds_self_supervised():
+def labeled_clouds_self_supervised(num_runs=1):
     from matplotlib import pyplot as plt
     import open3d as o3d
 
     ds = TraversabilityClouds_SelfSupervised(split=None)
 
+    n_run = 0
     for i in range(len(ds)):
         if ds.files[i]['label'] is None:
             continue
+        n_run += 1
+        if n_run > num_runs:
+            break
 
         depth_img, _ = ds[np.random.choice(len(ds))]
         label = np.load(ds.files[i]['label'])['arr_0'].reshape((ds.depth_img_H, ds.depth_img_W))
@@ -581,6 +586,7 @@ def label_cloud_from_img(visualize=False, save_clouds=True):
     ds_img = TraversabilityImages51()
     ds_depth = TraversabilityClouds()
 
+    # TODO: check the projection of points to images, maybe calibration error?
     # get camera intrinsics
     intrinsics = {"camera_front": [1179.41625, 0.0, 983.9155, 0.0, 1178.90431, 596.74537, 0.0, 0.0, 1.0],
                   "camera_left": [1180.22991, 0.0, 946.81284, 0.0, 1180.78981, 568.02642, 0.0, 0.0, 1.0],
@@ -713,12 +719,12 @@ def label_cloud_from_img(visualize=False, save_clouds=True):
             np.savez(cloud_files[i].replace('destaggered_points', 'label_color'), depth_color)
 
 
-def images_demo():
+def images_demo(num_runs=1):
     from traversability_estimation.utils import visualize, convert_color
 
     ds = TraversabilityImages(split='val')
 
-    for _ in range(5):
+    for _ in range(num_runs):
         i = np.random.choice(range(len(ds)))
         img, label = ds[i]
 
@@ -730,12 +736,12 @@ def images_demo():
 
 
 def main():
-    # images_demo()
+    images_demo(1)
     # images_save_labels()
-    # clouds_demo(5)
-    # labeled_clouds_self_supervised()
-    # labeled_clouds(5)
-    label_cloud_from_img(visualize=True)
+    clouds_demo(1)
+    labeled_clouds_self_supervised()
+    labeled_clouds(1)
+    # label_cloud_from_img(visualize=True)
 
 
 if __name__ == "__main__":
