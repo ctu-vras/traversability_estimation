@@ -205,7 +205,7 @@ class BaseDatasetClouds(data.Dataset):
         assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
 
         self.traversability_labels = traversability_labels
-        self.color_map = None
+        self.color_map = color_map
         self.class_values = None
         self.scan = None
 

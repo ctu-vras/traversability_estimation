@@ -15,13 +15,13 @@ import matplotlib.pyplot as plt
 VOID_VALUE = 255
 
 
-def create_model(architecture, n_inputs, n_outputs, pretrained=True):
+def create_model(architecture, n_inputs, n_outputs, pretrained_backbone=True):
     assert architecture in ['fcn_resnet50', 'fcn_resnet101', 'deeplabv3_resnet50', 'deeplabv3_resnet101',
                             'deeplabv3_mobilenet_v3_large', 'lraspp_mobilenet_v3_large']
 
     print('Creating model %s with %i inputs and %i outputs' % (architecture, n_inputs, n_outputs))
     Architecture = eval('torchvision.models.segmentation.%s' % architecture)
-    model = Architecture(pretrained=pretrained)
+    model = Architecture(pretrained=pretrained_backbone)
 
     arch = architecture.split('_')[0]
     encoder = '_'.join(architecture.split('_')[1:])
@@ -94,11 +94,12 @@ def main():
                                        from_logits=True, ignore_index=0 if not VOID_VALUE in train_dataset.class_values \
                                                                         else VOID_VALUE)
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    background_index = 0 if not VOID_VALUE in valid_dataset.class_values \
-        else valid_dataset.class_values.index(VOID_VALUE)
+    background_channel = [0] if not VOID_VALUE in valid_dataset.class_values \
+        else [valid_dataset.class_values.index(VOID_VALUE)]
+    # background_channel = None
     metric_fn = smp.utils.metrics.IoU(threshold=0.5,
                                       activation='softmax2d',
-                                      ignore_channels=[background_index])
+                                      ignore_channels=background_channel)
 
     max_metric = -np.Inf
     for e in tqdm(range(args.n_epochs)):
