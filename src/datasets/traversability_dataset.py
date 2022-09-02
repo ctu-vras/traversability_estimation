@@ -274,7 +274,7 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
-        self.update_color_map(color_map)
+        self.setup_color_map(color_map)
         self.get_scan()
 
         self.files = self.read_files()
@@ -369,7 +369,7 @@ class TraversabilityClouds(BaseDatasetClouds):
 
         self.traversability_labels = True
 
-        self.update_color_map(color_map)
+        self.setup_color_map(color_map)
         self.get_scan()
 
         assert labels_mode in ['masks', 'labels']

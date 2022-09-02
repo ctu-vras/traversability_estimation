@@ -307,7 +307,7 @@ class Rellis3DClouds(BaseDatasetClouds):
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
-        self.update_color_map(color_map)
+        self.setup_color_map(color_map)
         self.get_scan()
 
         self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]

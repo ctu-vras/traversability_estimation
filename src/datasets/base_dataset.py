@@ -214,7 +214,7 @@ class BaseDatasetClouds(data.Dataset):
         self.lidar_fov_up = lidar_fov_up
         self.lidar_fov_down = lidar_fov_down
 
-    def update_color_map(self, color_map):
+    def setup_color_map(self, color_map):
         if not self.traversability_labels:
             self.label_map = None
             if not color_map:
