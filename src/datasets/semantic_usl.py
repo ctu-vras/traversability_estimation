@@ -1,5 +1,7 @@
 import os
 from datasets.base_dataset import BaseDatasetClouds, data_dir
+import yaml
+import numpy as np
 
 
 class SemanticUSL(BaseDatasetClouds):
@@ -12,7 +14,6 @@ class SemanticUSL(BaseDatasetClouds):
                  split='train',
                  fields=None,
                  num_samples=None,
-                 color_map=None,
                  traversability_labels=False,
                  lidar_beams_step=1,
                  labels_mode='labels'
@@ -35,7 +36,13 @@ class SemanticUSL(BaseDatasetClouds):
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
-        self.setup_color_map(color_map)
+        cfg = yaml.safe_load(open(os.path.join(data_dir, 'SemanticUSL', 'semantickitti19.yaml'), 'r'))
+        self.class_values = list(cfg['labels'].keys())
+        self.CLASSES = list(cfg['labels'].values())
+        self.color_map = cfg['color_map']
+        self.label_map = None
+        # self.setup_color_map(color_map)
+
         self.get_scan()
 
         self.depths_list = [os.path.join(self.path, 'velodyne', f) for f in os.listdir(os.path.join(self.path, 'velodyne'))]
@@ -59,6 +66,14 @@ class SemanticUSL(BaseDatasetClouds):
             })
         return files
 
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        color = self.scan.sem_color_lut[label]
+        return color
+
     def __getitem__(self, index):
         item = self.files[index]
         self.scan.open_scan(item["depth"])
@@ -73,8 +88,21 @@ class SemanticUSL(BaseDatasetClouds):
 
 
 def demo():
+    import matplotlib.pyplot as plt
+
     ds = SemanticUSL()
-    ds[0]
+    data, label = ds[0]
+
+    range_image = data[0]
+    color = ds.label_to_color(label)
+
+    plt.figure(figsize=(20, 10))
+    plt.subplot(2, 1, 1)
+    plt.imshow(color)
+    plt.subplot(2, 1, 2)
+    plt.imshow(range_image)
+    plt.tight_layout()
+    plt.show()
 
 
 def main():
