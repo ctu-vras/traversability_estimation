@@ -8,6 +8,7 @@ from ros_numpy import msgify, numpify
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import os
 import numpy as np
+import tf2_ros
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -23,10 +24,16 @@ class PointsProcessor:
         self.pc_topic = rospy.get_param('~pointcloud_topic', pc_topic)
         rospy.loginfo("Subscribed to " + self.pc_topic)
         self.file_names = []
-        self.points_path = os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'clouds', 'points')
+        self.data_path = os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'supervised')
+        self.points_path = os.path.join(self.data_path, 'clouds', pc_topic.split('/')[-1])
         self.bag_file = rospy.get_param('~bag_file', 'ugv_2022-08-12-15-30-22.bag').split('/')[-1]
+
         self.annotated_imgs_stamps = self.get_time_stamps(self.bag_file)
         self.t_eps = rospy.get_param('~t_threshold', 0.1)
+
+        self.tf = tf2_ros.Buffer()
+        self.tl = tf2_ros.TransformListener(self.tf)
+
         self.pc_sub = rospy.Subscriber(pc_topic, PointCloud2, self.pc_callback)
 
     def get_time_stamps(self, bag_file):
@@ -34,7 +41,7 @@ class PointsProcessor:
             os.mkdir(self.points_path)
 
         file_to_bag = yaml.safe_load(
-            open(os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'correspondencies.yaml'), 'r'))
+            open(os.path.join(self.data_path, 'correspondencies.yaml'), 'r'))
 
         annotated_imgs_stamps = []
         print(file_to_bag.keys())
@@ -57,6 +64,14 @@ class PointsProcessor:
         pc_stamp = pc_msg.header.stamp.to_sec()
         # rospy.logdebug('Point cloud time: %s' % pc_stamp)
 
+        # for camera_frame in ["pylon_camera_right", "pylon_camera_left", "pylon_camera_front"]:
+        #     try:
+        #         trans = self.tf.lookup_transform(camera_frame, pc_msg.header.frame_id, rospy.Time())
+        #         rospy.loginfo('\nTransformation between %s and %s\n: %s\n' % \
+        #                       (camera_frame, pc_msg.header.frame_id, numpify(trans.transform)))
+        #     except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+        #         rospy.logwarn('No transformation between %s and %s', camera_frame, pc_msg.header.frame_id)
+
         closest_img_stamp, idx = find_nearest(self.annotated_imgs_stamps, pc_stamp)
         t_diff = np.abs(pc_stamp - closest_img_stamp)
         rospy.logdebug('Closest img time: %ds [sec], time difference: %s [sec]' \
@@ -68,12 +83,12 @@ class PointsProcessor:
                 # rospy.logdebug('Cloud fields: %s' % pc_msg.fields)
                 cloud_lid = numpify(pc_msg)
                 points = structured_to_unstructured(cloud_lid[['x', 'y', 'z', 'intensity']])
-                rospy.logdebug('Saving cloud to %s' % os.path.join(self.points_path, self.file_names[idx]),)
+                rospy.loginfo('Saving cloud to %s' % os.path.join(self.points_path, self.file_names[idx]),)
                 np.savez(os.path.join(self.points_path, self.file_names[idx]), points)
 
                 self.annotated_imgs_stamps.remove(closest_img_stamp)
                 self.file_names.pop(idx)
-                rospy.loginfo('Found close enough point cloud.')
+
                 rospy.loginfo('Number of image timestamps to find annotations to: %s' % len(self.annotated_imgs_stamps))
 
         if len(self.annotated_imgs_stamps) == 0:

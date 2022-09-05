@@ -5,6 +5,7 @@
 
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
+    <arg name="record_points_bag" default="false"/>
 
     <param name="use_sim_time" value="true"/>
 
@@ -22,9 +23,12 @@
 
     <node name="save_clouds" pkg="traversability_estimation" type="save_clouds" output="screen">
         <rosparam subst_value="true">
-            t_threshold: 0.1
+            t_threshold: 0.05
             bag_file: $(arg bag)
         </rosparam>
     </node>
+
+    <node if="$(arg record_points_bag)" name="rosbag_record" pkg="rosbag" type="record"
+          args="/tf /tf_static /os_cloud_node/destaggered_points -O $(arg bag)_points"/>
 
 </launch>
