@@ -20,7 +20,6 @@ class CloudToDepth:
         depth = depth.astype(np.uint16)
         if self.negative:
             depth[depth > 0] = 2**16 - depth[depth > 0]
-        print(depth.dtype, depth.shape)
         depth_msg = msgify(Image, depth, 'mono16')
         self.image_pub.publish(depth_msg)
 
