@@ -161,13 +161,22 @@ def main():
             color_pred = valid_dataset.label_to_color(pred)
             color_gt = valid_dataset.label_to_color(label)
 
+            power = 16
+            depth_img = np.copy(inpt[-1].squeeze(0).cpu().numpy())  # depth
+            depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
+            depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
+                                       (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
+
             plt.figure(figsize=(20, 10))
-            plt.subplot(2, 1, 1)
+            plt.subplot(3, 1, 1)
             plt.imshow(color_pred)
             plt.title('Prediction')
-            plt.subplot(2, 1, 2)
+            plt.subplot(3, 1, 2)
             plt.imshow(color_gt)
             plt.title('Ground truth')
+            plt.subplot(3, 1, 3)
+            plt.imshow(depth_img)
+            plt.title('Depth image')
             plt.show()
 
 

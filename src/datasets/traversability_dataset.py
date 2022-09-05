@@ -575,7 +575,7 @@ def labeled_clouds_self_supervised(num_runs=1):
         o3d.visualization.draw_geometries([pcd])
 
 
-def label_cloud_from_img(visualize=False, save_clouds=True):
+def label_cloud_from_img(visualize=False, save_clouds=True, n_runs=1):
     import yaml
     import open3d as o3d
     import matplotlib.pyplot as plt
@@ -593,9 +593,9 @@ def label_cloud_from_img(visualize=False, save_clouds=True):
                   "camera_right": [1176.57392, 0.0, 963.54103, 0.0, 1176.1531, 600.43789, 0.0, 0.0, 1.0]}
 
     # get extrinsics: T_lid2cam
-    extrinsics = {"camera_front": {"trans": [0.104, 0.104, -0.180], "quat": [-0.653, 0.271, -0.271, 0.653]},
-                  "camera_right": {"trans": [0.062, -0.062, -0.180], "quat": [0.271, -0.653, 0.653, -0.271]},
-                  "camera_left": {"trans": [-0.062, 0.062, -0.180], "quat": [-0.653, -0.271, 0.271, 0.653]}}
+    extrinsics = {"camera_front": {"trans": [-0.000, -0.180, -0.147], "quat": [0.653, -0.271, 0.271, 0.653]},
+                  "camera_right": {"trans": [-0.000, -0.180, -0.087], "quat": [0.271, -0.653, 0.653, 0.271]},
+                  "camera_left": {"trans": [-0.000, -0.180, -0.087], "quat": [0.653, 0.271, -0.271, 0.653]}}
 
     # distortion coeffs for cameras
     distortion = {"camera_front": [-0.226817, 0.071594, -7e-05, 6.9e-05, 0.0],
@@ -612,17 +612,17 @@ def label_cloud_from_img(visualize=False, save_clouds=True):
     img_files = []
     cloud_files = []
     for file in ds_depth.files:
-            cloud_file = file['pts']
-            img_file = cloud_file.replace('.npz', '.jpg').replace('clouds', 'images').replace('destaggered_points', 'rgb')
+        cloud_file = file['pts']
+        img_file = cloud_file.replace('.npz', '.jpg').replace('clouds', 'images').replace('destaggered_points', 'rgb')
 
-            for bag_file in ['ugv_2022-08-12-15-18-34.bag', 'ugv_2022-08-12-15-30-22.bag']:
-                imgs_in_bag = file_to_bag[bag_file]
+        for bag_file in ['ugv_2022-08-12-15-18-34.bag', 'ugv_2022-08-12-15-30-22.bag']:
+            imgs_in_bag = file_to_bag[bag_file]
 
-                for camera_frame in imgs_in_bag.keys():
-                    if img_file.split('/')[-1] in imgs_in_bag[camera_frame]:
-                        img_files.append(img_file)
-                        camera_frames.append(camera_frame)
-                        cloud_files.append(cloud_file)
+            for camera_frame in imgs_in_bag.keys():
+                if img_file.split('/')[-1] in imgs_in_bag[camera_frame]:
+                    img_files.append(img_file)
+                    camera_frames.append(camera_frame)
+                    cloud_files.append(cloud_file)
 
     assert len(img_files) == len(camera_frames) == len(ds_depth) == len(cloud_files)
 
@@ -631,7 +631,10 @@ def label_cloud_from_img(visualize=False, save_clouds=True):
     if not os.path.exists(os.path.join(ds_depth.path, 'label_id')):
         os.mkdir(os.path.join(ds_depth.path, 'label_id'))
 
-    for i in tqdm(range(len(img_files))):
+    # for i in tqdm(range(len(img_files))):
+    np.random.seed(42)
+    for i in np.random.choice(range(len(img_files)), n_runs):
+
         img = cv2.imread(img_files[i])
         img_label = ds_img.get_mask(img_files[i])
 
@@ -643,10 +646,16 @@ def label_cloud_from_img(visualize=False, save_clouds=True):
         """
         camera_frame = camera_frames[i]
 
-        T_cam2lid = np.eye(4)
-        T_cam2lid[:3, :3] = Rotation.from_quat(extrinsics[camera_frame]['quat']).as_matrix()
-        T_cam2lid[:3, 3] = np.asarray(extrinsics[camera_frame]['trans'])
-        T_lid2cam = np.linalg.inv(T_cam2lid)
+        T_lid2cam = np.eye(4)
+        T_lid2cam[:3, :3] = Rotation.from_quat(extrinsics[camera_frame]['quat']).as_matrix()
+        T_lid2cam[:3, 3] = np.asarray(extrinsics[camera_frame]['trans'])
+
+        # for cf in ['camera_right', 'camera_left', 'camera_front']:
+        #     T_lid2cam = np.eye(4)
+        #     T_lid2cam[:3, :3] = Rotation.from_quat(extrinsics[cf]['quat']).as_matrix()
+        #     T_lid2cam[:3, 3] = np.asarray(extrinsics[cf]['trans'])
+        #
+        #     print('\nFrame: %s transformation:\n%s\n' % (cf, T_lid2cam))
 
         R_lid2cam, t_lid2cam = T_lid2cam[:3, :3], T_lid2cam[:3, 3]
 
