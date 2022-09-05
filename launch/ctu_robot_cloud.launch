@@ -27,6 +27,7 @@
 <!--            weights: 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'-->
 <!--            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_96_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
             weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth
+<!--            weights: fcn_resnet101_lr_1e-05_bs_16_epoch_4_Rellis3DClouds_depth_travTrue_iou_0.58.pth-->
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
 

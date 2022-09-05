@@ -205,7 +205,7 @@ class BaseDatasetClouds(data.Dataset):
         assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
 
         self.traversability_labels = traversability_labels
-        self.color_map = None
+        self.color_map = color_map
         self.class_values = None
         self.scan = None
 
@@ -214,7 +214,7 @@ class BaseDatasetClouds(data.Dataset):
         self.lidar_fov_up = lidar_fov_up
         self.lidar_fov_down = lidar_fov_down
 
-    def update_color_map(self, color_map):
+    def setup_color_map(self, color_map):
         if not self.traversability_labels:
             self.label_map = None
             if not color_map:
