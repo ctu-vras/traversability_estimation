@@ -2,14 +2,6 @@
 
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="destagger" default="true"/>
-
-    <node if="$(arg destagger)" name="points_destagger" pkg="nodelet" type="nodelet"
-          args="standalone cras_ouster_driver/destagger_nodelet">
-        <remap from="info" to="/os_node/sensor_info"/>
-        <remap from="input" to="/os_cloud_node/points"/>
-        <remap from="output" to="/os_cloud_node/destaggered_points"/>
-    </node>
 
     <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
@@ -31,8 +23,7 @@
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
 
-        <remap if="$(arg destagger)" from="cloud_in" to="/os_cloud_node/destaggered_points"/>
-        <remap unless="$(arg destagger)" from="cloud_in" to="/os_cloud_node/points"/>
+        <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>
         <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
     </node>
 
