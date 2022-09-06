@@ -632,13 +632,16 @@ def label_cloud_from_img(visualize=False, save_clouds=True, n_runs=1):
         os.mkdir(os.path.join(ds_depth.path, 'label_id'))
 
     # for i in tqdm(range(len(img_files))):
-    np.random.seed(42)
+    # np.random.seed(42)
     for i in np.random.choice(range(len(img_files)), n_runs):
 
         img = cv2.imread(img_files[i])
         img_label = ds_img.get_mask(img_files[i])
 
-        cloud = ds_depth.read_cloud(cloud_files[i]).reshape((-1, 4))
+        cloud = ds_depth.read_cloud(cloud_files[i])
+        if cloud.dtype.names is not None:
+            cloud = structured_to_unstructured(cloud[['x', 'y', 'z', 'intensity']])
+        cloud = cloud.reshape((-1, 4))
         points = cloud[..., :3]
 
         """
@@ -665,11 +668,11 @@ def label_cloud_from_img(visualize=False, save_clouds=True, n_runs=1):
 
         rvec, _ = cv2.Rodrigues(R_lid2cam)
         tvec = t_lid2cam.reshape((3, 1))
-        points_cam, color, camera_pts_mask = filter_camera_points(points[..., :3], img_width, img_height, K, T_lid2cam,
+        points_fov, color, camera_pts_mask = filter_camera_points(points[..., :3], img_width, img_height, K, T_lid2cam,
                                                                   give_mask=True)
         camera_pts_ids = [i for i, v in enumerate(camera_pts_mask) if v == True]
 
-        img_points, _ = cv2.projectPoints(points_cam[:, :], rvec, tvec, K, dist_coeff)
+        img_points, _ = cv2.projectPoints(points_fov, rvec, tvec, K, dist_coeff)
         img_points = np.squeeze(img_points, 1)
         img_points = img_points.T
 

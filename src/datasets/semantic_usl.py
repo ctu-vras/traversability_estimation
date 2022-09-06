@@ -5,12 +5,15 @@ import numpy as np
 
 
 class SemanticUSL(BaseDatasetClouds):
-    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
-               'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
+    CLASSES = ['unlabeled', 'outlier', 'car', 'bicycle', 'bus', 'motorcycle', 'on-rails', 'truck', 'other-vehicle',
+               'person', 'bicyclist', 'motorcyclist', 'road', 'parking', 'sidewalk', 'other-ground', 'building',
+               'fence', 'other-structure', 'lane-marking', 'vegetation', 'trunk', 'terrain', 'pole', 'traffic-sign',
+               'other-object', 'moving-car', 'moving-bicyclist', 'moving-person', 'moving-motorcyclist',
+               'moving-on-rails', 'moving-bus', 'moving-truck', 'moving-other-vehicle']
 
     def __init__(self,
                  path=None,
-                 seq = '00',
+                 seq='00',
                  split='train',
                  fields=None,
                  num_samples=None,
