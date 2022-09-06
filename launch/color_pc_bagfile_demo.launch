@@ -1,25 +1,36 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 
 <launch>
-    <arg name="robot" default="tradr"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="image_view" default="false"/>
-    <arg name="image_topic" default="/viz/camera_4/image/compressed"/>
-    <arg name="caminfo_topic" default="/viz/camera_4/camera_info"/>
-    <arg name="cloud_topic" default="/cloud"/>
-    <arg if="$(eval robot == 'tradr')" name="image_transport" default="compressed"/>
-    <arg if="$(eval robot == 'spot')" name="image_transport" default="raw"/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
+    <arg name="record" default="false" doc="If record topics to a bag file."/>
+    <arg name="save_clouds" default="false" doc="If save point clouds as np arrays"/>
+    <arg name="destagger" default="false" doc="Whether to run ouster lidar points destaggering."/>
+    <arg name="img_segmentation" default="false" doc="Whether to run image segmentation node"/>
 
     <!--Bag file player -->
-    <include file="$(dirname)/play_bag.launch">
-        <arg name="robot" value="$(arg robot)"/>
-        <arg name="output_image_topic" value="$(arg image_topic)"/>
-        <arg name="output_caminfo_topic" value="$(arg caminfo_topic)"/>
-    </include>
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
+    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
+    <rosparam command="load" file="$(arg params)"/>
+    <param name="use_sim_time" value="true"/>
+
+    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)"/>
+
+    <group if="$(arg destagger)">
+        <!-- Lidar packets to point cloud -->
+        <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
+        <!-- Point cloud destaggering -->
+        <node name="points_destagger" pkg="nodelet" type="nodelet"
+              args="standalone cras_ouster_driver/destagger_nodelet">
+            <remap from="info" to="/os_node/sensor_info"/>
+            <remap from="input" to="/os_cloud_node/points"/>
+            <remap from="output" to="/os_cloud_node/destaggered_points"/>
+        </node>
+    </group>
 
     <!-- Semantic segmantation of images -->
-    <node name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference" output="screen">
+    <node if="$(arg img_segmentation)" name="segmentation_inference" pkg="traversability_estimation" type="segmentation_inference">
         <rosparam subst_value="true">
             model_name: hrnet
             device: $(arg device)
@@ -30,8 +41,9 @@
             input_scale: 0.5
             traversability_labels: false
         </rosparam>
-        <remap from="input_0/image/compressed" to="$(arg image_topic)"/>
-        <remap from="input_0/camera_info" to="$(arg caminfo_topic)"/>
+        <remap from="input_0/image" to="/camera_front/image_color"/>
+        <remap from="input_0/image/compressed" to="/camera_front/image_color/compressed"/>
+        <remap from="input_0/camera_info" to="/camera_front/camera_info"/>
 
         <remap from="output_0/semseg" to="/segmentation_inference/semantic_segmentation"/>
         <remap from="output_0/semseg/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
@@ -41,26 +53,63 @@
     <!-- Point cloud color -->
     <node name="point_cloud_color" pkg="nodelet" type="nodelet"
         args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
-        <param name="num_cameras"            value="1"/>
-        <param name="max_image_age"          value="5.0"/>
-        <param name="use_first_valid"        value="true"/>
-        <param name="image_queue_size"       value="1"/>
-        <param name="point_cloud_queue_size" value="50"/>
-        <param name="wait_for_transform"     value="2.0"/>
-        <param name="default_color"          value="0x00000000"/>
+        <rosparam subst_value="true">
+            fixed_frame: odom
+            field_name: rgb
+            field_type: 7
+            default_color: "0x00000000"
+<!--            field_name: obstacle-->
+<!--            field_type: 2-->
+<!--            default_color: 1.0-->
+            num_cameras: 4
+            image_transport: compressed
+            max_image_age: 15.0
+            use_first_valid: true
+            image_queue_size: 2
+            cloud_queue_size: 2
+            wait_for_transform: 1.0
+        </rosparam>
 
-        <remap from="/camera_0/camera_info" to="$(arg caminfo_topic)"/>
-        <remap from="/camera_0/image" to="/hrnet_inference/semantic_segmentation"/>
-        <remap from="/cloud_in" to="$(arg cloud_topic)"/>
-        <remap from="/cloud_out" to="$(arg cloud_topic)_traversability"/>
+<!--        <remap from="/camera_0/camera_info" to="/camera_front/camera_info"/>-->
+<!--        <remap from="/camera_0/image" to="/segmentation_inference/semantic_segmentation"/>-->
+<!--        <remap from="/camera_0/image/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>-->
+
+        <remap from="camera_0/image" to="/camera_front/image_color"/>
+        <remap from="camera_0/image/compressed" to="/camera_front/image_color/compressed"/>
+        <remap from="camera_0/camera_info" to="/camera_front/camera_info"/>
+
+        <remap from="camera_1/image" to="/camera_left/image_color"/>
+        <remap from="camera_1/image/compressed" to="/camera_left/image_color/compressed"/>
+        <remap from="camera_1/camera_info" to="/camera_left/camera_info"/>
+
+        <remap from="camera_2/image" to="/camera_right/image_color"/>
+        <remap from="camera_2/image/compressed" to="/camera_right/image_color/compressed"/>
+        <remap from="camera_2/camera_info" to="/camera_right/camera_info"/>
+
+        <remap from="camera_3/image" to="/camera_rear/image_color"/>
+        <remap from="camera_3/image/compressed" to="/camera_rear/image_color/compressed"/>
+        <remap from="camera_3/camera_info" to="/camera_rear/camera_info"/>
+
+<!--        <remap from="camera_4/image" to="/camera_up/image_color"/>-->
+<!--        <remap from="camera_4/image/compressed" to="/camera_up/image_color/compressed"/>-->
+<!--        <remap from="camera_4/camera_info" to="/camera_up/camera_info"/>-->
+
+        <remap from="/cloud_in" to="/os_cloud_node/destaggered_points"/>
+        <remap from="/cloud_out" to="/os_cloud_node/destaggered_points_colored"/>
     </node>
 
+    <!-- Save point clouds -->
+    <node if="$(arg save_clouds)" name="save_clouds" pkg="traversability_estimation" type="save_clouds" output="screen">
+        <rosparam subst_value="true">
+            t_threshold: 0.1
+            bag_file: $(arg bag)
+            cloud_in: /os_cloud_node/destaggered_points_colored
+        </rosparam>
+    </node>
+    <node if="$(arg record)" name="rosbag_record" pkg="rosbag" type="record" output="screen"
+          args="-a -O $(arg bag)_points_colored"/>
+
     <!-- Visualization -->
-    <group if="$(arg image_view)">
-        <node name="image_view_semseg" pkg="image_view" type="image_view">
-            <remap from="image" to="/hrnet_inference/semantic_segmentation"/>
-        </node>
-    </group>
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/$(arg robot).rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/colored_cloud_marv.rviz"/>
 </launch>
