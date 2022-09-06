@@ -269,8 +269,7 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
-        assert traversability_labels == True
-        self.traversability_labels = traversability_labels
+        self.traversability_labels = True
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
@@ -402,8 +401,15 @@ class TraversabilityClouds(BaseDatasetClouds):
         return cloud
 
     def __getitem__(self, index):
-        cloud = self.read_cloud(self.files[index]['pts']).reshape((-1, 4))
-        label = self.read_cloud(self.files[index]['label']).reshape((self.depth_img_H, self.depth_img_W))
+        cloud = self.read_cloud(self.files[index]['pts'])
+        label = self.read_cloud(self.files[index]['label'])
+
+        if cloud.dtype.names is not None:
+            cloud = structured_to_unstructured(cloud[['x', 'y', 'z', 'intensity']])
+
+        assert cloud.shape[-1] == 4
+        cloud = cloud.reshape((-1, 4))
+        label = label.reshape((self.depth_img_H, self.depth_img_W))
 
         xyz = cloud[..., :3]
         intensity = cloud[..., 3]
