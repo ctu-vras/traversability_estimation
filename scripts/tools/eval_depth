@@ -1,0 +1,118 @@
+#!/usr/bin/env python
+
+import os
+import numpy as np
+import torchvision.models.segmentation
+import torch
+from torch.utils.data import DataLoader
+from argparse import ArgumentParser
+import datasets
+from tqdm import tqdm
+import segmentation_models_pytorch as smp
+import matplotlib.pyplot as plt
+
+
+VOID_VALUE = 255
+
+
+def main():
+    parser = ArgumentParser()
+    parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds_SelfSupervised')
+    parser.add_argument('--model', type=str, default='deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth')
+    parser.add_argument('--trav_labels', action='store_true')
+    parser.add_argument('--batch_size', type=int, default=6)
+    parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
+    parser.add_argument('--n_samples', type=int, default=None)
+    parser.add_argument('--vis_preds', action='store_true')
+    args = parser.parse_args()
+    print(args)
+
+    data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in args.model]
+    print('Model takes as input: %s' % ','.join(data_fields))
+    trav_labels = True if 'travTrue' in args.model else args.trav_labels
+    print('Model predicts traversability labels: %s' % trav_labels)
+
+    Dataset = eval('datasets.%s' % args.dataset)
+    # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
+    valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
+                            traversability_labels=trav_labels,
+                            fields=data_fields, num_samples=args.n_samples,
+                            labels_mode='masks')
+    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.n_workers)
+
+    # --------------Load and set model and optimizer-------------------------------------
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    # device = torch.device('cpu')
+
+    model = torch.load(args.model)
+    model = model.to(device)
+
+    # ----------------Evaluation----------------------------------------------------------
+    # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
+    background_channel = [0] if not VOID_VALUE in valid_dataset.class_values \
+        else [valid_dataset.class_values.index(VOID_VALUE)]
+    # background_channel = None
+    metric_fn = smp.utils.metrics.IoU(threshold=0.5,
+                                      activation='softmax2d',
+                                      ignore_channels=background_channel)
+
+    # validation epoch
+    metrics = []
+    model = model.eval()
+    for itr, sample in tqdm(enumerate(valid_loader)):
+        inpt, labels = sample
+        inpt, labels = inpt.to(device), labels.to(device)
+
+        with torch.no_grad():
+            pred = model(inpt)['out']  # make prediction
+
+            assert pred.shape == labels.shape
+            metric_sample = metric_fn(pred, labels)
+
+        metrics.append(metric_sample.cpu().numpy())
+
+        if itr % 100 == 0:
+            print('mIoU so far (iter=%d): %.3f' % (itr, np.mean(metrics)))
+
+    metric = np.mean(metrics)
+
+    print('Validation metric: %f' % metric)
+
+    if args.vis_preds:
+        for _ in range(5):
+            # Use the current trained model and visualize a prediction
+            model = model.eval()
+            inpt, label = valid_dataset[np.random.choice(range(len(valid_dataset)))]
+            inpt = torch.from_numpy(inpt[None]).to(device)
+            label = torch.from_numpy(label[None]).to(device)
+
+            with torch.no_grad():
+                pred = model(inpt)['out']
+            pred = pred.squeeze(0).cpu().numpy()
+            label = label.squeeze(0).cpu().numpy()
+
+            color_pred = valid_dataset.label_to_color(pred)
+            color_gt = valid_dataset.label_to_color(label)
+
+            power = 16
+            depth_img = np.copy(inpt[-1].squeeze(0).cpu().numpy())  # depth
+            depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
+            depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
+                                       (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
+
+            plt.figure(figsize=(20, 10))
+            plt.subplot(3, 1, 1)
+            plt.imshow(color_pred)
+            plt.title('Prediction')
+            plt.subplot(3, 1, 2)
+            plt.imshow(color_gt)
+            plt.title('Ground truth')
+            plt.subplot(3, 1, 3)
+            plt.imshow(depth_img)
+            plt.title('Depth image')
+            plt.show()
+
+
+if __name__ == '__main__':
+    main()
