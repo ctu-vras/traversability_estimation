@@ -189,10 +189,10 @@ def main():
             if max_metric < metric:  # Save model weights
                 max_metric = metric
             if max_metric <= metric or e % 10 == 0:
-                name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
+                name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_ft%s_iou_%.2f.pth' % \
                    (args.architecture,
                     args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields),
-                    train_dataset.traversability_labels, float(max_metric))
+                    train_dataset.traversability_labels, ft_loader is not None, float(max_metric))
                 print("Saving Model:", name)
                 torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
