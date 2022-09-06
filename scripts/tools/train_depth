@@ -50,8 +50,9 @@ def main():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
+    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds_SelfSupervised')
     parser.add_argument('--trav_labels', action='store_true')
+    parser.add_argument('--dont_save_models', action='store_true')
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
     parser.add_argument('--batch_size', type=int, default=6)
     parser.add_argument('--n_epochs', type=int, default=100)
@@ -82,7 +83,7 @@ def main():
     n_outputs = len(train_dataset.class_values)
     print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
 
-    model = create_model(args.architecture, n_inputs, n_outputs, pretrained=False)
+    model = create_model(args.architecture, n_inputs, n_outputs, pretrained_backbone=False)
     model = model.to(device)
 
     optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)  # Create adam optimizer
@@ -91,7 +92,7 @@ def main():
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     loss_mode = 'multilabel' if train_dataset[0][1].ndim == 3 else 'multiclass'  # (n_cl, H, W) or (H, W)
     criterion_fn = smp.losses.DiceLoss(mode=loss_mode, log_loss=True,
-                                       from_logits=True, ignore_index=0 if not VOID_VALUE in train_dataset.class_values \
+                                       from_logits=True, ignore_index=0 if not VOID_VALUE in train_dataset.class_values
                                                                         else VOID_VALUE)
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
     background_channel = [0] if not VOID_VALUE in valid_dataset.class_values \
@@ -132,15 +133,16 @@ def main():
 
         metric = np.mean(metrics)
 
-        # save better model
-        if max_metric < metric or e % 10 == 0:  # Save model weights
-            max_metric = metric
-            name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
-                   (args.architecture,
-                    args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields),
-                    train_dataset.traversability_labels, float(max_metric))
-            print("Saving Model:", name)
-            torch.save(model, os.path.join(os.path.dirname(__file__), name))
+        if not args.dont_save_models:
+            # save better model
+            if max_metric < metric or e % 10 == 0:  # Save model weights
+                max_metric = metric
+                name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
+                       (args.architecture,
+                        args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields),
+                        train_dataset.traversability_labels, float(max_metric))
+                print("Saving Model:", name)
+                torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
         print("Epoch: %i" % e)
         print('Train loss: %f' % loss.data.cpu().numpy())
@@ -153,9 +155,12 @@ def main():
         if args.vis_preds:
             # Use the current trained model and visualize a prediction
             model = model.eval()
-            inpt, label = next(iter(valid_loader))
+            inpt, label = valid_dataset[np.random.choice(range(len(valid_dataset)))]
+            inpt = torch.from_numpy(inpt[None]).to(device)
+            label = torch.from_numpy(label[None]).to(device)
+
             with torch.no_grad():
-                pred = model(inpt.to(device))['out']
+                pred = model(inpt)['out']
             pred = pred.squeeze(0).cpu().numpy()
             label = label.squeeze(0).cpu().numpy()
 
