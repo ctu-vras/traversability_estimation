@@ -232,7 +232,7 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
     For each point cloud frame, points which were traversed by robot's path within constant
     amount of time are labelled as 'traversable'.
     The rest of the points are marked as 'background'
-    TODO: we plan to add 'non-traversable' cathegory as well using local geometry estimate
+    TODO: we plan to add 'non-traversable' category as well using local geometry estimate
     for neihboring points
     """
     CLASSES = ["background", "traversable", "non-traversable"]

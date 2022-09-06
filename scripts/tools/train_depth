@@ -15,6 +15,25 @@ import matplotlib.pyplot as plt
 VOID_VALUE = 255
 
 
+def parse_arguments():
+    parser = ArgumentParser()
+    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
+    parser.add_argument('--dataset_fine_tune', type=str, default='TraversabilityClouds_SelfSupervised')
+    parser.add_argument('--trav_labels', action='store_true')
+    parser.add_argument('--dont_save_models', action='store_true')
+    parser.add_argument('--architecture', type=str, default='fcn_resnet50')
+    parser.add_argument('--batch_size', type=int, default=6)
+    parser.add_argument('--n_epochs', type=int, default=100)
+    parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
+    parser.add_argument('--data_fields', nargs='+', type=str, default=None)
+    parser.add_argument('--n_samples', type=int, default=None)
+    parser.add_argument('--vis_preds', action='store_true')
+    args = parser.parse_args()
+
+    return args
+
+
 def create_model(architecture, n_inputs, n_outputs, pretrained_backbone=True):
     assert architecture in ['fcn_resnet50', 'fcn_resnet101', 'deeplabv3_resnet50', 'deeplabv3_resnet101',
                             'deeplabv3_mobilenet_v3_large', 'lraspp_mobilenet_v3_large']
@@ -47,26 +66,14 @@ def create_model(architecture, n_inputs, n_outputs, pretrained_backbone=True):
 
 
 def main():
-    parser = ArgumentParser()
-    parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds_SelfSupervised')
-    parser.add_argument('--trav_labels', action='store_true')
-    parser.add_argument('--dont_save_models', action='store_true')
-    parser.add_argument('--architecture', type=str, default='fcn_resnet50')
-    parser.add_argument('--batch_size', type=int, default=6)
-    parser.add_argument('--n_epochs', type=int, default=100)
-    parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
-    parser.add_argument('--data_fields', nargs='+', type=str, default=None)
-    parser.add_argument('--n_samples', type=int, default=None)
-    parser.add_argument('--vis_preds', action='store_true')
-    args = parser.parse_args()
+    args = parse_arguments()
 
     Dataset = eval('datasets.%s' % args.dataset)
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
                             traversability_labels=args.trav_labels,
-                            fields=args.data_fields, num_samples=args.n_samples)
+                            fields=args.data_fields, num_samples=args.n_samples,
+                            labels_mode='labels')
     valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
                             traversability_labels=args.trav_labels,
                             fields=args.data_fields, num_samples=args.n_samples,
@@ -74,6 +81,16 @@ def main():
 
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
+
+    # fine tuning is only supported for traversability labels
+    if train_dataset.traversability_labels:
+        DatasetFT = eval('datasets.%s' % args.dataset_fine_tune)
+        ft_dataset = DatasetFT(split='train', traversability_labels=args.trav_labels,
+                               fields=args.data_fields, num_samples=args.n_samples,
+                               labels_mode='labels')
+        ft_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+    else:
+        ft_loader = None
 
     # --------------Load and set model and optimizer-------------------------------------
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -91,9 +108,15 @@ def main():
     # ----------------Train--------------------------------------------------------------------------
     # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
     loss_mode = 'multilabel' if train_dataset[0][1].ndim == 3 else 'multiclass'  # (n_cl, H, W) or (H, W)
-    criterion_fn = smp.losses.DiceLoss(mode=loss_mode, log_loss=True,
-                                       from_logits=True, ignore_index=0 if not VOID_VALUE in train_dataset.class_values
-                                                                        else VOID_VALUE)
+    print('Loss mode: %s' % loss_mode)
+    ignore_label = 0 if not VOID_VALUE in train_dataset.class_values else VOID_VALUE
+    print('Ignoring label value: %i' % ignore_label)
+
+    criterion_fn = smp.losses.DiceLoss(mode=loss_mode,
+                                       log_loss=True,
+                                       from_logits=True,
+                                       ignore_index=ignore_label)
+
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
     background_channel = [0] if not VOID_VALUE in valid_dataset.class_values \
         else [valid_dataset.class_values.index(VOID_VALUE)]
@@ -104,6 +127,7 @@ def main():
 
     max_metric = -np.Inf
     for e in tqdm(range(args.n_epochs)):
+        print('Starting training epoch %i...' % e)
         # train epoch
         model = model.train()
         for itr, sample in tqdm(enumerate(train_loader)):
@@ -117,6 +141,33 @@ def main():
             loss.backward()  # Backpropagate loss
             optimizer.step()  # Apply gradient descent change to weight
 
+        print('Train loss at epoch %i: %f' % (e, loss.item()))
+
+        if ft_loader:
+            print('Starting fine tuning epoch %i...' % e)
+            # fine tune epoch
+            model = model.train()
+            for itr, sample in tqdm(enumerate(ft_loader)):
+                inpt, labels = sample
+                inpt, labels = inpt.to(device), labels.to(device)
+
+                pred = model(inpt)['out']  # make prediction
+
+                # pred1 = torch.zeros_like(pred)
+                # pred1[:, 0, :, :] = 1
+                # criterion_fn1 = smp.losses.DiceLoss(mode='multiclass',
+                #                                     from_logits=False,
+                #                                     ignore_index=255)
+                # print(criterion_fn1(pred1, labels.long()))
+
+                optimizer.zero_grad()
+                loss = criterion_fn(pred, labels.long())
+                loss.backward()
+                optimizer.step()
+
+            print('Fine tuning loss at epoch %i: %f ' % (e, loss.item()))
+
+        print('Validation ...')
         # validation epoch
         metrics = []
         model = model.eval()
@@ -135,18 +186,17 @@ def main():
 
         if not args.dont_save_models:
             # save better model
-            if max_metric < metric or e % 10 == 0:  # Save model weights
+            if max_metric < metric:  # Save model weights
                 max_metric = metric
+            if max_metric <= metric or e % 10 == 0:
                 name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
-                       (args.architecture,
-                        args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields),
-                        train_dataset.traversability_labels, float(max_metric))
+                   (args.architecture,
+                    args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields),
+                    train_dataset.traversability_labels, float(max_metric))
                 print("Saving Model:", name)
                 torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
-        print("Epoch: %i" % e)
-        print('Train loss: %f' % loss.data.cpu().numpy())
-        print('Validation metric: %f' % metric)
+        print('Validation mIoU at epoch %i: %f' % (e, metric))
 
         if e == 60:
             optimizer.param_groups[0]['lr'] /= 10.0
@@ -161,6 +211,7 @@ def main():
 
             with torch.no_grad():
                 pred = model(inpt)['out']
+
             pred = pred.squeeze(0).cpu().numpy()
             label = label.squeeze(0).cpu().numpy()
 
