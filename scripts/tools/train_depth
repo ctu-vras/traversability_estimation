@@ -212,7 +212,7 @@ def main():
             color_gt = valid_dataset.label_to_color(label)
 
             power = 16
-            depth_img = np.copy(inpt[-1].squeeze(0).cpu().numpy())  # depth
+            depth_img = np.copy(inpt.squeeze(0).cpu().numpy()[-1])  # depth
             depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
             depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
                                        (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())

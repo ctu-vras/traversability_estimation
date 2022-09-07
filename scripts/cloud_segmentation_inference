@@ -4,7 +4,7 @@ import os
 import cv2
 from datasets.rellis_3d import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
-from traversability_estimation.utils import convert_label
+from traversability_estimation.utils import convert_label, correct_label
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
@@ -60,6 +60,7 @@ class CloudSegmentor:
         self.label_map = None
         self.color_map = self.setup_color_map()
         self.n_classes = len(self.color_map)
+        self.labels_to_correct = rospy.get_param('~labels_to_correct', [])
 
         self.scan = SemLaserScan(nclasses=self.n_classes,
                                  sem_color_dict=self.color_map,
@@ -107,6 +108,8 @@ class CloudSegmentor:
             assert label.shape == (H, W)
         if not self.traversability_labels:
             label = convert_label(label, inverse=True)
+        for l in self.labels_to_correct:
+            label = correct_label(label, value_to_correct=l)
         color = self.scan.sem_color_lut[label]
         return color, label
 
@@ -179,8 +182,12 @@ class CloudSegmentor:
         if isinstance(xyzid, dict):
             xyzid = np.concatenate([xyzid[f][None] for f in ['x', 'y', 'z', 'intensity', 'depth']], axis=0)
 
-        label_pred = label_pred.squeeze(0).cpu().numpy()
+        label_pred = torch.softmax(label_pred.squeeze(0), dim=0).cpu().numpy()
+        # n_classes, H, W = label_pred.shape
+        assert label_pred.ndim == 3
+
         colors, label_pred = self.label_to_color(label_pred)
+        assert label_pred.ndim == 2
 
         # colors_vis = cv2.resize(colors.astype('float'),
         #                         (colors.shape[1] // 2, colors.shape[0] // 2),
@@ -221,6 +228,8 @@ class CloudSegmentor:
             rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
+        t0 = rospy.Time.now().to_sec()
+
         # Transform local map to ground truth localization frame
         cloud = numpify(pc_msg)
         if not set(self.input_pc_fields) <= set(cloud.dtype.names):
@@ -231,22 +240,35 @@ class CloudSegmentor:
 
         with self.lock:
             input, xyzid = self.preprocessing(cloud)
+            t1 = rospy.Time.now().to_sec()
+            rospy.logdebug('Preprocessing took: %.3f [sec]' % (t1 - t0))
+
             pred = self.model_inference(input)
+            t2 = rospy.Time.now().to_sec()
+            rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
+
             xyz_rgb_l = self.postprocessing(pred, xyzid=xyzid)
+            t3 = rospy.Time.now().to_sec()
+            rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
 
-        # publish segmented point cloud
-        stamp = rospy.Time.now()
-        segm_pc_msg = msgify_cloud(xyz_rgb_l, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
-        self.segm_cloud_pub.publish(segm_pc_msg)
+            # publish segmented point cloud
+            stamp = rospy.Time.now()
+            segm_pc_msg = msgify_cloud(xyz_rgb_l, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
+            self.segm_cloud_pub.publish(segm_pc_msg)
 
-        # publish depth image
-        power = 16
-        depth_img = np.copy(xyzid['depth'])  # depth
-        depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
-        depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
-                                   (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
-        depth_msg = msgify(Image, depth_img, '32FC1')
-        self.depth_pub.publish(depth_msg)
+            # publish depth image
+            power = 16
+            depth_img = np.copy(xyzid['depth'])  # depth
+            depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
+            depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
+                                       (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
+            depth_msg = msgify(Image, depth_img, '32FC1')
+            self.depth_pub.publish(depth_msg)
+
+            t4 = rospy.Time.now().to_sec()
+            rospy.logdebug('Data publishing took: %.3f [sec]' % (t4 - t3))
+
+        rospy.loginfo('Point cloud processing time: %.3f [sec]' % (t4 - t0))
 
 
 if __name__ == '__main__':

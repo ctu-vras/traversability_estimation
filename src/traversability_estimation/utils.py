@@ -3,10 +3,41 @@ from numpy.lib.recfunctions import unstructured_to_structured
 import cv2
 import yaml
 from PIL import Image, ImageFile
-
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import matplotlib.pyplot as plt
 import torch
+from timeit import default_timer as timer
+import rospy
+
+
+def correct_label(label, value_to_correct=11):
+    # value_to_correct = 11: human label
+    label_corr = label.copy()
+
+    human_mask = (label == value_to_correct)
+
+    h, w = human_mask.shape
+    # tuning the kernel size in vertical direction affects the dilation
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ksize=(1, h // 2))
+
+    human_mask_corr = cv2.erode(human_mask.astype('float'), None, iterations=1)
+    human_mask_corr = cv2.dilate(human_mask_corr.astype('float'), kernel=kernel).astype('bool')
+
+    # the upper part of an image is not being corrected
+    human_mask_corr[:h // 2, :] = False
+    label_corr[human_mask_corr] = value_to_correct
+
+    return label_corr
+
+
+def timing(f):
+    def timing_wrapper(*args, **kwargs):
+        t0 = timer()
+        ret = f(*args, **kwargs)
+        t1 = timer()
+        rospy.logdebug('%s %.6f s' % (f.__name__, t1 - t0))
+        return ret
+    return timing_wrapper
 
 
 def read_points_ply(path, dtype=np.float32):

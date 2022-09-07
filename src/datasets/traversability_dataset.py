@@ -316,21 +316,12 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
                                            dtype=np.uint8)  # [H,W]  label
         self.scan.set_label(label=traversability)
 
-        depth_img = self.scan.proj_range[None]  # (1, H, W)
         label = self.scan.proj_sem_label
         assert set(np.unique(label)) <= set(self.class_values)
 
-        # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
-        if self.labels_mode == 'masks':
-            # extract certain classes from mask
-            labels = [(label == v) for v in self.class_values]
-            label = np.stack(labels, axis=0)
+        data, label = self.create_sample(label=label)
 
-        if self.lidar_beams_step:
-            depth_img = depth_img[..., ::self.lidar_beams_step]
-            label = label[..., ::self.lidar_beams_step]
-
-        return depth_img.astype('float32'), label.astype('float32')
+        return data, label
 
 
 class TraversabilityClouds(BaseDatasetClouds):
