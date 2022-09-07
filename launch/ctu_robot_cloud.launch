@@ -3,6 +3,13 @@
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
 
+    <node name="points_destagger" pkg="nodelet" type="nodelet"
+          args="standalone cras_ouster_driver/destagger_nodelet">
+        <remap from="info" to="/os_node/sensor_info"/>
+        <remap from="input" to="/os_cloud_node/points"/>
+        <remap from="output" to="/os_cloud_node/destaggered_points"/>
+    </node>
+
     <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
@@ -18,8 +25,8 @@
 <!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'-->
 <!--            weights: 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'-->
 <!--            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_96_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
-            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth
-<!--            weights: fcn_resnet101_lr_1e-05_bs_16_epoch_4_Rellis3DClouds_depth_travTrue_iou_0.58.pth-->
+<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
+            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftTrue_iou_0.54.pth
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
 
