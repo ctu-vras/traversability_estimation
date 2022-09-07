@@ -3,6 +3,7 @@ import numpy as np
 import open3d as o3d
 
 from segments import SegmentsClient, SegmentsDataset
+from sklearn.model_selection import train_test_split
 
 
 class TraversabilityCloud(object):
@@ -41,8 +42,7 @@ class TraversabilityCloud(object):
             # append sample to dataset
             point_clouds.append(self._get_path(sample["name"]))
             labels.append(self._map_annotations(point_annotations, annotations))
-
-        return point_clouds, labels
+        return self._generate_split(point_clouds, labels)
 
     def _map_annotations(self, point_annotations: list, annotations: list) -> np.ndarray:
         ret = []
@@ -60,6 +60,16 @@ class TraversabilityCloud(object):
     def _get_path(self, name: str) -> str:
         return os.path.join(self.path, name)
 
+    def _generate_split(self, X: list, y: list, test_ratio=0.2) -> (list, list):
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=42)
+        if self.split == 'train':
+            X = X_train
+            y = y_train
+        elif self.split in ['val', 'test']:
+            X = X_test
+            y = y_test
+        return X, y
+
     def __getitem__(self, index: int) -> (np.ndarray, np.ndarray):
         point_cloud = o3d.io.read_point_cloud(self.point_clouds[index])
         point_cloud = np.asarray(point_cloud.points).reshape((128, -1, 3))
@@ -69,7 +79,7 @@ class TraversabilityCloud(object):
     def __len__(self) -> int:
         return len(self.point_clouds)
 
-    def visualize_sample(self, index: int):
+    def visualize_sample(self, index: int) -> None:
         point_cloud = o3d.io.read_point_cloud(self.point_clouds[index])
 
         colors = np.array([self.color_map[label] for label in self.labels[index]])
