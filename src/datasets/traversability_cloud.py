@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 
 
 class TraversabilityCloud(object):
-    def __init__(self, path: str, version: str = "v0.2", split: str = "train"):
+    def __init__(self, path: str, version: str = "v0.2", split: str = None):
         self.path = path
         self.split = split
 
@@ -90,9 +90,11 @@ class TraversabilityCloud(object):
 def main():
     directory = "/home/ales/Datasets/points_colored"
     dataset = TraversabilityCloud(directory)
+    print(f"INFO: Initialized dataset split type: {dataset.split}")
+    print(f"INFO: Split contains {len(dataset)} samples.")
     for i, sample in enumerate(dataset):
         point_cloud, label = sample
-        print(point_cloud.shape, label.shape)
+        print(f"INFO: Sample {i} has shape {point_cloud.shape} and label {label.shape}")
         dataset.visualize_sample(i)
 
 
