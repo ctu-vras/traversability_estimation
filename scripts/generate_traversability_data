@@ -13,6 +13,7 @@ Multi-pass processing:
 """
 from __future__ import absolute_import, division, print_function
 from argparse import ArgumentParser
+from glob import glob
 import numpy as np
 from numpy.lib.recfunctions import merge_arrays, structured_to_unstructured, unstructured_to_structured
 import os
@@ -21,7 +22,7 @@ from rosbag import Bag, ROSBagException, Compression
 import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import BufferCore, TransformException
-from traversability_estimation.segmentation import fit_cylinders
+from traversability_estimation.segmentation import fit_cylinders, fit_planes, fit_sticks
 from tqdm import tqdm
 import yaml
 
@@ -68,7 +69,8 @@ def affine(tf, x):
     assert tf.ndim == 2
     assert x.ndim == 2
     assert tf.shape[1] == x.shape[0] + 1
-    return np.matmul(tf[:-1, :-1], x) + tf[:-1, -1:]
+    y = np.matmul(tf[:-1, :-1], x) + tf[:-1, -1:]
+    return y
 
 
 class Body(object):
@@ -168,9 +170,9 @@ def load_buffer(bag_paths):
 
 
 def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
-    assert isinstance(model, Body)
+    assert model is None or isinstance(model, Body)
     assert isinstance(arr, np.ndarray)
-    assert isinstance(discard_model, Body)
+    assert discard_model is None or isinstance(discard_model, Body)
 
     x = structured_to_unstructured(arr.ravel()[['x', 'y', 'z']])
     x = x.T
@@ -181,19 +183,22 @@ def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
 
     # Identify valid points, i.e., points with valid depth which are not part
     # of the robot (contained by the discard model).
-    valid = (x > 0.0).all(axis=0)
+    valid = (x != 0.0).any(axis=0)
+    valid = np.logical_and(valid, np.isfinite(x).all(axis=0))
     if discard_model:
         assert discard_tf is not None
         y = affine(discard_tf, x)
         valid = np.logical_and(valid, ~discard_model.contains(y))
+    valid_ind = np.flatnonzero(valid)
 
     # Mark valid points which are contained by future model poses as empty.
     x_valid = x[:, valid]
     c_valid = np.zeros((x_valid.shape[1],), dtype=bool)
-    for tf in tfs:
-        assert isinstance(tf, np.ndarray)
-        y_valid = affine(tf, x_valid)
-        c_valid = np.logical_or(c_valid, model.contains(y_valid))
+    if model:
+        for tf in tfs:
+            assert isinstance(tf, np.ndarray)
+            y_valid = affine(tf, x_valid)
+            c_valid = np.logical_or(c_valid, model.contains(y_valid))
 
     contained = np.zeros((x.shape[1],), dtype=bool)
     contained[valid] = c_valid
@@ -205,9 +210,18 @@ def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
     segmented = merge_arrays((arr, empty), flatten=True)
 
     # Fit obstacle models (trunks or branches as cylinders, ground or walls as plane).
-    models = fit_cylinders(segmented, 0.05, [0.05, 0.25])
-    # models += fit_planes(segmented, 0.05)
-    for model, indices in models.items():
+    models = []
+    # models = fit_cylinders(segmented, 0.05, [0.05, 0.25])
+    # models = fit_cylinders(segmented, 0.05, max_iterations=1000, visualize=True, min_support=20, max_models=5)
+    # models = fit_sticks(segmented, 0.25, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
+    # models += fit_planes(segmented, 0.1, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
+    # models += fit_planes(segmented, 0.05, max_iterations=1000, min_support=20, max_models=20, cluster_eps=0.2,
+    #                      visualize=True)
+    models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=50, cluster_eps=0.2,
+                         verbose=1, visualize=True)
+    for m, indices in models:
+        print(m, len(indices))
+        indices = valid_ind[indices]
         segmented[LABEL_FIELD_NAME][indices] = LABEL_RIGID
 
     return segmented
@@ -300,7 +314,7 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
                     arr = numpify(msg)
                     segmented_arr = segment_cloud(model, arr, tfs, discard_tf=tfs[n[0]], discard_model=discard_model)
 
-                    n_valid_labels = (segmented_arr['empty'] != IGNORE_LABEL).sum()
+                    n_valid_labels = (segmented_arr[LABEL_FIELD_NAME] != IGNORE_LABEL).sum()
                     if discard_empty and n_valid_labels == 0:
                         print('Discarding cloud with no valid labels.')
                         continue
@@ -329,6 +343,12 @@ def main():
     #     args.box = yaml.safe_load(args.box)
     # if args.discard_box:
     #     args.discard_box = yaml.safe_load(args.discard_box)
+
+    print('Collecting bag files...')
+    print('Bags:', *args.bags, sep='\n')
+    args.bags = sum((glob(b) for b in args.bags), start=[])
+    print('Found %i bag files.' % len(args.bags))
+    print('Bags:', *args.bags, sep='\n')
 
     bodies = []
     if args.radius:
