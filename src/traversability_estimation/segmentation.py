@@ -92,7 +92,7 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
 
         if len(support_tmp) < min_support:
             if verbose >= 0:
-                print('Halt due to insufficient plane support.')
+                print('Halt due to insufficient model support.')
             break
 
         # Extract the largest contiguous cluster and keep the rest for next iteration.
@@ -126,7 +126,7 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
 
         if len(models) == max_models:
             if verbose >= 1:
-                print('Target number of planes found.')
+                print('Target number of models found.')
             break
 
         mask = remove_mask(len(remaining), support_tmp)
@@ -138,7 +138,7 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
             break
         label += 1
 
-    print('%i planes (highest label %i) with minimum support of %i points were found.'
+    print('%i models (highest label %i) with minimum support of %i points were found.'
           % (len(models), labels.max(), min_support))
 
     if visualize:
