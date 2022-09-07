@@ -46,5 +46,5 @@
           args="$(arg topics_to_record) -O $(arg bag)_traversability"/>
 
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/virtual_bumber_segmented_cloud.rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/demo_cloud.rviz"/>
 </launch>

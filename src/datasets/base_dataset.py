@@ -318,6 +318,15 @@ class BaseDatasetClouds(data.Dataset):
 
         return data, label
 
+    def horizontal_shift(self, img, shift):
+        if shift > 0:
+            img_shifted = np.zeros_like(img)
+            img_shifted[..., :shift] = img[..., -shift:]
+            img_shifted[..., shift:] = img[..., :-shift]
+        else:
+            img_shifted = img
+        return img_shifted
+
     def apply_augmentations(self, data, label):
         # with probability 0.5 flip from L to R image and mask
         if np.random.random() <= 0.5:
@@ -329,6 +338,12 @@ class BaseDatasetClouds(data.Dataset):
                 label = label.transpose((2, 0, 1))
             else:
                 label = np.fliplr(label)
+
+        # add rotation around vertical axis (Z)
+        n_inputs, H, W = data.shape
+        shift = np.random.choice(range(W))
+        data = self.horizontal_shift(data, shift=shift)
+        label = self.horizontal_shift(label, shift=shift)
 
         return data.copy(), label.copy()
 

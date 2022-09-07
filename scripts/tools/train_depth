@@ -88,7 +88,7 @@ def main():
         ft_dataset = DatasetFT(split='train', traversability_labels=args.trav_labels,
                                fields=args.data_fields, num_samples=args.n_samples,
                                labels_mode='labels')
-        ft_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+        ft_loader = DataLoader(ft_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
     else:
         ft_loader = None
 
@@ -152,13 +152,6 @@ def main():
                 inpt, labels = inpt.to(device), labels.to(device)
 
                 pred = model(inpt)['out']  # make prediction
-
-                # pred1 = torch.zeros_like(pred)
-                # pred1[:, 0, :, :] = 1
-                # criterion_fn1 = smp.losses.DiceLoss(mode='multiclass',
-                #                                     from_logits=False,
-                #                                     ignore_index=255)
-                # print(criterion_fn1(pred1, labels.long()))
 
                 optimizer.zero_grad()
                 loss = criterion_fn(pred, labels.long())
