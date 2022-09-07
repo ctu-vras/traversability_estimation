@@ -3,7 +3,10 @@ from matplotlib import cm
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
 import open3d as o3d
+from timeit import default_timer as timer
 import torch
+
+default_rng = np.random.default_rng(135)
 
 
 def map_colors(values, colormap=cm.gist_rainbow, min_value=None, max_value=None):
@@ -334,3 +337,65 @@ def fit_sticks(x, distance_threshold, max_iterations=1000, **kwargs):
     models = fit_models_iteratively(x, lambda x: fit_stick_pcl(x, distance_threshold, max_iterations=max_iterations),
                                     **kwargs)
     return models
+
+
+def position(cloud):
+    """Cloud to point positions (xyz)."""
+    if cloud.dtype.names:
+        x = structured_to_unstructured(cloud[['x', 'y', 'z']])
+    else:
+        x = cloud
+    return x
+
+
+def filter_range(cloud, min, max, log=False):
+    """Keep points within range interval."""
+    assert isinstance(cloud, np.ndarray), type(cloud)
+    assert isinstance(min, (float, int)), min
+    assert isinstance(max, (float, int)), max
+    assert min <= max, (min, max)
+    min = float(min)
+    max = float(max)
+    if min <= 0.0 or max == np.inf:
+        return cloud
+    if cloud.dtype.names:
+        cloud = cloud.ravel()
+    x = position(cloud)
+    r = np.linalg.norm(x, axis=1)
+    mask = (min <= r) & (r <= max)
+
+    if log:
+        print('%.3f = %i / %i points kept (range min %s, max %s).'
+              % (mask.sum() / len(cloud), mask.sum(), len(cloud), min, max))
+
+    filtered = cloud[mask]
+    return filtered
+
+
+def filter_grid(cloud, grid, keep='first', log=False, rng=default_rng):
+    """Keep single point within each cell. Order is not preserved."""
+    assert isinstance(cloud, np.ndarray)
+    # assert cloud.dtype.names
+    assert isinstance(grid, (float, int)) and grid > 0.0
+    assert keep in ('first', 'random', 'last')
+
+    if cloud.dtype.names:
+        cloud = cloud.ravel()
+    if keep == 'first':
+        pass
+    elif keep == 'random':
+        rng.shuffle(cloud)
+    elif keep == 'last':
+        cloud = cloud[::-1]
+
+    x = position(cloud)
+    keys = np.floor(x / grid).astype(int)
+    assert keys.size > 0
+    _, ind = np.unique(keys, return_index=True, axis=0)
+
+    if log:
+        print('%.3f = %i / %i points kept (grid res. %.3f m).'
+              % (len(ind) / len(keys), len(ind), len(keys), grid))
+
+    filtered = cloud[ind]
+    return filtered
