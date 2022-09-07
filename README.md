@@ -57,9 +57,9 @@ catkin_make
     and bakbone [weights](https://onedrive.live.com/?authkey=%21AKvqI6pBZlifgJk&cid=F7FD0B7F26543CEB&id=F7FD0B7F26543CEB%21116&parId=F7FD0B7F26543CEB%21105&action=locate) (pretrained on ImageNet).
 
 - [SMP](https://github.com/qubvel/segmentation_models.pytorch):
-    [weights](https://drive.google.com/drive/folders/1WDbBEgDVPPBbWUka5zZKFoOfhAm-jTZr?usp=sharing)
+    [weights](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/image/)
 
-Put the [weights](https://drive.google.com/drive/folders/1w_Bv4H_DdcC1NJ9gdNoozWjc2r0FhLD7?usp=sharing)
+Put the [weights](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/)
 to `./config/weights` folder:
 
 ```bash
@@ -71,7 +71,7 @@ to `./config/weights` folder:
       └── se_resnext50_32x4d_352x640_lr1e-4.pth
 ```
 
-- [Traversability Dataset](https://drive.google.com/drive/folders/10uOtvGhUcdaCTigC99WlPW0kQL1H9a6J?usp=sharing):
+- [Traversability Dataset](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/):
     - RGB images with segmentation labels (traversable, non-traversable area).
     - Point clouds with self-supervised annotations of traversable area from robot's trajectories.
     

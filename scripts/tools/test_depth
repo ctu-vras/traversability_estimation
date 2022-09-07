@@ -5,8 +5,6 @@ import torch
 from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import datasets
-from traversability_estimation.utils import *
-import yaml
 import os
 
 
@@ -21,11 +19,14 @@ def main():
     pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../../'))
 
     # Initialize model with the best available weights
-    model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'
+    # model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'
     # model_name = 'fcn_resnet50_lr_0.0001_bs_24_epoch_9_Rellis3DClouds_z_depth_iou_0.61.pth'
     # model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_5_Rellis3DClouds_intensity_z_depth_iou_0.63.pth'
     # model_name = 'lraspp_mobilenet_v3_large_lr_0.0001_bs_80_epoch_48_Rellis3DClouds_depth_iou_0.62.pth'
     # model_name = 'fcn_resnet50_lr_0.0001_bs_6_epoch_17_TraversabilityClouds_depth_travTrue_iou_1.00.pth'
+    # model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_0_Rellis3DClouds_depth_travTrue_iou_0.54.pth'
+    # model_name = 'fcn_resnet101_lr_0.0001_bs_16_epoch_0_Rellis3DClouds_depth_travTrue_iou_0.58.pth'
+    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth'
     assert args.dataset in model_name
     model = torch.load(os.path.join(pkg_path, 'config/weights/depth_cloud', model_name), map_location=args.device)
     # model = torch.load(model_name, map_location=args.device)
@@ -38,8 +39,8 @@ def main():
 
     for _ in range(5):
         # Apply inference preprocessing transforms
-        xyzir, label = ds[np.random.choice(range(len(ds)))]
-        batch = torch.from_numpy(xyzir).unsqueeze(0).to(args.device)
+        inpt, label = ds[np.random.choice(range(len(ds)))]
+        batch = torch.from_numpy(inpt).unsqueeze(0).to(args.device)
 
         # Use the model and visualize the prediction
         with torch.no_grad():
@@ -47,7 +48,6 @@ def main():
         pred = pred.squeeze(0).cpu().numpy()
 
         color_pred = ds.label_to_color(pred)
-
         color_gt = ds.label_to_color(label)
 
         plt.figure(figsize=(20, 10))

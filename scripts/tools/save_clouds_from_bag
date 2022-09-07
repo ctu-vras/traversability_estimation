@@ -1,0 +1,111 @@
+#!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+import rospy
+from sensor_msgs.msg import PointCloud2
+import yaml
+from ros_numpy import msgify, numpify
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+import os
+import numpy as np
+import tf2_ros
+import rosbag
+from tqdm import tqdm
+import image_geometry
+
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../..'))
+
+
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx], idx
+
+
+def slots(msg):
+    """Return message attributes (slots) as list."""
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
+class PointsProcessor:
+    def __init__(self, pc_topic='/points'):
+        self.pc_topic = rospy.get_param('~pointcloud_topic', pc_topic)
+        rospy.loginfo("Subscribed to " + self.pc_topic)
+        self.file_names = []
+        self.data_path = os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'supervised')
+        self.points_path = os.path.join(self.data_path, 'clouds', pc_topic.split('/')[-1])
+        self.bag_file = rospy.get_param('~bag_file',
+                                        os.path.join(pkg_path,
+                                                     'data/bags/traversability/marv/ugv_2022-08-12-15-30-22_points.bag'))
+        assert os.path.exists(self.bag_file)
+        self.camera_model = image_geometry.PinholeCameraModel()
+
+        self.annotated_imgs_stamps = self.get_time_stamps(self.bag_file)
+        self.t_eps = rospy.get_param('~t_threshold', 0.1)
+
+        self.run(pc_topic)
+
+    def get_time_stamps(self, bag_file):
+        if not os.path.exists(self.points_path):
+            os.mkdir(self.points_path)
+
+        bag_file = bag_file.split('/')[-1].replace('_points', '')
+
+        file_to_bag = yaml.safe_load(
+            open(os.path.join(self.data_path, 'correspondencies.yaml'), 'r'))
+
+        annotated_imgs_stamps = []
+        assert bag_file in file_to_bag.keys()
+
+        for camera_frame in file_to_bag[bag_file].keys():
+            for i, t in enumerate(file_to_bag[bag_file][camera_frame]):
+                fname = file_to_bag[bag_file][camera_frame][i]
+                secs = int(fname.split('_')[1].replace('s', ''))
+                nsecs = int(fname.split('_')[2].replace('n', '').replace('.jpg', ''))
+                annotated_imgs_stamps.append(rospy.Time(secs, nsecs).to_sec())
+                self.file_names.append(fname.replace('.jpg', '.npz'))
+
+        assert len(self.file_names) == len(annotated_imgs_stamps)
+        rospy.loginfo('Found %s images annotated from bag file %s' % (len(annotated_imgs_stamps), bag_file))
+
+        return annotated_imgs_stamps
+
+    def run(self, pc_topic):
+
+        with rosbag.Bag(self.bag_file, 'r') as bag:
+            for (topic, pc_msg, ts) in tqdm(bag.read_messages(topics=str(pc_topic))):
+                pc_msg = PointCloud2(*slots(pc_msg))
+                assert isinstance(pc_msg, PointCloud2)
+                pc_stamp = pc_msg.header.stamp.to_sec()
+                rospy.logdebug('Point cloud time: %s' % pc_stamp)
+
+                closest_img_stamp, idx = find_nearest(self.annotated_imgs_stamps, pc_stamp)
+                t_diff = np.abs(pc_stamp - closest_img_stamp)
+                rospy.logdebug('Closest img time: %ds [sec], time difference: %s [sec]'
+                               % (closest_img_stamp, t_diff))
+
+                if t_diff < self.t_eps:
+                    if closest_img_stamp in self.annotated_imgs_stamps:
+                        # save point cloud here
+                        rospy.logdebug('Cloud fields: %s' % pc_msg.fields)
+                        cloud = numpify(pc_msg)
+                        rospy.loginfo('Saving cloud to %s' % os.path.join(self.points_path, self.file_names[idx]),)
+                        np.savez(os.path.join(self.points_path, self.file_names[idx]), cloud)
+
+                        self.annotated_imgs_stamps.remove(closest_img_stamp)
+                        self.file_names.pop(idx)
+
+                        rospy.loginfo('Number of image timestamps to find annotations to: %s'
+                                      % len(self.annotated_imgs_stamps))
+
+                if len(self.annotated_imgs_stamps) == 0:
+                    rospy.loginfo('All point clouds for image labels are found!')
+                    exit()
+                if rospy.is_shutdown():
+                    exit()
+
+
+if __name__ == '__main__':
+    rospy.init_node('pc_saving_node', log_level=rospy.INFO)
+    proc = PointsProcessor(pc_topic=rospy.get_param('cloud_in', '/os_cloud_node/destaggered_points'))
+    rospy.spin()

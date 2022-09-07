@@ -13,6 +13,7 @@ Multi-pass processing:
 """
 from __future__ import absolute_import, division, print_function
 from argparse import ArgumentParser
+from glob import glob
 import numpy as np
 from numpy.lib.recfunctions import merge_arrays, structured_to_unstructured, unstructured_to_structured
 import os
@@ -21,9 +22,13 @@ from rosbag import Bag, ROSBagException, Compression
 import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import BufferCore, TransformException
+from traversability_estimation.segmentation import fit_cylinders, fit_planes, fit_sticks
 from tqdm import tqdm
 import yaml
 
+LABEL_FIELD_NAME = 'flexible'
+LABEL_RIGID = 0
+LABEL_FLEXIBLE = 1
 IGNORE_LABEL = 255
 
 
@@ -40,14 +45,13 @@ def parse_args():
     parser.add_argument('--discard-radius', type=float, default=None)
     parser.add_argument('--discard-box', type=yaml.safe_load, default=None)
     parser.add_argument('--discard-empty', type=bool, default=True)
+    parser.add_argument('--input-step', type=int, default=1)
     parser.add_argument('--radius', '-r', type=float, default=None)
     parser.add_argument('--box', '-b', type=yaml.safe_load, default=None)
-    # parser.add_argument('-x', type=float, nargs=2, default=[-0.5, 0.5])
-    # parser.add_argument('-y', type=float, nargs=2, default=[-0.5, 0.5])
-    # parser.add_argument('-z', type=float, nargs=2, default=[-0.5, 0.5])
     parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
-    parser.add_argument('--time-horizon', '-t', type=float, default=10.0)
+    parser.add_argument('--time-horizon', '-t', type=float, nargs='+', default=[10.0])
     parser.add_argument('--time-step', '-s', type=float, default=0.5)
+    # parser.add_argument('--time-horizon-direction', type=str, default='future', help='Check poses from history, future, or both.')
     # FIXME: Handle redundant /?
     parser.add_argument('--output-path', '-o', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
     # parser.add_argument('--cloud-path', '-c', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
@@ -65,7 +69,8 @@ def affine(tf, x):
     assert tf.ndim == 2
     assert x.ndim == 2
     assert tf.shape[1] == x.shape[0] + 1
-    return np.matmul(tf[:-1, :-1], x) + tf[:-1, -1:]
+    y = np.matmul(tf[:-1, :-1], x) + tf[:-1, -1:]
+    return y
 
 
 class Body(object):
@@ -164,10 +169,10 @@ def load_buffer(bag_paths):
     return buffer
 
 
-def segment_cloud(model, arr, tfs, label='empty', discard_model=None):
-    assert isinstance(model, Body)
+def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
+    assert model is None or isinstance(model, Body)
     assert isinstance(arr, np.ndarray)
-    assert isinstance(discard_model, Body)
+    assert discard_model is None or isinstance(discard_model, Body)
 
     x = structured_to_unstructured(arr.ravel()[['x', 'y', 'z']])
     x = x.T
@@ -178,35 +183,71 @@ def segment_cloud(model, arr, tfs, label='empty', discard_model=None):
 
     # Identify valid points, i.e., points with valid depth which are not part
     # of the robot (contained by the discard model).
-    valid = (x > 0.0).all(axis=0)
+    valid = (x != 0.0).any(axis=0)
+    valid = np.logical_and(valid, np.isfinite(x).all(axis=0))
     if discard_model:
-        valid = np.logical_and(valid, ~discard_model.contains(x))
+        assert discard_tf is not None
+        y = affine(discard_tf, x)
+        valid = np.logical_and(valid, ~discard_model.contains(y))
+    valid_ind = np.flatnonzero(valid)
 
     # Mark valid points which are contained by future model poses as empty.
     x_valid = x[:, valid]
     c_valid = np.zeros((x_valid.shape[1],), dtype=bool)
-    for tf in tfs:
-        assert isinstance(tf, np.ndarray)
-        y_valid = affine(tf, x_valid)
-        c_valid = np.logical_or(c_valid, model.contains(y_valid))
+    if model:
+        for tf in tfs:
+            assert isinstance(tf, np.ndarray)
+            y_valid = affine(tf, x_valid)
+            c_valid = np.logical_or(c_valid, model.contains(y_valid))
 
     contained = np.zeros((x.shape[1],), dtype=bool)
     contained[valid] = c_valid
-    empty[valid & contained] = 1
+    empty[valid & contained] = LABEL_FLEXIBLE
     empty = empty.reshape((-1, 1))
 
-    empty = unstructured_to_structured(empty, names=[label])
+    empty = unstructured_to_structured(empty, names=[LABEL_FIELD_NAME])
     empty = empty.reshape(arr.shape)
     segmented = merge_arrays((arr, empty), flatten=True)
+
+    # Fit obstacle models (trunks or branches as cylinders, ground or walls as plane).
+    models = []
+    # models = fit_cylinders(segmented, 0.05, [0.05, 0.25])
+    # models = fit_cylinders(segmented, 0.05, max_iterations=1000, visualize=True, min_support=20, max_models=5)
+    # models = fit_sticks(segmented, 0.25, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
+    # models += fit_planes(segmented, 0.1, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
+    # models += fit_planes(segmented, 0.05, max_iterations=1000, min_support=20, max_models=20, cluster_eps=0.2,
+    #                      visualize=True)
+    # models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=40, cluster_eps=0.2,
+    #                      verbose=1, visualize=True)
+    models += fit_planes(x_valid.T, 0.05, max_iterations=100, min_support=25, max_models=20, cluster_eps=0.2,
+                         verbose=1, visualize=True)
+    # models += fit_cylinders(x_valid.T, 0.05, radius_limits=[0.05, 0.5], max_iterations=100, min_support=100,
+    #                         max_models=10, cluster_eps=0.2, verbose=1, visualize=True)
+    for m, indices in models:
+        print(m, len(indices))
+        indices = valid_ind[indices]
+        segmented[LABEL_FIELD_NAME][indices] = LABEL_RIGID
+
     return segmented
 
 
 def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_model=None, discard_empty=False,
-                  distance_horizon=None, time_horizon=None, time_step=None,
+                  input_step=1, distance_horizon=None, time_horizon=None, time_step=None,
                   output_path_fmt=None, output_bag_path_fmt=None, output_topic_fmt=None, output_period=None):
-    assert bag_paths
+    assert bag_paths, bag_paths
+
+    if len(time_horizon) == 1:
+        time_horizon = [0.0] + time_horizon
+    assert len(time_horizon) == 2, time_horizon
+    assert time_horizon[0] < time_horizon[1], time_horizon
+    print('Time horizon:', time_horizon)
+
     dir = os.path.dirname(bag_paths[0])
     name, _ = os.path.splitext(os.path.basename(bag_paths[0]))
+
+    # n = int(np.floor(time_horizon / time_step))
+    n = [int(np.floor(h / time_step)) for h in time_horizon]
+
     last_out = {}
 
     if output_bag_path_fmt:
@@ -228,12 +269,12 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
             topic_types = get_topic_types(bag)
             # print('Topic types:', *['%s: %s' % (k, v)
             #                         for k, v in topic_types.items() if k in topics], sep='\n')
-            i = 0
+            i = -1
             for topic, msg, stamp in tqdm(bag.read_messages(topics=topics),
                                           desc='%s: generating data' % path.split('/')[-1],
                                           total=bag.get_message_count(topic_filters=topics)):
                 i += 1
-                if i % 10 != 0:
+                if i % input_step != 0:
                     continue
 
                 fmt_kwargs = {'dir': dir, 'name': name, 'topic': topic}
@@ -248,9 +289,9 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
                 if output_period and topic in last_out and start - last_out[topic] < output_period:
                     continue
 
-                n = int(np.floor(time_horizon / time_step))
+                # TODO: Always look up t=0.
                 tfs = []
-                for t in np.linspace(start - n * time_step, start + n * time_step, 2 * n + 1):
+                for t in np.linspace(start - n[0] * time_step, start + n[1] * time_step, sum(n) + 1):
                     try:
                         tf = buffer.lookup_transform_full_core(robot_frame, rospy.Time.from_seconds(t),
                                                                msg.header.frame_id, msg.header.stamp,
@@ -261,7 +302,7 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
                     tf = numpify(tf.transform)
                     if tfs:
                         # Check distance horizon.
-                        diff = np.matmul(tfs[0], np.linalg.inv(tf))
+                        diff = np.matmul(tfs[n[0]], np.linalg.inv(tf))
                         distance = np.linalg.norm(diff[:-1, -1])
                         if distance > distance_horizon:
                             print('Distance horizon reached, %.3f m > %.3f m.' % (distance, distance_horizon))
@@ -275,9 +316,9 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
                 if topic_types[topic] == 'sensor_msgs/PointCloud2':
                     msg = PointCloud2(*slots(msg))
                     arr = numpify(msg)
-                    segmented_arr = segment_cloud(model, arr, tfs, discard_model=discard_model)
+                    segmented_arr = segment_cloud(model, arr, tfs, discard_tf=tfs[n[0]], discard_model=discard_model)
 
-                    n_valid_labels = (segmented_arr['empty'] != IGNORE_LABEL).sum()
+                    n_valid_labels = (segmented_arr[LABEL_FIELD_NAME] != IGNORE_LABEL).sum()
                     if discard_empty and n_valid_labels == 0:
                         print('Discarding cloud with no valid labels.')
                         continue
@@ -307,6 +348,12 @@ def main():
     # if args.discard_box:
     #     args.discard_box = yaml.safe_load(args.discard_box)
 
+    print('Collecting bag files...')
+    print('Bags:', *args.bags, sep='\n')
+    args.bags = sum((glob(b) for b in args.bags), start=[])
+    print('Found %i bag files.' % len(args.bags))
+    print('Bags:', *args.bags, sep='\n')
+
     bodies = []
     if args.radius:
         body = Sphere(radius=args.radius)
@@ -328,7 +375,7 @@ def main():
     print('Discard model:', discard_model)
 
     generate_data(args.bags, args.topics, args.fixed_frame, args.robot_frame, model,
-                  discard_model=discard_model, discard_empty=args.discard_empty,
+                  discard_model=discard_model, discard_empty=args.discard_empty, input_step=args.input_step,
                   distance_horizon=args.distance_horizon, time_horizon=args.time_horizon, time_step=args.time_step,
                   output_path_fmt=args.output_path, output_bag_path_fmt=args.output_bag_path,
                   output_topic_fmt=args.output_topic, output_period=args.output_period)

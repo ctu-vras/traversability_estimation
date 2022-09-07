@@ -29,7 +29,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Camera Left
+    SyncSource: "Segmented Points: Obstacles"
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -83,47 +83,45 @@ Visualization Manager:
         base_link:
           Value: true
         battery1:
-          Value: false
+          Value: true
         battery2:
-          Value: false
+          Value: true
         bottom_plate:
-          Value: false
+          Value: true
         camera_fisheye_front:
-          Value: false
+          Value: true
         camera_fisheye_rear:
-          Value: false
+          Value: true
         camera_front:
-          Value: false
+          Value: true
         camera_left:
-          Value: false
+          Value: true
         camera_rear:
-          Value: false
+          Value: true
         camera_right:
-          Value: false
+          Value: true
         camera_up:
-          Value: false
+          Value: true
         deck:
-          Value: false
+          Value: true
         front_left_flipper:
           Value: false
         front_left_flipper_end_point:
           Value: false
         front_left_flipper_end_point_inflated:
-          Value: false
+          Value: true
         front_left_motor:
-          Value: false
+          Value: true
         front_right_flipper:
           Value: false
         front_right_flipper_end_point:
           Value: false
         front_right_flipper_end_point_inflated:
-          Value: false
+          Value: true
         front_right_motor:
-          Value: false
+          Value: true
         imu:
           Value: false
-        map:
-          Value: true
         odom:
           Value: true
         os_imu:
@@ -133,29 +131,29 @@ Visualization Manager:
         os_sensor:
           Value: false
         ouster_calib:
-          Value: false
+          Value: true
         pylon_camera_fisheye_front:
-          Value: false
+          Value: true
         pylon_camera_fisheye_rear:
-          Value: false
+          Value: true
         pylon_camera_front:
-          Value: false
+          Value: true
         pylon_camera_left:
-          Value: false
+          Value: true
         pylon_camera_rear:
-          Value: false
+          Value: true
         pylon_camera_right:
-          Value: false
+          Value: true
         pylon_camera_up:
-          Value: false
+          Value: true
         rear_left_flipper:
           Value: false
         rear_left_flipper_end_point:
           Value: false
         rear_left_flipper_end_point_inflated:
-          Value: false
+          Value: true
         rear_left_motor:
-          Value: false
+          Value: true
         rear_right_box:
           Value: false
         rear_right_flipper:
@@ -163,94 +161,93 @@ Visualization Manager:
         rear_right_flipper_end_point:
           Value: false
         rear_right_flipper_end_point_inflated:
-          Value: false
+          Value: true
         rear_right_motor:
-          Value: false
+          Value: true
         top_box:
           Value: false
         total_mass_60_006:
-          Value: false
+          Value: true
       Marker Alpha: 1
-      Marker Scale: 5
+      Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        map:
-          odom:
-            base_link:
-              battery1:
+        odom:
+          base_link:
+            battery1:
+              {}
+            battery2:
+              {}
+            bottom_plate:
+              {}
+            camera_fisheye_front:
+              pylon_camera_fisheye_front:
                 {}
-              battery2:
+            camera_fisheye_rear:
+              pylon_camera_fisheye_rear:
                 {}
-              bottom_plate:
+            deck:
+              {}
+            front_left_flipper:
+              front_left_flipper_end_point:
                 {}
-              camera_fisheye_front:
-                pylon_camera_fisheye_front:
-                  {}
-              camera_fisheye_rear:
-                pylon_camera_fisheye_rear:
-                  {}
-              deck:
+              front_left_flipper_end_point_inflated:
                 {}
-              front_left_flipper:
-                front_left_flipper_end_point:
-                  {}
-                front_left_flipper_end_point_inflated:
-                  {}
-              front_left_motor:
+            front_left_motor:
+              {}
+            front_right_flipper:
+              front_right_flipper_end_point:
                 {}
-              front_right_flipper:
-                front_right_flipper_end_point:
-                  {}
-                front_right_flipper_end_point_inflated:
-                  {}
-              front_right_motor:
+              front_right_flipper_end_point_inflated:
                 {}
-              imu:
+            front_right_motor:
+              {}
+            imu:
+              {}
+            rear_left_flipper:
+              rear_left_flipper_end_point:
                 {}
-              rear_left_flipper:
-                rear_left_flipper_end_point:
-                  {}
-                rear_left_flipper_end_point_inflated:
-                  {}
-              rear_left_motor:
+              rear_left_flipper_end_point_inflated:
                 {}
-              rear_right_box:
-                camera_front:
-                  pylon_camera_front:
+            rear_left_motor:
+              {}
+            rear_right_box:
+              camera_front:
+                pylon_camera_front:
+                  {}
+              camera_rear:
+                pylon_camera_rear:
+                  {}
+            rear_right_flipper:
+              rear_right_flipper_end_point:
+                {}
+              rear_right_flipper_end_point_inflated:
+                {}
+            rear_right_motor:
+              {}
+            top_box:
+              antenna:
+                {}
+              camera_left:
+                pylon_camera_left:
+                  {}
+              camera_right:
+                pylon_camera_right:
+                  {}
+              camera_up:
+                pylon_camera_up:
+                  {}
+              ouster_calib:
+                os_sensor:
+                  os_imu:
                     {}
-                camera_rear:
-                  pylon_camera_rear:
+                  os_lidar:
                     {}
-              rear_right_flipper:
-                rear_right_flipper_end_point:
-                  {}
-                rear_right_flipper_end_point_inflated:
-                  {}
-              rear_right_motor:
-                {}
-              top_box:
-                antenna:
-                  {}
-                camera_left:
-                  pylon_camera_left:
-                    {}
-                camera_right:
-                  pylon_camera_right:
-                    {}
-                camera_up:
-                  pylon_camera_up:
-                    {}
-                ouster_calib:
-                  os_sensor:
-                    os_imu:
-                      {}
-                    os_lidar:
-                      {}
-              total_mass_60_006:
-                {}
+            total_mass_60_006:
+              {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -472,11 +469,27 @@ Visualization Manager:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-      Name: Robot Model
-      Robot Description: marv/robot_description
+      Name: Marv Robot Model
+      Robot Description: /marv/robot_description
       TF Prefix: ""
       Update Interval: 0
       Value: true
+      Visual Enabled: false
+    - Alpha: 1
+      Class: rviz/RobotModel
+      Collision Enabled: true
+      Enabled: false
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+      Name: Tradr Robot Model
+      Robot Description: nifti_robot_description
+      TF Prefix: ""
+      Update Interval: 0
+      Value: false
       Visual Enabled: false
     - Alpha: 0.5
       Autocompute Intensity Bounds: false
@@ -802,7 +815,7 @@ Visualization Manager:
       Transport Hint: raw
       Unreliable: false
       Value: true
-    - Alpha: 0.5
+    - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
         Max Value: 8
@@ -832,7 +845,7 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
-    - Alpha: 0.5
+    - Alpha: 1
       Autocompute Intensity Bounds: false
       Autocompute Value Bounds:
         Max Value: 8
@@ -846,9 +859,9 @@ Visualization Manager:
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
-      Max Color: 255; 255; 255
+      Max Color: 204; 0; 0
       Max Intensity: 1
-      Min Color: 0; 0; 0
+      Min Color: 115; 210; 22
       Min Intensity: 0
       Name: "Segmented Points: Obstacles"
       Position Transformer: XYZ
@@ -860,14 +873,14 @@ Visualization Manager:
       Topic: /cloud_segmentation/lidar_cloud
       Unreliable: false
       Use Fixed Frame: true
-      Use rainbow: true
+      Use rainbow: false
       Value: true
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /bumper_bbx
       Name: Marker
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true

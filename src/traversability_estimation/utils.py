@@ -110,12 +110,12 @@ def depth_color(val, min_d=0, max_d=120):
 
 def filter_camera_points(points, img_width, img_height, K, RT, give_mask=False):
     assert points.shape[1] == 3
-    ctl = np.array(RT)
+    RT = np.asarray(RT)
     fov_x = 2 * np.arctan2(img_width, 2 * K[0, 0]) * 180 / np.pi + 10
     fov_y = 2 * np.arctan2(img_height, 2 * K[1, 1]) * 180 / np.pi + 10
     p_l = np.ones((points.shape[0], points.shape[1] + 1))
     p_l[:, :3] = points
-    p_c = np.matmul(ctl, p_l.T)
+    p_c = np.matmul(RT, p_l.T)
     p_c = p_c.T
     x = p_c[:, 0]
     y = p_c[:, 1]
@@ -131,7 +131,7 @@ def filter_camera_points(points, img_width, img_height, K, RT, give_mask=False):
     y = points_res[:, 1]
     z = points_res[:, 2]
     dist = np.sqrt(x ** 2 + y ** 2 + z ** 2)
-    color = depth_color(dist, 0, 70)
+    color = depth_color(dist, 0, 10)
     if give_mask:
         return points_res, color, mask
     return points_res, color

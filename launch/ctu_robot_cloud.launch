@@ -2,9 +2,8 @@
 
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="destagger" default="true"/>
 
-    <node if="$(arg destagger)" name="points_destagger" pkg="nodelet" type="nodelet"
+    <node name="points_destagger" pkg="nodelet" type="nodelet"
           args="standalone cras_ouster_driver/destagger_nodelet">
         <remap from="info" to="/os_node/sensor_info"/>
         <remap from="input" to="/os_cloud_node/points"/>
@@ -24,12 +23,14 @@
             output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
             label_config: $(dirname)/../config/obstacles.yaml
 <!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'-->
-            weights: 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
+<!--            weights: 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'-->
+<!--            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_96_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
+<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
+            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftTrue_iou_0.54.pth
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
 
-        <remap if="$(arg destagger)" from="cloud_in" to="/os_cloud_node/destaggered_points"/>
-        <remap unless="$(arg destagger)" from="cloud_in" to="/os_cloud_node/points"/>
+        <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>
         <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
     </node>
 

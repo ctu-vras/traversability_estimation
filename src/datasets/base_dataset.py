@@ -1,14 +1,14 @@
-# ------------------------------------------------------------------------------
-# Copyright (c) Microsoft
-# Licensed under the MIT License.
-# Written by Ke Sun (sunk@mail.ustc.edu.cn)
-# ------------------------------------------------------------------------------
-
 import cv2
 import numpy as np
 import random
 from torch.utils import data
+from datasets.laserscan import SemLaserScan
+from traversability_estimation.utils import convert_label
+import os
+import yaml
 
+
+data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
 
 VOID_VALUE = 255
 TRAVERSABILITY_LABELS = {0: "traversable",
@@ -181,3 +181,171 @@ class BaseDatasetImages(data.Dataset):
         encoded_labelmap = labelmap - 1
 
         return encoded_labelmap
+
+
+class BaseDatasetClouds(data.Dataset):
+    def __init__(self,
+                 path=None,
+                 fields=None,
+                 color_map=None,
+                 traversability_labels=False,
+                 lidar_beams_step=1,
+                 depth_img_H=128,
+                 depth_img_W=1024,
+                 lidar_fov_up=45.0,
+                 lidar_fov_down=-45.0,
+                 ):
+        self.path = path
+        self.split = None
+        self.lidar_beams_step = lidar_beams_step
+        if fields is None:
+            fields = ['x', 'y', 'z', 'intensity', 'depth']
+        self.fields = fields
+        # make sure the input fields are supported
+        assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
+
+        self.traversability_labels = traversability_labels
+        self.color_map = color_map
+        self.class_values = None
+        self.scan = None
+
+        self.depth_img_W = depth_img_W
+        self.depth_img_H = depth_img_H
+        self.lidar_fov_up = lidar_fov_up
+        self.lidar_fov_down = lidar_fov_down
+
+    def setup_color_map(self, color_map):
+        if not self.traversability_labels:
+            self.label_map = None
+            if not color_map:
+                CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+                color_map = CFG["color_map"]
+        else:
+            label_map = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis_to_obstacles.yaml"), 'r'))
+            assert isinstance(label_map, (dict, list))
+            if isinstance(label_map, dict):
+                label_map = dict((int(k), int(v)) for k, v in label_map.items())
+                n = max(label_map) + 1
+                self.label_map = np.zeros((n,), dtype=np.uint8)
+                for k, v in label_map.items():
+                    self.label_map[k] = v
+            elif isinstance(label_map, list):
+                self.label_map = np.asarray(label_map)
+            # traversability label map is assumed (0: traversable, 1: obstacle)
+            color_map = TRAVERSABILITY_COLOR_MAP
+            self.CLASSES = ["traversable", "obstacle"]
+
+        self.color_map = color_map
+        n_classes = len(self.CLASSES)
+        # TRAVERSABILITY_LABELS = [0, 1, 255]
+        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist() if self.traversability_labels \
+            else list(range(n_classes))
+
+    def get_scan(self):
+        self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
+                                 project=True, H=self.depth_img_H, W=self.depth_img_W,
+                                 fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
+
+    def label_to_color(self, label):
+        if len(label.shape) == 3:
+            C, H, W = label.shape
+            label = np.argmax(label, axis=0)
+            assert label.shape == (H, W)
+        if not self.traversability_labels:
+            label = convert_label(label, inverse=True)
+        color = self.scan.sem_color_lut[label]
+        return color
+
+    def generate_split(self, train_ratio=0.8):
+        all_files = self.files.copy()
+        if self.split == 'train':
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
+            files = train_files
+        elif self.split in ['val', 'test']:
+            train_files = self.rng.choice(all_files, size=round(train_ratio * len(all_files)), replace=False).tolist()
+            val_files = all_files.copy()
+            for x in train_files:
+                if x in val_files:
+                    val_files.remove(x)
+            files = val_files
+        else:
+            files = all_files
+        self.files = files
+
+        return files
+
+    def create_sample(self, label=None):
+        # TODO: transform point cloud and LABEL to ground frame (base_link)
+        # following SalsaNext approach: (x, y, z, intensity, depth)
+        xyzid = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
+                                self.scan.proj_remission[None],  # (1 x H x W)
+                                self.scan.proj_range[None]], axis=0)  # (1 x H x W)
+
+        # select input data according to the fields list
+        ids = [['x', 'y', 'z', 'intensity', 'depth'].index(f) for f in self.fields]
+        data = xyzid[ids]
+        n_inputs, H, W = data.shape
+
+        if label is None:
+            label = self.scan.proj_sem_label.copy()
+            if self.label_map is not None:
+                label = self.label_map[label]
+
+        if not self.traversability_labels:
+            label = convert_label(label, inverse=False)
+
+        assert data.shape[1:] == label.shape  # (N, H, W) and (H, W)
+        assert set(np.unique(label)) <= set(self.class_values)  # label should contain only valid class values
+
+        # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
+        if self.labels_mode == 'masks':
+            # extract certain classes from mask (one hot encoding)
+            masks = [(label == v) for v in self.class_values]
+            label = np.stack(masks, axis=0).astype('float')
+
+            n_classes = len(self.class_values)
+            assert label.shape == (n_classes, H, W)
+
+        assert data.shape == (n_inputs, H, W)
+
+        # sample depth image points in horizontal direction
+        if self.lidar_beams_step:
+            data = data[..., ::self.lidar_beams_step]
+            label = label[..., ::self.lidar_beams_step]
+
+        if self.split == 'train':
+            data, label = self.apply_augmentations(data, label)
+
+        return data, label
+
+    def horizontal_shift(self, img, shift):
+        if shift > 0:
+            img_shifted = np.zeros_like(img)
+            img_shifted[..., :shift] = img[..., -shift:]
+            img_shifted[..., shift:] = img[..., :-shift]
+        else:
+            img_shifted = img
+        return img_shifted
+
+    def apply_augmentations(self, data, label):
+        # with probability 0.5 flip from L to R image and mask
+        if np.random.random() <= 0.5:
+            data = np.fliplr(data.transpose((1, 2, 0)))
+            data = data.transpose((2, 0, 1))
+
+            if self.labels_mode == 'masks':
+                label = np.fliplr(label.transpose((1, 2, 0)))
+                label = label.transpose((2, 0, 1))
+            else:
+                label = np.fliplr(label)
+
+        # add rotation around vertical axis (Z)
+        n_inputs, H, W = data.shape
+        shift = np.random.choice(range(W))
+        data = self.horizontal_shift(data, shift=shift)
+        label = self.horizontal_shift(label, shift=shift)
+
+        return data.copy(), label.copy()
+
+    def __len__(self):
+        return len(self.files)
