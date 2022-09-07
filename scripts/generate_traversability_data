@@ -217,8 +217,12 @@ def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
     # models += fit_planes(segmented, 0.1, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
     # models += fit_planes(segmented, 0.05, max_iterations=1000, min_support=20, max_models=20, cluster_eps=0.2,
     #                      visualize=True)
-    models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=50, cluster_eps=0.2,
+    # models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=40, cluster_eps=0.2,
+    #                      verbose=1, visualize=True)
+    models += fit_planes(x_valid.T, 0.05, max_iterations=100, min_support=25, max_models=20, cluster_eps=0.2,
                          verbose=1, visualize=True)
+    # models += fit_cylinders(x_valid.T, 0.05, radius_limits=[0.05, 0.5], max_iterations=100, min_support=100,
+    #                         max_models=10, cluster_eps=0.2, verbose=1, visualize=True)
     for m, indices in models:
         print(m, len(indices))
         indices = valid_ind[indices]

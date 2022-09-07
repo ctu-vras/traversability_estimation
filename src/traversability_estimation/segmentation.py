@@ -199,6 +199,73 @@ def fit_cylinder_rsc(x, distance_threshold, max_iterations=1000):
     return model, indices
 
 
+def fit_cylinder_ls(x):
+    from cylinder_fitting import fit, show_fit
+    # t = timer()
+    assert isinstance(x, np.ndarray)
+    assert x.shape[1] == 3
+    w, c, r, err = fit(x, guess_angles=[(0, np.pi / 2)])
+    # show_fit(w, c, r, x)
+    model = w, c, r
+    # print('fit_cylinder_ls', timer() - t, point_to_cylinder_dist(x, model))
+    return model
+
+
+def fit_cylinder(x, distance_threshold, radius_limits=None, max_iterations=1000):
+    from .ransac import ransac
+    from scipy.spatial import cKDTree
+    assert isinstance(x, np.ndarray)
+    assert x.shape[1] == 3
+    assert distance_threshold >= 0.0
+    assert max_iterations > 0
+
+    # min_sample = 3
+
+    # Speed up by constructing the model only from a local neighborhood.
+    # To interface with ransac, we will use minimal sample size 1 and find the
+    # other two points in the local neighborhood if necessary.
+    x_all = x
+    tree = cKDTree(x, leafsize=64, compact_nodes=True, balanced_tree=False)
+    min_sample = 1
+
+    def get_model(x):
+        if len(x) == 1:
+            # Find the two other points in the local neighborhood.
+            i = tree.query_ball_point(x, 5 * distance_threshold)[0]
+            # Return sample from all points if no model can be constructed from
+            # the local neighborhood.
+            if len(i) < 5:
+                sample = np.random.choice(len(x_all), 5, replace=False)
+                x = x_all[sample]
+            else:
+                i = np.random.choice(i, size=5, replace=False)
+                x = x_all[i]
+        model = fit_cylinder_ls(x)
+        # Limit radius
+        if radius_limits:
+            r = model[2]
+            if r < radius_limits[0] or r > radius_limits[1]:
+                print('Radius limits exceeded:', r, radius_limits)
+                return None
+        # Limit direction
+        w = model[0]
+        if abs(w[2]) < 0.8:
+            print('Direction limits exceeded:', w)
+            return None
+        return model
+
+    def get_inliers(model, x):
+        dist = point_to_cylinder_dist(x, model)
+        dist = np.abs(dist)
+        inliers = np.flatnonzero(dist <= distance_threshold)
+        return inliers
+
+    # Avoid local optimization with inliers due to slow cylinder fit.
+    model, inliers = ransac(x, min_sample, get_model, get_inliers,
+                            fail_prob=0.01, max_iters=max_iterations, lo_iters=0, verbosity=1)
+    return model, inliers
+
+
 def fit_cylinders(x, distance_threshold, radius_limits=None, max_iterations=1000, **kwargs):
     """Segment points into cylinders."""
     assert isinstance(x, np.ndarray)
@@ -211,7 +278,10 @@ def fit_cylinders(x, distance_threshold, radius_limits=None, max_iterations=1000
     if x.dtype.names:
         x = structured_to_unstructured(x[['x', 'y', 'z']])
     # models = fit_models_iteratively(x, lambda x: fit_cylinder_pcl(x, distance_threshold, radius_limits), **kwargs)
-    models = fit_models_iteratively(x, lambda x: fit_cylinder_rsc(x, distance_threshold, max_iterations=max_iterations),
+    # models = fit_models_iteratively(x, lambda x: fit_cylinder_rsc(x, distance_threshold, max_iterations=max_iterations),
+    #                                 **kwargs)
+    models = fit_models_iteratively(x, lambda x: fit_cylinder(x, distance_threshold, radius_limits=radius_limits,
+                                                              max_iterations=max_iterations),
                                     **kwargs)
     return models
 
@@ -250,7 +320,17 @@ def fit_plane_ls(x):
 def point_to_plane_dist(x, model):
     n = model[:3]
     d = model[3]
-    dist = np.abs(np.dot(x, n) + d)
+    dist = np.dot(x, n) + d
+    return dist
+
+
+def point_to_cylinder_dist(x, model):
+    w, c, r = model
+    w = np.asarray(w).reshape((1, 3))
+    c = np.asarray(c).reshape((1, 3))
+    w = w / np.linalg.norm(w)
+    u = x - c
+    dist = np.linalg.norm(u - np.dot(u, w.T) * w, axis=1) - r
     return dist
 
 
@@ -288,11 +368,11 @@ def fit_plane(x, distance_threshold, max_iterations=1000):
     def get_inliers(model, x):
         dist = point_to_plane_dist(x, model)
         dist = np.abs(dist)
-        inliers = np.flatnonzero(dist < distance_threshold)
+        inliers = np.flatnonzero(dist <= distance_threshold)
         return inliers
 
     model, inliers = ransac(x, min_sample, get_model, get_inliers,
-                            fail_prob=0.01, max_iters=max_iterations, lo_iters=3)
+                            fail_prob=0.01, max_iters=max_iterations, lo_iters=3, verbosity=0)
     return model, inliers
 
 
@@ -303,10 +383,19 @@ def fit_planes(x, distance_threshold, max_iterations=1000, **kwargs):
     assert distance_threshold >= 0.0
     if x.dtype.names:
         x = structured_to_unstructured(x[['x', 'y', 'z']])
+
     # models = fit_models_iteratively(x, lambda x: fit_plane_pcl(x, distance_threshold, max_iterations=max_iterations),
     #                                 **kwargs)
-    models = fit_models_iteratively(x, lambda x: fit_plane(x, distance_threshold, max_iterations=max_iterations),
+    # models = fit_models_iteratively(x, lambda x: fit_plane(x, distance_threshold, max_iterations=max_iterations),
+    #                                 **kwargs)
+    # Fit models to filtered cloud, then get original inliers.
+    x_filtered = filter_range(x, 0.5, 10.0)
+    x_filtered = filter_grid(x_filtered, 0.1)
+    models = fit_models_iteratively(x_filtered,
+                                    lambda x: fit_plane(x, distance_threshold, max_iterations=max_iterations),
                                     **kwargs)
+    models = [(model, np.flatnonzero(point_to_plane_dist(x, model) <= distance_threshold))
+              for model, _ in models]
     return models
 
 
