@@ -41,6 +41,8 @@ def ransac(x, min_sample, get_model, get_inliers, fail_prob=1e-3,
         sample = np.random.choice(len(x), min_sample, replace=False)
         model = get_model(x[sample])
         if model is None:
+            if verbosity > 0:
+                print('Failed to fit model to sample.')
             continue
         support = get_inliers(model, x)
         if verbosity > 0 and len(support) < min_sample:
@@ -54,6 +56,9 @@ def ransac(x, min_sample, get_model, get_inliers, fail_prob=1e-3,
                 if len(new_support) < min_sample:
                     print('Optimized support lower than minimal sample.')
                 if len(new_support) > len(support):
+                    if verbosity > 0:
+                        print('Improved optimized model %s with %d inliers (prev. %i).'
+                              % (new_model, len(new_support), len(support)))
                     model = new_model
                     support = new_support
                 else:
@@ -61,6 +66,9 @@ def ransac(x, min_sample, get_model, get_inliers, fail_prob=1e-3,
                     break
 
         if len(support) > len(inliers):
+            if verbosity > 0:
+                print('New best model %s with %i inliers (prev. %i).'
+                      % (model, len(support), len(inliers)))
             best_model = model
             inliers = support
 
