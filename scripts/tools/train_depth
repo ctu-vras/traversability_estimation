@@ -4,12 +4,14 @@ import os
 import numpy as np
 import torchvision.models.segmentation
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, BatchSampler
+from torch.utils.data.sampler import SequentialSampler, Sampler
 from argparse import ArgumentParser
 import datasets
 from tqdm import tqdm
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
+from typing import Iterator, List
 
 
 VOID_VALUE = 255
@@ -65,6 +67,23 @@ def create_model(architecture, n_inputs, n_outputs, pretrained_backbone=True):
     return model
 
 
+class CommonBatchSampler(BatchSampler):
+    """
+    Selecting indices from two different datasets to form batches of data
+    """
+    def __iter__(self) -> Iterator[List[int]]:
+        # TODO: add shuffling of indices
+        batch = []
+        datasets_idx_border = self.sampler.data_source.cumulative_sizes[0]
+        for idx in self.sampler:
+            batch.append(idx)
+            if len(batch) == self.batch_size or idx == datasets_idx_border - 1:
+                yield batch
+                batch = []
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+
 def main():
     args = parse_arguments()
 
@@ -79,18 +98,30 @@ def main():
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='masks')
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
-    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers)
-
     # fine tuning is only supported for traversability labels
     if train_dataset.traversability_labels:
+        print('Using two datasets for training: %s and %s' % (args.dataset, args.dataset_fine_tune))
         DatasetFT = eval('datasets.%s' % args.dataset_fine_tune)
         ft_dataset = DatasetFT(split='train', traversability_labels=args.trav_labels,
                                fields=args.data_fields, num_samples=args.n_samples,
                                labels_mode='labels')
-        ft_loader = DataLoader(ft_dataset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+        train_ft_dataset = torch.utils.data.ConcatDataset([train_dataset, ft_dataset])
+        # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
+        batch_sampler = CommonBatchSampler(SequentialSampler(train_ft_dataset),
+                                           batch_size=args.batch_size,
+                                           drop_last=False)
+        train_loader = DataLoader(dataset=train_ft_dataset,
+                                  num_workers=args.n_workers,
+                                  batch_sampler=batch_sampler,
+                                  pin_memory=True)
     else:
-        ft_loader = None
+        train_loader = DataLoader(train_dataset,
+                                  batch_size=args.batch_size,
+                                  shuffle=True,
+                                  num_workers=args.n_workers,
+                                  pin_memory=True)
+
+    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers, pin_memory=True)
 
     # --------------Load and set model and optimizer-------------------------------------
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -143,23 +174,6 @@ def main():
 
         print('Train loss at epoch %i: %f' % (e, loss.item()))
 
-        if ft_loader:
-            print('Starting fine tuning epoch %i...' % e)
-            # fine tune epoch
-            model = model.train()
-            for itr, sample in tqdm(enumerate(ft_loader)):
-                inpt, labels = sample
-                inpt, labels = inpt.to(device), labels.to(device)
-
-                pred = model(inpt)['out']  # make prediction
-
-                optimizer.zero_grad()
-                loss = criterion_fn(pred, labels.long())
-                loss.backward()
-                optimizer.step()
-
-            print('Fine tuning loss at epoch %i: %f ' % (e, loss.item()))
-
         print('Validation ...')
         # validation epoch
         metrics = []
@@ -182,10 +196,10 @@ def main():
             if max_metric < metric:  # Save model weights
                 max_metric = metric
             if max_metric <= metric or e % 10 == 0:
-                name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_ft%s_iou_%.2f.pth' % \
+                name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
                    (args.architecture,
                     args.lr, args.batch_size, e, args.dataset, '_'.join(train_dataset.fields),
-                    train_dataset.traversability_labels, ft_loader is not None, float(max_metric))
+                    train_dataset.traversability_labels, float(max_metric))
                 print("Saving Model:", name)
                 torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
