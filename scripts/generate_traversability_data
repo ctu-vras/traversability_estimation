@@ -44,25 +44,17 @@ def parse_args():
     parser.add_argument('--topics', type=str, nargs='+')
     parser.add_argument('--fixed-frame', type=str, default='map')
     parser.add_argument('--robot-frame', type=str, default='base_link')
-    # parser.add_argument('--discard-radius', type=float, default=None, help='Discard points within this radius.')
-    # parser.add_argument('--discard-box', type=yaml.safe_load, default=None, help='Discard points within this box.')
     parser.add_argument('--discard-empty', type=bool, default=True)
     parser.add_argument('--input-step', type=int, default=1)
     parser.add_argument('--input-start', type=float, default=-float('inf'), help='Start time in seconds.')
     parser.add_argument('--input-end', type=float, default=float('inf'), help='End time in seconds.')
-    # parser.add_argument('--radius', '-r', type=float, default=None, help='Robot radius for the segmentation.')
-    # parser.add_argument('--box', '-b', type=yaml.safe_load, default=None, help='Bounding box for flexible points.')
     parser.add_argument('--discard-model', type=str, default=None, help='Model at current position discarding points.')
     parser.add_argument('--flexible-model', type=str, default=None, help='Model to move along robot path marking points flexible.')
     parser.add_argument('--rigid-model', type=str, default=None, help='Model to move along robot path marking points rigid.')
     parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
     parser.add_argument('--time-horizon', '-t', type=float, nargs='+', default=[10.0])
     parser.add_argument('--time-step', '-s', type=float, default=0.5)
-    # parser.add_argument('--time-horizon-direction', type=str, default='future', help='Check poses from history, future, or both.')
-    # FIXME: Handle redundant /?
     parser.add_argument('--output-path', '-o', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
-    # parser.add_argument('--cloud-path', '-c', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
-    # parser.add_argument('--image-path', '-i', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
     parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
@@ -369,11 +361,6 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
 
 def main():
     args = parse_args()
-    # print(vars(args))
-    # if args.box:
-    #     args.box = yaml.safe_load(args.box)
-    # if args.discard_box:
-    #     args.discard_box = yaml.safe_load(args.discard_box)
 
     print('Collecting bag files...')
     print('Bags:', *args.bag_paths, sep='\n')
@@ -385,41 +372,12 @@ def main():
         args.discard_model = eval(args.discard_model)
         print('Discard model:', args.discard_model)
     if args.flexible_model:
-        # assert args.radius is None
-        # assert args.box is None
         args.flexible_model = eval(args.flexible_model)
         print('Flexible model:', args.flexible_model)
-    # else:
-    #     bodies = []
-    #     if args.radius:
-    #         body = Sphere(radius=args.radius)
-    #         bodies.append(body)
-    #     if args.box:
-    #         body = Box(extents=args.box)
-    #         bodies.append(body)
-    #     model = Bodies(bodies)
-
     if args.rigid_model:
         args.rigid_model = eval(args.rigid_model)
         print('Rigid model:', args.rigid_model)
 
-    bodies = []
-    # if args.discard_radius:
-    #     body = Sphere(radius=args.discard_radius)
-    #     bodies.append(body)
-    # if args.discard_box:
-    #     body = Box(extents=args.discard_box)
-    #     bodies.append(body)
-    discard_model = Bodies(bodies) if bodies else None
-    print('Discard model:', discard_model)
-
-    # generate_data(args.bags, args.topics, args.fixed_frame, args.robot_frame,
-    #               model=args.flexible_model, rigid_model=rigid_model,
-    #               discard_model=discard_model, discard_empty=args.discard_empty,
-    #               input_step=args.input_step, input_start=args.input_start, input_end=args.input_end,
-    #               distance_horizon=args.distance_horizon, time_horizon=args.time_horizon, time_step=args.time_step,
-    #               output_path_fmt=args.output_path, output_bag_path_fmt=args.output_bag_path,
-    #               output_topic_fmt=args.output_topic, output_period=args.output_period)
     generate_data(**vars(args))
 
 
