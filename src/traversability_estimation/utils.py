@@ -18,7 +18,7 @@ def correct_label(label, value_to_correct=11):
 
     h, w = human_mask.shape
     # tuning the kernel size in vertical direction affects the dilation
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ksize=(1, h // 2))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ksize=(1, h // 6))
 
     human_mask_corr = cv2.erode(human_mask.astype('float'), None, iterations=1)
     human_mask_corr = cv2.dilate(human_mask_corr.astype('float'), kernel=kernel).astype('bool')
