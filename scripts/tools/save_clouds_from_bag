@@ -5,13 +5,15 @@ import rospy
 from sensor_msgs.msg import PointCloud2
 import yaml
 from ros_numpy import msgify, numpify
-from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import os
 import numpy as np
-import tf2_ros
+from numpy.lib.recfunctions import structured_to_unstructured
 import rosbag
 from tqdm import tqdm
 import image_geometry
+import torch
+from datasets.laserscan import SemLaserScan
+from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../..'))
 
@@ -30,20 +32,39 @@ def slots(msg):
 class PointsProcessor:
     def __init__(self, pc_topic='/points'):
         self.pc_topic = rospy.get_param('~pointcloud_topic', pc_topic)
-        rospy.loginfo("Subscribed to " + self.pc_topic)
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.file_names = []
         self.data_path = os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'supervised')
         self.points_path = os.path.join(self.data_path, 'clouds', pc_topic.split('/')[-1])
         self.bag_file = rospy.get_param('~bag_file',
                                         os.path.join(pkg_path,
-                                                     'data/bags/traversability/marv/ugv_2022-08-12-15-30-22_points.bag'))
+                                                     'data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag'))
         assert os.path.exists(self.bag_file)
         self.camera_model = image_geometry.PinholeCameraModel()
+
+        self.data_fields = ['depth']
+        self.model = self.load_model()
+
+        self.scan = SemLaserScan(nclasses=2,
+                                 sem_color_dict=TRAVERSABILITY_COLOR_MAP,
+                                 project=True,
+                                 H=64, W=1024,
+                                 fov_up=45.0, fov_down=-45.0)
 
         self.annotated_imgs_stamps = self.get_time_stamps(self.bag_file)
         self.t_eps = rospy.get_param('~t_threshold', 0.1)
 
         self.run(pc_topic)
+
+    def load_model(self):
+        model_weights = rospy.get_param('~weights',
+                                        'fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftTrue_iou_0.54.pth')
+        self.data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_weights]
+        model_path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % model_weights)
+        assert os.path.exists(model_path)
+        model = torch.load(model_path, map_location=self.device)
+        model = model.eval()
+        return model
 
     def get_time_stamps(self, bag_file):
         if not os.path.exists(self.points_path):
@@ -90,7 +111,26 @@ class PointsProcessor:
                         rospy.logdebug('Cloud fields: %s' % pc_msg.fields)
                         cloud = numpify(pc_msg)
                         rospy.loginfo('Saving cloud to %s' % os.path.join(self.points_path, self.file_names[idx]),)
-                        np.savez(os.path.join(self.points_path, self.file_names[idx]), cloud)
+                        # np.savez(os.path.join(self.points_path, self.file_names[idx]), cloud)
+
+                        # color point cloud with model predictions
+                        points = structured_to_unstructured(cloud[['x', 'y', 'z']]).reshape((-1, 3))
+                        self.scan.set_points(points=points, remissions=cloud['intensity'].reshape(-1,))
+
+                        xyzid = {'x': self.scan.proj_xyz[..., 0],  # (H x W)
+                                 'y': self.scan.proj_xyz[..., 1],  # (H x W)
+                                 'z': self.scan.proj_xyz[..., 2],  # (H x W)
+                                 'intensity': self.scan.proj_remission,  # (H x W)
+                                 'depth': self.scan.proj_range}  # (H x W)
+
+                        # normalize intensity to be in the same format as in Rellis 3D
+                        if xyzid['intensity'].max() > 1.0:
+                            xyzid['intensity'] /= 2.0 ** 16
+
+                        inpt = np.concatenate([xyzid[f][None] for f in self.data_fields], axis=0)
+                        batch = torch.from_numpy(inpt).unsqueeze(0).to(self.device)
+                        with torch.no_grad():
+                            pred = self.model(batch)['out']
 
                         self.annotated_imgs_stamps.remove(closest_img_stamp)
                         self.file_names.pop(idx)
@@ -106,6 +146,5 @@ class PointsProcessor:
 
 
 if __name__ == '__main__':
-    rospy.init_node('pc_saving_node', log_level=rospy.INFO)
+    rospy.init_node('pc_saving_node', log_level=rospy.DEBUG)
     proc = PointsProcessor(pc_topic=rospy.get_param('cloud_in', '/os_cloud_node/destaggered_points'))
-    rospy.spin()
