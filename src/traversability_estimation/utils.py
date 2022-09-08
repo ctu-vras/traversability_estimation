@@ -1,13 +1,15 @@
+import cv2
+import matplotlib.pyplot as plt
+from matplotlib import cm
 import numpy as np
 from numpy.lib.recfunctions import unstructured_to_structured
-import cv2
-import yaml
 from PIL import Image, ImageFile
-ImageFile.LOAD_TRUNCATED_IMAGES = True
-import matplotlib.pyplot as plt
-import torch
-from timeit import default_timer as timer
 import rospy
+from timeit import default_timer as timer
+import torch
+import yaml
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 def correct_label(label, value_to_correct=11):
@@ -235,6 +237,48 @@ def visualize(**images):
         plt.title(' '.join(name.split('_')).title())
         plt.imshow(image)
     plt.show()
+
+
+def map_colors(values, colormap=cm.gist_rainbow, min_value=None, max_value=None):
+    if not isinstance(values, torch.Tensor):
+        values = torch.tensor(values)
+    assert callable(colormap) or isinstance(colormap, torch.Tensor)
+    if min_value is None:
+        min_value = values.min()
+    if max_value is None:
+        max_value = values.max()
+    scale = max_value - min_value
+    a = (values - min_value) / scale if scale > 0.0 else values - min_value
+    if callable(colormap):
+        colors = colormap(a.squeeze())[:, :3]
+        return colors
+    # TODO: Allow full colormap with multiple colors.
+    assert isinstance(colormap, torch.Tensor)
+    num_colors = colormap.shape[0]
+    a = a.reshape([-1, 1])
+    if num_colors == 2:
+        # Interpolate the two colors.
+        colors = (1 - a) * colormap[0:1] + a * colormap[1:]
+    else:
+        # Select closest based on scaled value.
+        i = torch.round(a * (num_colors - 1))
+        colors = colormap[i]
+    return colors
+
+
+def show_cloud(x, value=None, min=None, max=None, colormap=cm.jet):
+    import open3d as o3d
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(x)
+    if value is not None:
+        assert isinstance(value, np.ndarray)
+        if value.ndim == 2:
+            assert value.shape[1] == 3
+            colors = value
+        elif value.ndim == 1:
+            colors = map_colors(value, colormap=colormap, min_value=min, max_value=max)
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.visualization.draw_geometries([pcd])
 
 
 def convert_label(label, inverse=False, label_mapping=None):

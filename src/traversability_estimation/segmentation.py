@@ -1,4 +1,5 @@
 """Segmentation of points into geometric primitives (planes, etc.)."""
+from .utils import map_colors, show_cloud
 from matplotlib import cm
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
@@ -7,37 +8,6 @@ from timeit import default_timer as timer
 import torch
 
 default_rng = np.random.default_rng(135)
-
-
-def map_colors(values, colormap=cm.gist_rainbow, min_value=None, max_value=None):
-    if not isinstance(values, torch.Tensor):
-        values = torch.tensor(values)
-    # if not isinstance(colormap, torch.Tensor):
-    #     colormap = torch.tensor(colormap, dtype=torch.float64)
-    # assert colormap.shape[1] == (2, 3)
-    # assert callable(colormap)
-    assert callable(colormap) or isinstance(colormap, torch.Tensor)
-    if min_value is None:
-        min_value = values.min()
-    if max_value is None:
-        max_value = values.max()
-    scale = max_value - min_value
-    a = (values - min_value) / scale if scale > 0.0 else values - min_value
-    if callable(colormap):
-        colors = colormap(a.squeeze())[:, :3]
-        return colors
-    # TODO: Allow full colormap with multiple colors.
-    assert isinstance(colormap, torch.Tensor)
-    num_colors = colormap.shape[0]
-    a = a.reshape([-1, 1])
-    if num_colors == 2:
-        # Interpolate the two colors.
-        colors = (1 - a) * colormap[0:1] + a * colormap[1:]
-    else:
-        # Select closest based on scaled value.
-        i = torch.round(a * (num_colors - 1))
-        colors = colormap[i]
-    return colors
 
 
 def cluster_open3d(x, eps, min_points=10):
@@ -49,7 +19,7 @@ def cluster_open3d(x, eps, min_points=10):
     # NB: High min_points value causes finding no points, even if clusters
     # with enough support are found when using lower min_points value.
     # clustering = pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=True)
-    clustering = pcd.cluster_dbscan(eps=eps, min_points=10, print_progress=False)
+    clustering = pcd.cluster_dbscan(eps=eps, min_points=min_points, print_progress=False)
     # Invalid labels < 0.
     clustering = np.asarray(clustering)
     return clustering
@@ -65,6 +35,17 @@ def remove_mask(n, indices):
     mask = np.ones(n, dtype=bool)
     mask[indices] = 0
     return mask
+
+
+def largest_cluster(x, eps, min_points=10):
+    clustering = cluster_open3d(x, eps, min_points=min_points)
+    clusters, counts = np.unique(clustering[clustering >= 0], return_counts=True)
+    if len(counts) == 0:
+        return []
+    largest = clusters[counts.argmax()]
+    indices = np.flatnonzero(clustering == largest)
+    assert len(indices) >= min_points
+    return indices
 
 
 def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_eps=None, verbose=0, visualize=False):
@@ -100,25 +81,22 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
 
         # Extract the largest contiguous cluster and keep the rest for next iteration.
         if cluster_eps:
-            clustering = cluster_open3d(remaining[support_tmp], cluster_eps, min_points=min_support)
-            clusters, counts = np.unique(clustering[clustering >= 0], return_counts=True)
-            if len(counts) == 0 or counts.max() < min_support:
+            largest_indices = largest_cluster(remaining[support_tmp], eps=cluster_eps, min_points=min_support)
+            if len(largest_indices) == 0:
                 # Remove all points if there is no cluster with sufficient support.
                 mask = remove_mask(len(remaining), support_tmp)
                 remaining = remaining[mask]
                 indices = indices[mask]
                 if verbose >= 2:
-                    print('No cluster from model %i has sufficient support (largest %i < %i).'
-                          % (label, counts.max() if len(counts) else 0, min_support))
+                    print('No cluster from model %i has support >= %i.' % (label, min_support))
                 if len(remaining) < min_support:
                     if verbose >= 1:
                         print('Not enough points to continue.')
                     break
                 continue
-            i_max = counts.argmax()
-            assert counts[i_max] >= min_support
-            largest = clusters[i_max]
-            support_tmp = support_tmp[clustering == largest]
+            support_tmp = support_tmp[largest_indices]
+
+            # support_tmp = support_tmp[clustering == largest]
             if verbose >= 1:
                 print('Kept largest cluster from model %i %s supported by %i / %i (%i) points.'
                       % (label, model, len(support_tmp), len(remaining), len(x)))
@@ -145,8 +123,6 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
           % (len(models), labels.max(), min_support))
 
     if visualize:
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(x)
         num_primitives = len(models)
         num_points = len(x)
         labels = np.full(num_points, -1, dtype=int)
@@ -156,8 +132,7 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
         colors = np.zeros((num_points, 3), dtype=np.float32)
         segmented = labels >= 0
         colors[segmented] = map_colors(labels[segmented], colormap=cm.viridis, min_value=0.0, max_value=max_label)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-        o3d.visualization.draw_geometries([pcd])
+        show_cloud(x, colors)
 
     return models
 
@@ -363,7 +338,9 @@ def fit_plane(x, distance_threshold, max_iterations=1000):
             else:
                 i = np.random.choice(i, size=3, replace=False)
                 x = x_all[i]
-        return fit_plane_ls(x)
+        model = fit_plane_ls(x)
+        # TODO: Check consistency with local neighborhood.
+        return model
 
     def get_inliers(model, x):
         dist = point_to_plane_dist(x, model)
@@ -378,24 +355,32 @@ def fit_plane(x, distance_threshold, max_iterations=1000):
 
 def fit_planes(x, distance_threshold, max_iterations=1000, **kwargs):
     """Segment points into planes."""
+    from scipy.spatial import cKDTree
     assert isinstance(x, np.ndarray)
     assert isinstance(distance_threshold, float)
     assert distance_threshold >= 0.0
     if x.dtype.names:
         x = structured_to_unstructured(x[['x', 'y', 'z']])
 
-    # models = fit_models_iteratively(x, lambda x: fit_plane_pcl(x, distance_threshold, max_iterations=max_iterations),
-    #                                 **kwargs)
-    # models = fit_models_iteratively(x, lambda x: fit_plane(x, distance_threshold, max_iterations=max_iterations),
-    #                                 **kwargs)
-    # Fit models to filtered cloud, then get original inliers.
+    # Fit models to filtered cloud.
     x_filtered = filter_range(x, 0.5, 10.0)
-    x_filtered = filter_grid(x_filtered, 0.1)
+    grid = 0.1
+    x_filtered = filter_grid(x_filtered, grid)
     models = fit_models_iteratively(x_filtered,
                                     lambda x: fit_plane(x, distance_threshold, max_iterations=max_iterations),
                                     **kwargs)
-    models = [(model, np.flatnonzero(point_to_plane_dist(x, model) <= distance_threshold))
-              for model, _ in models]
+
+    # Construct inlier set from original points: consistent with model and close to filtered inliers.
+    for i in range(len(models)):
+        model, inliers = models[i]
+        tree = cKDTree(x_filtered[inliers])
+        dist = point_to_plane_dist(x, model)
+        dist = np.abs(dist)
+        orig_inliers = np.flatnonzero(dist <= distance_threshold)
+        d, _ = tree.query(x[orig_inliers])
+        orig_inliers = orig_inliers[d <= grid]
+        models[i] = model, orig_inliers
+
     return models
 
 
