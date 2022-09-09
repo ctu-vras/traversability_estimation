@@ -48,7 +48,8 @@ def largest_cluster(x, eps, min_points=10):
     return indices
 
 
-def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_eps=None, verbose=0, visualize=False):
+def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_eps=None, cluster_k=10,
+                           verbose=0, visualize=False):
     """Fit multiple models iteratively.
 
     @param x: Input point cloud.
@@ -81,8 +82,9 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
 
         # Extract the largest contiguous cluster and keep the rest for next iteration.
         if cluster_eps:
-            largest_indices = largest_cluster(remaining[support_tmp], eps=cluster_eps, min_points=min_support)
-            if len(largest_indices) == 0:
+            # largest_indices = largest_cluster(remaining[support_tmp], eps=cluster_eps, min_points=min_support)
+            largest_indices = largest_cluster(remaining[support_tmp], eps=cluster_eps, min_points=cluster_k)
+            if len(largest_indices) == 0 or len(largest_indices) < min_support:
                 # Remove all points if there is no cluster with sufficient support.
                 mask = remove_mask(len(remaining), support_tmp)
                 remaining = remaining[mask]
@@ -131,7 +133,7 @@ def fit_models_iteratively(x, fit_model, min_support=3, max_models=10, cluster_e
         max_label = num_primitives - 1
         colors = np.zeros((num_points, 3), dtype=np.float32)
         segmented = labels >= 0
-        colors[segmented] = map_colors(labels[segmented], colormap=cm.viridis, min_value=0.0, max_value=max_label)
+        colors[segmented] = map_colors(labels[segmented], colormap=cm.jet, min_value=0.0, max_value=max_label)
         show_cloud(x, colors)
 
     return models
@@ -309,7 +311,7 @@ def point_to_cylinder_dist(x, model):
     return dist
 
 
-def fit_plane(x, distance_threshold, max_iterations=1000):
+def fit_plane(x, distance_threshold, normal_z_limits=(0.0, 1.0), max_iterations=1000):
     from .ransac import ransac
     from scipy.spatial import cKDTree
     assert isinstance(x, np.ndarray)
@@ -323,7 +325,8 @@ def fit_plane(x, distance_threshold, max_iterations=1000):
     # To interface with ransac, we will use minimal sample size 1 and find the
     # other two points in the local neighborhood if necessary.
     x_all = x
-    tree = cKDTree(x, leafsize=64, compact_nodes=True, balanced_tree=False)
+    # tree = cKDTree(x, leafsize=64, compact_nodes=True, balanced_tree=False)
+    tree = cKDTree(x, compact_nodes=True, balanced_tree=False)
     min_sample = 1
 
     def get_model(x):
@@ -333,12 +336,17 @@ def fit_plane(x, distance_threshold, max_iterations=1000):
             # Return sample from all points if no model can be constructed from
             # the local neighborhood.
             if len(i) < 3:
+                # print('Not enough points in local neighborhood.')
+                return None
                 sample = np.random.choice(len(x_all), 3, replace=False)
                 x = x_all[sample]
             else:
+                # print('Model constructed from local neighborhood.')
                 i = np.random.choice(i, size=3, replace=False)
                 x = x_all[i]
         model = fit_plane_ls(x)
+        if abs(model[2]) < normal_z_limits[0] or abs(model[2]) > normal_z_limits[1]:
+            return None
         # TODO: Check consistency with local neighborhood.
         return model
 
@@ -349,11 +357,11 @@ def fit_plane(x, distance_threshold, max_iterations=1000):
         return inliers
 
     model, inliers = ransac(x, min_sample, get_model, get_inliers,
-                            fail_prob=0.01, max_iters=max_iterations, lo_iters=3, verbosity=0)
+                            fail_prob=1e-6, max_iters=max_iterations, lo_iters=3, verbosity=0)
     return model, inliers
 
 
-def fit_planes(x, distance_threshold, max_iterations=1000, **kwargs):
+def fit_planes(x, distance_threshold, normal_z_limits=(0.0, 1.0), max_iterations=1000, **kwargs):
     """Segment points into planes."""
     from scipy.spatial import cKDTree
     assert isinstance(x, np.ndarray)
@@ -366,9 +374,9 @@ def fit_planes(x, distance_threshold, max_iterations=1000, **kwargs):
     x_filtered = filter_range(x, 0.5, 10.0)
     grid = 0.1
     x_filtered = filter_grid(x_filtered, grid)
-    models = fit_models_iteratively(x_filtered,
-                                    lambda x: fit_plane(x, distance_threshold, max_iterations=max_iterations),
-                                    **kwargs)
+    def fit_model(x):
+        return fit_plane(x, distance_threshold, normal_z_limits=normal_z_limits, max_iterations=max_iterations)
+    models = fit_models_iteratively(x_filtered, fit_model, **kwargs)
 
     # Construct inlier set from original points: consistent with model and close to filtered inliers.
     for i in range(len(models)):

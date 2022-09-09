@@ -52,6 +52,10 @@ def ransac(x, min_sample, get_model, get_inliers, fail_prob=1e-3,
         if len(support) > min_sample:
             for j in range(lo_iters):
                 new_model = get_model(x[support])
+                if new_model is None:
+                    if verbosity > 0:
+                        print('Failed to fit model to support.')
+                    break
                 new_support = get_inliers(new_model, x)
                 if len(new_support) < min_sample:
                     print('Optimized support lower than minimal sample.')
@@ -75,4 +79,5 @@ def ransac(x, min_sample, get_model, get_inliers, fail_prob=1e-3,
         inl_ratio = len(support) / len(x)
         max_iters = min(max_iters, num_iters(inl_ratio, fail_prob, min_sample))
 
+    # print('RANSAC finished after %i iterations.' % i)
     return best_model, inliers
