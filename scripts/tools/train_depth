@@ -85,8 +85,8 @@ class CommonBatchSampler(BatchSampler):
         assert len(self.sampler.data_source.cumulative_sizes) == 2
         if self.shuffle:
             # random batch sampler: select batches randomly either from one dataset or another
-            ids = {'0': list(self.sampler)[:datasets_idx_border].copy(),
-                   '1': list(self.sampler)[datasets_idx_border:].copy()}
+            ids = {'0': list(self.sampler)[:datasets_idx_border],
+                   '1': list(self.sampler)[datasets_idx_border:]}
             while len(ids['0']) > 0 or len(ids['1']) > 0:
                 data_id = np.random.choice(list(ids.keys()))
                 if len(ids[data_id]) == 0:

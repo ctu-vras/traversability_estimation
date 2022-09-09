@@ -306,6 +306,8 @@ class Rellis3DClouds(BaseDatasetClouds):
         self.split = split
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
+        self.classes_to_correct = ['person']
+        assert set(self.classes_to_correct) <= set(self.CLASSES)
 
         self.setup_color_map(color_map)
         self.get_scan()

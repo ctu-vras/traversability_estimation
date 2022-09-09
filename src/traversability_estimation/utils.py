@@ -12,7 +12,8 @@ import yaml
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
-def correct_label(label, value_to_correct=11):
+def correct_label(label, value_to_correct=11, value_to_assign=None):
+    assert label.ndim == 2
     # value_to_correct = 11: human label
     label_corr = label.copy()
 
@@ -20,14 +21,18 @@ def correct_label(label, value_to_correct=11):
 
     h, w = human_mask.shape
     # tuning the kernel size in vertical direction affects the dilation
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ksize=(1, h // 6))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, ksize=(1, h // 4))
 
     human_mask_corr = cv2.erode(human_mask.astype('float'), None, iterations=1)
     human_mask_corr = cv2.dilate(human_mask_corr.astype('float'), kernel=kernel).astype('bool')
 
+    masks_diff = np.logical_xor(human_mask_corr, human_mask)
+
     # the upper part of an image is not being corrected
-    human_mask_corr[:h // 2, :] = False
-    label_corr[human_mask_corr] = value_to_correct
+    masks_diff[:h // 2, :] = False
+    if value_to_assign is None:
+        value_to_assign = value_to_correct
+    label_corr[masks_diff] = value_to_assign
 
     return label_corr
 

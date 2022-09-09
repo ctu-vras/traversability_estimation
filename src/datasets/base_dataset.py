@@ -3,7 +3,7 @@ import numpy as np
 import random
 from torch.utils import data
 from datasets.laserscan import SemLaserScan
-from traversability_estimation.utils import convert_label
+from traversability_estimation.utils import convert_label, correct_label
 import os
 import yaml
 
@@ -208,6 +208,7 @@ class BaseDatasetClouds(data.Dataset):
         self.color_map = color_map
         self.class_values = None
         self.scan = None
+        self.classes_to_correct = []
 
         self.depth_img_W = depth_img_W
         self.depth_img_H = depth_img_H
@@ -275,7 +276,7 @@ class BaseDatasetClouds(data.Dataset):
         return files
 
     def create_sample(self, label=None):
-        # TODO: transform point cloud and LABEL to ground frame (base_link)
+
         # following SalsaNext approach: (x, y, z, intensity, depth)
         xyzid = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
                                 self.scan.proj_remission[None],  # (1 x H x W)
@@ -293,6 +294,8 @@ class BaseDatasetClouds(data.Dataset):
 
         if not self.traversability_labels:
             label = convert_label(label, inverse=False)
+            for cl in self.classes_to_correct:
+                label = correct_label(label, value_to_correct=self.CLASSES.index(cl), value_to_assign=0)
 
         assert data.shape[1:] == label.shape  # (N, H, W) and (H, W)
         assert set(np.unique(label)) <= set(self.class_values)  # label should contain only valid class values
