@@ -74,17 +74,50 @@ class CommonBatchSampler(BatchSampler):
     """
     Selecting indices from two different datasets to form batches of data
     """
+    def __init__(self, sampler, batch_size, drop_last, shuffle=False):
+        super(CommonBatchSampler, self).__init__(sampler=sampler, batch_size=batch_size, drop_last=drop_last)
+        self.shuffle = shuffle
+
     def __iter__(self) -> Iterator[List[int]]:
-        # TODO: add shuffling of indices
-        batch = []
         datasets_idx_border = self.sampler.data_source.cumulative_sizes[0]
-        for idx in self.sampler:
-            batch.append(idx)
-            if len(batch) == self.batch_size or idx == datasets_idx_border - 1:
+
+        # assume we have 2 datasets two concatenate
+        assert len(self.sampler.data_source.cumulative_sizes) == 2
+        if self.shuffle:
+            # random batch sampler: select batches randomly either from one dataset or another
+            ids = {'0': list(self.sampler)[:datasets_idx_border].copy(),
+                   '1': list(self.sampler)[datasets_idx_border:].copy()}
+            while len(ids['0']) > 0 or len(ids['1']) > 0:
+                data_id = np.random.choice(list(ids.keys()))
+                if len(ids[data_id]) == 0:
+                    # inverse 0 to 1 and vise versa
+                    data_id = str(int(not int(data_id)))
+                assert len(ids[data_id]) > 0
+
+                if len(ids[data_id]) > self.batch_size:
+                    batch = np.random.choice(ids[data_id], self.batch_size, replace=False).tolist()
+                    assert len(batch) > 0
+                else:
+                    if self.drop_last:
+                        break
+                    else:
+                        batch = ids[data_id].copy()
+                        assert len(batch) > 0
+
+                for ind in batch:
+                    ids[data_id].remove(ind)
+                assert len(batch) > 0
                 yield batch
-                batch = []
-        if len(batch) > 0 and not self.drop_last:
-            yield batch
+        else:
+            # sequential batch sampler
+            batch = []
+            for idx in self.sampler:
+                batch.append(idx)
+                if len(batch) == self.batch_size or idx == datasets_idx_border - 1:
+                    yield batch
+                    batch = []
+            if len(batch) > 0 and not self.drop_last:
+                yield batch
 
 
 def create_dataloaders(args):
@@ -111,7 +144,8 @@ def create_dataloaders(args):
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
         batch_sampler = CommonBatchSampler(SequentialSampler(train_dataset_combined),
                                            batch_size=args.batch_size,
-                                           drop_last=False)
+                                           drop_last=False,
+                                           shuffle=True)
         train_loader = DataLoader(dataset=train_dataset_combined,
                                   num_workers=args.n_workers,
                                   batch_sampler=batch_sampler,
@@ -124,7 +158,8 @@ def create_dataloaders(args):
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
         batch_sampler_val = CommonBatchSampler(SequentialSampler(valid_dataset_combined),
                                                batch_size=args.batch_size,
-                                               drop_last=False)
+                                               drop_last=False,
+                                               shuffle=False)
         valid_loader = DataLoader(dataset=valid_dataset_combined,
                                   num_workers=args.n_workers,
                                   batch_sampler=batch_sampler_val,
