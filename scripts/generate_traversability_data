@@ -14,6 +14,7 @@ Multi-pass processing:
 from __future__ import absolute_import, division, print_function
 from argparse import ArgumentParser
 from glob import glob
+from matplotlib import cm
 import numpy as np
 from numpy.lib.recfunctions import merge_arrays, structured_to_unstructured, unstructured_to_structured
 import os
@@ -23,6 +24,7 @@ import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import BufferCore, TransformException
 from traversability_estimation.segmentation import fit_cylinders, fit_planes, fit_sticks
+from traversability_estimation.utils import show_cloud
 from tqdm import tqdm
 import yaml
 
@@ -42,24 +44,21 @@ def parse_args():
     parser.add_argument('--topics', type=str, nargs='+')
     parser.add_argument('--fixed-frame', type=str, default='map')
     parser.add_argument('--robot-frame', type=str, default='base_link')
-    parser.add_argument('--discard-radius', type=float, default=None)
-    parser.add_argument('--discard-box', type=yaml.safe_load, default=None)
     parser.add_argument('--discard-empty', type=bool, default=True)
     parser.add_argument('--input-step', type=int, default=1)
-    parser.add_argument('--radius', '-r', type=float, default=None)
-    parser.add_argument('--box', '-b', type=yaml.safe_load, default=None)
+    parser.add_argument('--input-start', type=float, default=-float('inf'), help='Start time in seconds.')
+    parser.add_argument('--input-end', type=float, default=float('inf'), help='End time in seconds.')
+    parser.add_argument('--discard-model', type=str, default=None, help='Model at current position discarding points.')
+    parser.add_argument('--flexible-model', type=str, default=None, help='Model to move along robot path marking points flexible.')
+    parser.add_argument('--rigid-model', type=str, default=None, help='Model to move along robot path marking points rigid.')
     parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
     parser.add_argument('--time-horizon', '-t', type=float, nargs='+', default=[10.0])
     parser.add_argument('--time-step', '-s', type=float, default=0.5)
-    # parser.add_argument('--time-horizon-direction', type=str, default='future', help='Check poses from history, future, or both.')
-    # FIXME: Handle redundant /?
     parser.add_argument('--output-path', '-o', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
-    # parser.add_argument('--cloud-path', '-c', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
-    # parser.add_argument('--image-path', '-i', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
     parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
-    parser.add_argument('bags', type=str, nargs='+')
+    parser.add_argument('bag_paths', type=str, nargs='+')
     args = parser.parse_args()
     print(args)
     return args
@@ -169,9 +168,28 @@ def load_buffer(bag_paths):
     return buffer
 
 
-def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
-    assert model is None or isinstance(model, Body)
+def fit_primitives(x_valid):
+    # Fit obstacle models (trunks or branches as cylinders, ground or walls as plane).
+    models = []
+    # models = fit_cylinders(segmented, 0.05, [0.05, 0.25])
+    # models = fit_cylinders(segmented, 0.05, max_iterations=1000, visualize=True, min_support=20, max_models=5)
+    # models = fit_sticks(segmented, 0.25, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
+    # models += fit_planes(segmented, 0.1, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
+    # models += fit_planes(segmented, 0.05, max_iterations=1000, min_support=20, max_models=20, cluster_eps=0.2,
+    #                      visualize=True)
+    # models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=40, cluster_eps=0.2,
+    #                      verbose=1, visualize=True)
+    models += fit_planes(x_valid.T, 0.05, max_iterations=100, min_support=25, max_models=10, cluster_eps=0.25,
+                         verbose=1, visualize=True)
+    # models += fit_cylinders(x_valid.T, 0.05, radius_limits=[0.05, 0.5], max_iterations=100, min_support=100,
+    #                         max_models=10, cluster_eps=0.2, verbose=1, visualize=True)
+    return models
+
+
+def segment_cloud(flexible_model, arr, tfs, rigid_model=None, discard_tf=None, discard_model=None):
+    assert flexible_model is None or isinstance(flexible_model, Body)
     assert isinstance(arr, np.ndarray)
+    assert rigid_model is None or isinstance(rigid_model, Body)
     assert discard_model is None or isinstance(discard_model, Body)
 
     x = structured_to_unstructured(arr.ravel()[['x', 'y', 'z']])
@@ -179,7 +197,7 @@ def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
 
     # Initialize all labels as unknown.
     # 0: occupied, 1: empty, IGNORE_LABEL: label unknown.
-    empty = np.full((x.shape[1],), IGNORE_LABEL, dtype=np.uint8)
+    labels = np.full((x.shape[1],), IGNORE_LABEL, dtype=np.uint8)
 
     # Identify valid points, i.e., points with valid depth which are not part
     # of the robot (contained by the discard model).
@@ -193,47 +211,43 @@ def segment_cloud(model, arr, tfs, discard_tf=None, discard_model=None):
 
     # Mark valid points which are contained by future model poses as empty.
     x_valid = x[:, valid]
-    c_valid = np.zeros((x_valid.shape[1],), dtype=bool)
-    if model:
-        for tf in tfs:
-            assert isinstance(tf, np.ndarray)
-            y_valid = affine(tf, x_valid)
-            c_valid = np.logical_or(c_valid, model.contains(y_valid))
+    flexible_valid = np.zeros((x_valid.shape[1],), dtype=bool)
+    rigid_valid = np.zeros((x_valid.shape[1],), dtype=bool)
+    for tf in tfs:
+        assert isinstance(tf, np.ndarray)
+        y_valid = affine(tf, x_valid)
+        if flexible_model:
+            flexible_valid = np.logical_or(flexible_valid, flexible_model.contains(y_valid))
+        if rigid_model:
+            rigid_valid = np.logical_or(rigid_valid, rigid_model.contains(y_valid))
 
-    contained = np.zeros((x.shape[1],), dtype=bool)
-    contained[valid] = c_valid
-    empty[valid & contained] = LABEL_FLEXIBLE
-    empty = empty.reshape((-1, 1))
+    # Fit geometric primitives to points and mark their inliers as rigid.
+    primitives = fit_primitives(x_valid)
+    for primitive, indices in primitives:
+        labels[valid_ind[indices]] = LABEL_RIGID
+    show_cloud(x.T, labels, min=0, max=2, colormap=cm.jet)
 
-    empty = unstructured_to_structured(empty, names=[LABEL_FIELD_NAME])
-    empty = empty.reshape(arr.shape)
-    segmented = merge_arrays((arr, empty), flatten=True)
+    flexible = np.zeros((x.shape[1],), dtype=bool)
+    flexible[valid] = flexible_valid
+    rigid = np.zeros((x.shape[1],), dtype=bool)
+    rigid[valid] = rigid_valid
+    labels[valid & rigid] = LABEL_RIGID
+    # Flexible overrides rigid label (if robot went through it cannot be rigid).
+    labels[valid & flexible] = LABEL_FLEXIBLE
+    show_cloud(x.T, labels, min=0, max=2, colormap=cm.jet)
 
-    # Fit obstacle models (trunks or branches as cylinders, ground or walls as plane).
-    models = []
-    # models = fit_cylinders(segmented, 0.05, [0.05, 0.25])
-    # models = fit_cylinders(segmented, 0.05, max_iterations=1000, visualize=True, min_support=20, max_models=5)
-    # models = fit_sticks(segmented, 0.25, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
-    # models += fit_planes(segmented, 0.1, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
-    # models += fit_planes(segmented, 0.05, max_iterations=1000, min_support=20, max_models=20, cluster_eps=0.2,
-    #                      visualize=True)
-    # models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=40, cluster_eps=0.2,
-    #                      verbose=1, visualize=True)
-    models += fit_planes(x_valid.T, 0.05, max_iterations=100, min_support=25, max_models=20, cluster_eps=0.2,
-                         verbose=1, visualize=True)
-    # models += fit_cylinders(x_valid.T, 0.05, radius_limits=[0.05, 0.5], max_iterations=100, min_support=100,
-    #                         max_models=10, cluster_eps=0.2, verbose=1, visualize=True)
-    for m, indices in models:
-        print(m, len(indices))
-        indices = valid_ind[indices]
-        segmented[LABEL_FIELD_NAME][indices] = LABEL_RIGID
+    labels = labels.reshape((-1, 1))
+    labels = unstructured_to_structured(labels, names=[LABEL_FIELD_NAME])
+    labels = labels.reshape(arr.shape)
+    segmented = merge_arrays((arr, labels), flatten=True)
 
     return segmented
 
 
-def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_model=None, discard_empty=False,
-                  input_step=1, distance_horizon=None, time_horizon=None, time_step=None,
-                  output_path_fmt=None, output_bag_path_fmt=None, output_topic_fmt=None, output_period=None):
+def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=None, flexible_model=None, rigid_model=None,
+                  discard_model=None, discard_empty=False, input_step=1, input_start=0.0, input_end=float('inf'),
+                  distance_horizon=None, time_horizon=None, time_step=None,
+                  output_path=None, output_bag_path=None, output_topic=None, output_period=None):
     assert bag_paths, bag_paths
 
     if len(time_horizon) == 1:
@@ -250,8 +264,8 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
 
     last_out = {}
 
-    if output_bag_path_fmt:
-        output_bag_path = output_bag_path_fmt.format(dir=dir, name=name)
+    if output_bag_path:
+        output_bag_path = output_bag_path.format(dir=dir, name=name)
         if output_bag_path in bag_paths:
             print('Output %s removed from input bag files.' % output_bag_path)
             del bag_paths[bag_paths.index(output_bag_path)]
@@ -262,19 +276,22 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
         output_bag = None
 
     buffer = load_buffer(bag_paths)
-    for path in bag_paths:
+    for bag_path in bag_paths:
 
-        with Bag(path, 'r') as bag:
+        with Bag(bag_path, 'r') as bag:
 
             topic_types = get_topic_types(bag)
             # print('Topic types:', *['%s: %s' % (k, v)
             #                         for k, v in topic_types.items() if k in topics], sep='\n')
             i = -1
             for topic, msg, stamp in tqdm(bag.read_messages(topics=topics),
-                                          desc='%s: generating data' % path.split('/')[-1],
+                                          desc='%s: generating data' % bag_path.split('/')[-1],
                                           total=bag.get_message_count(topic_filters=topics)):
                 i += 1
                 if i % input_step != 0:
+                    continue
+                if stamp.to_sec() < input_start or stamp.to_sec() > input_end:
+                    print('Skipping %s at %.3f s.' % (topic, stamp.to_sec()))
                     continue
 
                 fmt_kwargs = {'dir': dir, 'name': name, 'topic': topic}
@@ -316,7 +333,8 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
                 if topic_types[topic] == 'sensor_msgs/PointCloud2':
                     msg = PointCloud2(*slots(msg))
                     arr = numpify(msg)
-                    segmented_arr = segment_cloud(model, arr, tfs, discard_tf=tfs[n[0]], discard_model=discard_model)
+                    segmented_arr = segment_cloud(flexible_model, arr, tfs, rigid_model=rigid_model,
+                                                  discard_tf=tfs[n[0]], discard_model=discard_model)
 
                     n_valid_labels = (segmented_arr[LABEL_FIELD_NAME] != IGNORE_LABEL).sum()
                     if discard_empty and n_valid_labels == 0:
@@ -327,58 +345,40 @@ def generate_data(bag_paths, topics, fixed_frame, robot_frame, model, discard_mo
 
                     last_out[topic] = start
 
-                    if output_path_fmt is not None:
-                        output_path = output_path_fmt.format(**fmt_kwargs)
-                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                        np.savez_compressed(output_path, {'cloud': segmented_arr})
+                    if output_path is not None:
+                        p = output_path.format(**fmt_kwargs)
+                        os.makedirs(os.path.dirname(p), exist_ok=True)
+                        np.savez_compressed(p, {'cloud': segmented_arr})
 
                     if output_bag is not None:
-                        output_topic = output_topic_fmt.format(topic=topic)
+                        t = output_topic.format(topic=topic)
                         segmented_msg = msgify(PointCloud2, segmented_arr)
                         segmented_msg.header = msg.header
-                        output_bag.write(output_topic, segmented_msg, stamp)
+                        output_bag.write(t, segmented_msg, stamp)
     if output_bag:
         output_bag.close()
 
 
 def main():
     args = parse_args()
-    # if args.box:
-    #     args.box = yaml.safe_load(args.box)
-    # if args.discard_box:
-    #     args.discard_box = yaml.safe_load(args.discard_box)
 
     print('Collecting bag files...')
-    print('Bags:', *args.bags, sep='\n')
-    args.bags = sum((glob(b) for b in args.bags), start=[])
-    print('Found %i bag files.' % len(args.bags))
-    print('Bags:', *args.bags, sep='\n')
+    print('Bags:', *args.bag_paths, sep='\n')
+    args.bag_paths = sum((glob(b) for b in args.bag_paths), start=[])
+    print('Found %i bag files.' % len(args.bag_paths))
+    print('Bags:', *args.bag_paths, sep='\n')
 
-    bodies = []
-    if args.radius:
-        body = Sphere(radius=args.radius)
-        bodies.append(body)
-    if args.box:
-        body = Box(extents=args.box)
-        bodies.append(body)
-    model = Bodies(bodies)
-    print('Model:', model)
+    if args.discard_model:
+        args.discard_model = eval(args.discard_model)
+        print('Discard model:', args.discard_model)
+    if args.flexible_model:
+        args.flexible_model = eval(args.flexible_model)
+        print('Flexible model:', args.flexible_model)
+    if args.rigid_model:
+        args.rigid_model = eval(args.rigid_model)
+        print('Rigid model:', args.rigid_model)
 
-    bodies = []
-    if args.discard_radius:
-        body = Sphere(radius=args.discard_radius)
-        bodies.append(body)
-    if args.discard_box:
-        body = Box(extents=args.discard_box)
-        bodies.append(body)
-    discard_model = Bodies(bodies) if bodies else None
-    print('Discard model:', discard_model)
-
-    generate_data(args.bags, args.topics, args.fixed_frame, args.robot_frame, model,
-                  discard_model=discard_model, discard_empty=args.discard_empty, input_step=args.input_step,
-                  distance_horizon=args.distance_horizon, time_horizon=args.time_horizon, time_step=args.time_step,
-                  output_path_fmt=args.output_path, output_bag_path_fmt=args.output_bag_path,
-                  output_topic_fmt=args.output_topic, output_period=args.output_period)
+    generate_data(**vars(args))
 
 
 if __name__ == '__main__':
