@@ -5,13 +5,15 @@ import numpy as np
 import torchvision.models.segmentation
 import torch
 from torch.utils.data import DataLoader, BatchSampler
-from torch.utils.data.sampler import SequentialSampler, Sampler
+from torch.utils.data.sampler import SequentialSampler
+from torch.utils.tensorboard import SummaryWriter
 from argparse import ArgumentParser
 import datasets
 from tqdm import tqdm
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
 from typing import Iterator, List
+from time import time
 
 
 VOID_VALUE = 255
@@ -22,6 +24,7 @@ def parse_arguments():
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     parser.add_argument('--dataset_fine_tune', type=str, default='TraversabilityClouds_SelfSupervised')
+    parser.add_argument('--fine_tune', action='store_true')
     parser.add_argument('--trav_labels', action='store_true')
     parser.add_argument('--dont_save_models', action='store_true')
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
@@ -84,9 +87,7 @@ class CommonBatchSampler(BatchSampler):
             yield batch
 
 
-def main():
-    args = parse_arguments()
-
+def create_dataloaders(args):
     Dataset = eval('datasets.%s' % args.dataset)
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
@@ -99,20 +100,34 @@ def main():
                             labels_mode='masks')
 
     # fine tuning is only supported for traversability labels
-    if train_dataset.traversability_labels:
+    if args.fine_tune:
+        assert train_dataset.traversability_labels
         print('Using two datasets for training: %s and %s' % (args.dataset, args.dataset_fine_tune))
         DatasetFT = eval('datasets.%s' % args.dataset_fine_tune)
-        ft_dataset = DatasetFT(split='train', traversability_labels=args.trav_labels,
-                               fields=args.data_fields, num_samples=args.n_samples,
-                               labels_mode='labels')
-        train_ft_dataset = torch.utils.data.ConcatDataset([train_dataset, ft_dataset])
+        ft_dataset_train = DatasetFT(split='train', traversability_labels=args.trav_labels,
+                                     fields=args.data_fields, num_samples=args.n_samples,
+                                     labels_mode='labels')
+        train_dataset_combined = torch.utils.data.ConcatDataset([train_dataset, ft_dataset_train])
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
-        batch_sampler = CommonBatchSampler(SequentialSampler(train_ft_dataset),
+        batch_sampler = CommonBatchSampler(SequentialSampler(train_dataset_combined),
                                            batch_size=args.batch_size,
                                            drop_last=False)
-        train_loader = DataLoader(dataset=train_ft_dataset,
+        train_loader = DataLoader(dataset=train_dataset_combined,
                                   num_workers=args.n_workers,
                                   batch_sampler=batch_sampler,
+                                  pin_memory=True)
+
+        ft_dataset_val = DatasetFT(split='val', traversability_labels=args.trav_labels,
+                                   fields=args.data_fields, num_samples=args.n_samples,
+                                   labels_mode='masks')
+        valid_dataset_combined = torch.utils.data.ConcatDataset([valid_dataset, ft_dataset_val])
+        # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
+        batch_sampler_val = CommonBatchSampler(SequentialSampler(valid_dataset_combined),
+                                               batch_size=args.batch_size,
+                                               drop_last=False)
+        valid_loader = DataLoader(dataset=valid_dataset_combined,
+                                  num_workers=args.n_workers,
+                                  batch_sampler=batch_sampler_val,
                                   pin_memory=True)
     else:
         train_loader = DataLoader(train_dataset,
@@ -121,7 +136,19 @@ def main():
                                   num_workers=args.n_workers,
                                   pin_memory=True)
 
-    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False, num_workers=args.n_workers, pin_memory=True)
+        valid_loader = DataLoader(valid_dataset,
+                                  batch_size=1,
+                                  shuffle=False,
+                                  num_workers=args.n_workers,
+                                  pin_memory=True)
+
+    return train_dataset, valid_dataset, train_loader, valid_loader
+
+
+def main():
+    args = parse_arguments()
+
+    train_dataset, valid_dataset, train_loader, valid_loader = create_dataloaders(args)
 
     # --------------Load and set model and optimizer-------------------------------------
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -148,6 +175,11 @@ def main():
                                        from_logits=True,
                                        ignore_index=ignore_label)
 
+    loss_mode_val = 'multilabel' if valid_dataset[0][1].ndim == 3 else 'multiclass'  # (n_cl, H, W) or (H, W)
+    criterion_fn_val = smp.losses.DiceLoss(mode=loss_mode_val,
+                                           log_loss=True,
+                                           from_logits=True)
+
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
     background_channel = [0] if not VOID_VALUE in valid_dataset.class_values \
         else [valid_dataset.class_values.index(VOID_VALUE)]
@@ -155,6 +187,11 @@ def main():
     metric_fn = smp.utils.metrics.IoU(threshold=0.5,
                                       activation='softmax2d',
                                       ignore_channels=background_channel)
+
+    log_dir = '%s_lr_%g_bs_%d_%s_%s_trav%s_ft%s_%s' % \
+              (args.architecture, args.lr, args.batch_size, args.dataset, '_'.join(train_dataset.fields),
+               train_dataset.traversability_labels, args.fine_tune, time())
+    tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), 'tb_runs', log_dir))
 
     max_metric = -np.Inf
     for e in tqdm(range(args.n_epochs)):
@@ -172,7 +209,10 @@ def main():
             loss.backward()  # Backpropagate loss
             optimizer.step()  # Apply gradient descent change to weight
 
+            tb_logger.add_scalar('Train_Dice_Loss(iter) for Epoch %i' % e, loss.item(), itr)
+
         print('Train loss at epoch %i: %f' % (e, loss.item()))
+        tb_logger.add_scalar('Train_Dice_Loss(epoch)', loss.item(), e)
 
         print('Validation ...')
         # validation epoch
@@ -187,7 +227,13 @@ def main():
 
                 assert pred.shape == labels.shape
                 metric_sample = metric_fn(pred, labels)
-            metrics.append(metric_sample.cpu().numpy())
+                loss_val = criterion_fn_val(pred, labels.long())
+
+            iou = metric_sample.cpu().numpy()
+            metrics.append(iou)
+
+            tb_logger.add_scalar('Valid_mIoU(iter) for Epoch %i' % e, iou, itr)
+            tb_logger.add_scalar('Valid_Dice_Loss(iter) for Epoch %i' % e, loss_val.item(), itr)
 
         metric = np.mean(metrics)
 
@@ -204,6 +250,8 @@ def main():
                 torch.save(model, os.path.join(os.path.dirname(__file__), name))
 
         print('Validation mIoU at epoch %i: %f' % (e, metric))
+        tb_logger.add_scalar('Valid_mIoU(epoch)', metric, e)
+        tb_logger.add_scalar('Valid_Dice_Loss(epoch)', loss_val.item(), e)
 
         if e == 60:
             optimizer.param_groups[0]['lr'] /= 10.0
