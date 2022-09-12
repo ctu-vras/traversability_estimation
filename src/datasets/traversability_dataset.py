@@ -231,14 +231,13 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
     Traversability dataset, where the traversable area is generated using real robot poses.
     For each point cloud frame, points which were traversed by robot's path within constant
     amount of time are labelled as 'traversable'.
-    The rest of the points are marked as 'background'
-    TODO: we plan to add 'non-traversable' category as well using local geometry estimate
-    for neihboring points
+    The rest of the points are marked as 'background',
+    'non-traversable' category is added using local geometry estimate
     """
     CLASSES = ["background", "traversable", "non-traversable"]
 
     def __init__(self,
-                 sequence='ugv_2022-08-12-15-30-22',
+                 sequence='ugv_2022-08-12-15-30-22_with_primitives',
                  path=None,
                  num_samples=None,
                  labels_mode='labels',
@@ -261,8 +260,14 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
         assert os.path.exists(path)
         self.path = os.path.join(path, 'clouds', sequence, 'os_cloud_node')
         self.rng = np.random.default_rng(42)
-        self.mask_targets = {val: key for key, val in TRAVERSABILITY_LABELS.items()}
-        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
+        self.class_values = [0, 1, 255]
+
+        self.mask_targets = {"non-traversable": 0,
+                             "traversable": 1,
+                             "background": VOID_VALUE}
+        self.color_map = {0: [255, 0, 0],
+                          1: [0, 255, 0],
+                          VOID_VALUE: [0, 0, 0]}
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
@@ -273,7 +278,6 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
-        self.setup_color_map(color_map)
         self.get_scan()
 
         self.files = self.read_files()
@@ -307,8 +311,7 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
         cloud = self.read_cloud(cloud_path)
 
         xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
-        traversability = cloud['empty'].copy()
-        traversability[traversability == 1] = 0
+        traversability = cloud['flexible'].copy()
 
         self.scan.set_points(points=xyz)
         bg_value = self.mask_targets["background"]
