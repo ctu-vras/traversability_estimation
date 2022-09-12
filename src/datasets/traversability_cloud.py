@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 
 
 class TraversabilityCloud(object):
-    def __init__(self, path: str, version: str = "v0.2", split: str = None):
+    def __init__(self, path: str, version: str = "v0.3", split: str = None):
         self.path = path
         self.split = split
 
@@ -31,7 +31,7 @@ class TraversabilityCloud(object):
         # load and format dataset annotations
         client = SegmentsClient(self.api_key)
         release = client.get_release(self.dataset_name, self.version)
-        dataset = SegmentsDataset(release, labelset='ground-truth', filter_by=['LABELED', 'REVIEWED'])
+        dataset = SegmentsDataset(release, labelset='ground-truth', filter_by=['REVIEWED'])
         samples = dataset.samples
         for sample in samples:
             # get attributes of the label
