@@ -24,7 +24,7 @@
             input_fields: ['x', 'y', 'z', 'intensity']
             output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
             label_config: $(dirname)/../config/obstacles.yaml
-            labels_to_correct: [1]
+            labels_to_correct: []
 <!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'-->
 <!--            weights: 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'-->
 <!--            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_96_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->

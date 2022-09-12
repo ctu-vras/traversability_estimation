@@ -6,7 +6,7 @@ from argparse import ArgumentParser
 from matplotlib import pyplot as plt
 import datasets
 import os
-from traversability_estimation.utils import correct_label
+from traversability_estimation.utils import correct_label, visualize
 
 
 def main():
@@ -62,22 +62,12 @@ def main():
         color_gt = ds.label_to_color(label)
         color_gt_corr = ds.label_to_color(label_corr)
 
-        plt.figure(figsize=(20, 10))
-        plt.subplot(4, 1, 1)
-        plt.imshow(color_pred)
-        plt.title('Prediction')
-        plt.subplot(4, 1, 2)
-        plt.imshow(color_pred_corr)
-        plt.title('Prediction: corrected')
-
-        plt.subplot(4, 1, 3)
-        plt.imshow(color_gt)
-        plt.title('Ground truth')
-        plt.subplot(4, 1, 4)
-        plt.imshow(color_gt_corr)
-        plt.title('Ground truth: corrected')
-        plt.tight_layout()
-        plt.show()
+        visualize(layout='columns',
+                  prediction=color_pred,
+                  # prediction_corr=color_pred_corr,
+                  ground_truth=color_gt,
+                  # ground_truth_corr=color_gt_corr,
+                  )
 
 
 if __name__ == '__main__':

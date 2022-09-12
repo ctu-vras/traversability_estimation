@@ -231,16 +231,21 @@ def normalize(x, eps=1e-6):
 
 
 # helper function for data visualization
-def visualize(**images):
+def visualize(layout='rows', figsize=(20, 10), **images):
+    assert layout in ['columns', 'rows']
     """PLot images in one row."""
     n = len(images)
-    plt.figure(figsize=(16, 5))
+    plt.figure(figsize=figsize)
     for i, (name, image) in enumerate(images.items()):
-        plt.subplot(1, n, i + 1)
+        if layout == 'rows':
+            plt.subplot(1, n, i + 1)
+        elif layout == 'columns':
+            plt.subplot(n, 1, i + 1)
         plt.xticks([])
         plt.yticks([])
         plt.title(' '.join(name.split('_')).title())
         plt.imshow(image)
+    plt.tight_layout()
     plt.show()
 
 
