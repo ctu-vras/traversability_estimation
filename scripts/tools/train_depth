@@ -133,6 +133,9 @@ def create_dataloaders(args):
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
 
+    train_datasets = [train_dataset]
+    valid_datasets = [valid_dataset]
+
     # fine tuning is only supported for traversability labels
     if args.fine_tune:
         assert train_dataset.traversability_labels
@@ -165,6 +168,9 @@ def create_dataloaders(args):
                                   num_workers=args.n_workers,
                                   batch_sampler=batch_sampler_val,
                                   pin_memory=True)
+
+        train_datasets.append(ft_dataset_train)
+        valid_datasets.append(ft_dataset_val)
     else:
         train_loader = DataLoader(train_dataset,
                                   batch_size=args.batch_size,
@@ -178,12 +184,12 @@ def create_dataloaders(args):
                                   num_workers=args.n_workers,
                                   pin_memory=True)
 
-    return train_dataset, valid_dataset, train_loader, valid_loader
+    return train_datasets, valid_datasets, train_loader, valid_loader
 
 
 # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
 # background_channel = None
-iou_fn = smp.utils.metrics.IoU(threshold=0.5, activation='softmax2d')
+iou_fn = smp.utils.metrics.IoU(threshold=0.5)
 
 
 def metric_fn(pred, labels, ignore_label=VOID_VALUE):
@@ -193,6 +199,8 @@ def metric_fn(pred, labels, ignore_label=VOID_VALUE):
     labels_one_hot = labels.clone()
 
     mask = labels_one_hot != ignore_label
+
+    pred = torch.softmax(pred, dim=1)
     pred = pred * mask.unsqueeze(1)
 
     labels_one_hot = F.one_hot((labels_one_hot * mask).to(torch.long).view(N, H * W), C)  # N,H*W -> N,H*W, C
@@ -200,7 +208,7 @@ def metric_fn(pred, labels, ignore_label=VOID_VALUE):
     labels_one_hot = labels_one_hot.reshape((N, C, H, W))
 
     assert pred.shape == labels_one_hot.shape == (N, C, H, W)
-    iou = iou_fn(pred, labels_one_hot)
+    iou = iou_fn.forward(y_pr=pred, y_gt=labels_one_hot)
 
     return iou
 
@@ -208,8 +216,8 @@ def metric_fn(pred, labels, ignore_label=VOID_VALUE):
 class Trainer(object):
 
     def __init__(self, args):
-        self.train_dataset, \
-        self.valid_dataset, \
+        self.train_datasets, \
+        self.valid_datasets, \
         self.train_loader, \
         self.valid_loader = create_dataloaders(args)
 
@@ -224,7 +232,7 @@ class Trainer(object):
         self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=args.lr)
 
         # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-        ignore_label = 0 if not VOID_VALUE in self.train_dataset.class_values else VOID_VALUE
+        ignore_label = 0 if not VOID_VALUE in self.train_datasets[0].class_values else VOID_VALUE
         print('Ignoring label value: %i' % ignore_label)
         self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
                                                 log_loss=True,
@@ -232,13 +240,13 @@ class Trainer(object):
                                                 ignore_index=ignore_label)
 
         log_dir = '%s_lr_%g_bs_%d_%s_%s_trav%s_ft%s_%s' % \
-                  (args.architecture, args.lr, args.batch_size, args.dataset, '_'.join(self.train_dataset.fields),
-                   self.train_dataset.traversability_labels, args.fine_tune, time())
+                  (args.architecture, args.lr, args.batch_size, args.dataset, '_'.join(self.train_datasets[0].fields),
+                   self.train_datasets[0].traversability_labels, args.fine_tune, time())
         self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), 'tb_runs', log_dir))
 
     def prepare_model(self, args):
-        n_inputs = self.train_dataset[0][0].shape[0]
-        n_classes = len(self.train_dataset.class_values)
+        n_inputs = self.train_datasets[0][0][0].shape[0]
+        n_classes = len(self.train_datasets[0].class_values)
         print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
 
         model = create_model(args.architecture, n_inputs, n_classes, pretrained_backbone=False)
@@ -291,8 +299,8 @@ class Trainer(object):
 
     def test_model(self):
         # Use the current trained model and visualize a prediction
-        inpt, label = self.valid_dataset[np.random.choice(range(len(self.valid_dataset)))]
-        # inpt, label = self.train_dataset[np.random.choice(range(len(self.train_dataset)))]
+        # inpt, label = self.valid_datasets[1][np.random.choice(range(len(self.valid_datasets[1])))]
+        inpt, label = self.train_datasets[1][np.random.choice(range(len(self.train_datasets[1])))]
         inpt = torch.from_numpy(inpt[None]).to(self.device)
         label = torch.from_numpy(label[None]).to(self.device)
 
@@ -302,8 +310,8 @@ class Trainer(object):
         pred = pred.squeeze(0).cpu().numpy()
         label = label.squeeze(0).cpu().numpy()
 
-        color_pred = self.valid_dataset.label_to_color(pred)
-        color_gt = self.valid_dataset.label_to_color(label)
+        color_pred = self.valid_datasets[0].label_to_color(pred)
+        color_gt = self.valid_datasets[0].label_to_color(label)
 
         power = 16
         depth_img = np.copy(inpt.squeeze(0).cpu().numpy()[-1])  # depth
@@ -338,10 +346,10 @@ class Trainer(object):
                 if max_metric < metric_val:  # Save model weights
                     max_metric = metric_val
                 if max_metric <= metric_val or epoch_n % 10 == 0:
-                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
+                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_ft%s_iou_%.2f.pth' % \
                            (self.cfg.architecture,
-                            self.cfg.lr, self.cfg.batch_size, epoch_n, self.cfg.dataset, '_'.join(self.train_dataset.fields),
-                            self.train_dataset.traversability_labels, float(metric_val))
+                            self.cfg.lr, self.cfg.batch_size, epoch_n, self.cfg.dataset, '_'.join(self.train_datasets[0].fields),
+                            self.train_datasets[0].traversability_labels, self.cfg.fine_tune, float(metric_val))
                     print("Saving Model:", name)
                     torch.save(self.model, os.path.join(os.path.dirname(__file__), name))
 
