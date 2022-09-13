@@ -13,6 +13,7 @@
     <arg name="record" default="false" doc="If record topics to a bag file."/>
     <arg name="topics_to_record" default="fix mag_azimuth path tf tf_static cloud_segmentation/lidar_cloud"/>
     <arg name="destagger" default="false" doc="Where to run ouster lidar points destaggering."/>
+    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftFalse_iou_0.54.pth"/>
 
     <param name="use_sim_time" value="true"/>
 
@@ -36,7 +37,7 @@
     </node>
 
     <include file="$(dirname)/ctu_robot_cloud.launch" pass_all_args="true">
-        <arg name="destagger" value="false"/>
+        <arg name="weights" value="$(arg weights)"/>
     </include>
 
     <!--    Virtual bumper     -->
