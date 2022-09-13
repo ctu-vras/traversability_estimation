@@ -3,7 +3,6 @@
 import numpy as np
 import torch
 from argparse import ArgumentParser
-from matplotlib import pyplot as plt
 import datasets
 import os
 from traversability_estimation.utils import correct_label, visualize

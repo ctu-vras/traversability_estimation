@@ -15,18 +15,17 @@ from time import time
 import segmentation_models_pytorch as smp
 from typing import Iterator, List
 from traversability_estimation.utils import visualize
-
-VOID_VALUE = 255
+from datasets.base_dataset import VOID_VALUE
 
 
 def parse_arguments():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--datasets', nargs='+', type=str, default='Rellis3DClouds')
-    parser.add_argument('--trav_labels', action='store_true')
+    parser.add_argument('--labels_mapping', type=str, default=None)
     parser.add_argument('--dont_save_models', action='store_true')
-    parser.add_argument('--architecture', type=str, default='fcn_resnet50')
-    parser.add_argument('--batch_size', type=int, default=6)
+    parser.add_argument('--architecture', type=str, default='fcn_resnet101')
+    parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
@@ -125,11 +124,11 @@ def create_dataloaders(args):
     Dataset = eval('datasets.%s' % args.datasets[0])
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.datasets[0] else None,
-                            traversability_labels=args.trav_labels,
+                            labels_mapping=args.labels_mapping,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
     valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.datasets[0] else None,
-                            traversability_labels=args.trav_labels,
+                            labels_mapping=args.labels_mapping,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
 
@@ -137,14 +136,16 @@ def create_dataloaders(args):
 
     if len(args.datasets) > 1:
         assert len(args.datasets) == 2
-        # fine tuning is only supported for traversability labels
-        assert train_dataset.traversability_labels
+        # fine tuning is only supported for traversability or flexibility labels
+        assert train_dataset.labels_mapping in ['traversability', 'flexibility']
 
         DatasetFT = eval('datasets.%s' % args.datasets[1])
 
         ft_dataset_train = DatasetFT(split='train',
+                                     labels_mapping=args.labels_mapping,
                                      fields=args.data_fields, num_samples=args.n_samples,
                                      labels_mode='labels')
+        assert ft_dataset_train.labels_mapping == train_dataset.labels_mapping
 
         train_dataset_combined = torch.utils.data.ConcatDataset([train_dataset, ft_dataset_train])
 
@@ -159,8 +160,11 @@ def create_dataloaders(args):
                                   pin_memory=True)
 
         ft_dataset_val = DatasetFT(split='val',
+                                   labels_mapping=args.labels_mapping,
                                    fields=args.data_fields, num_samples=args.n_samples,
                                    labels_mode='labels')
+        assert ft_dataset_val.labels_mapping == valid_dataset.labels_mapping
+
         valid_dataset_combined = torch.utils.data.ConcatDataset([valid_dataset, ft_dataset_val])
 
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
@@ -245,11 +249,21 @@ class Trainer(object):
                                                 from_logits=True,
                                                 ignore_index=ignore_label)
 
-        log_dir = '%s_lr_%g_bs_%d_%s_%s_trav%s_%s' % \
+        log_dir = '%s_lr_%g_bs_%d_%s_%s_labels_%s_%s' % \
                   (args.architecture, args.lr, args.batch_size,
                    '_'.join(args.datasets), '_'.join(self.train_datasets[0].fields),
-                   self.train_datasets[0].traversability_labels, time())
+                   self.train_datasets[0].labels_mapping, time())
         self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), 'tb_runs', log_dir))
+
+    def __str__(self):
+        return 'Training a model: %s\n' \
+               'with batch size: %s\n' \
+               'using input: %s\n' \
+               'on datasets: %s\n' \
+               'Rellis labels mapping mode: %s\n' \
+               'initial learning rate: %s' % \
+               (self.cfg.architecture, self.cfg.batch_size, ' '.join(self.cfg.data_fields), ' '.join(self.cfg.datasets),\
+                self.cfg.labels_mapping, self.cfg.lr)
 
     def prepare_model(self, args):
         n_inputs = self.train_datasets[0][0][0].shape[0]
@@ -304,10 +318,11 @@ class Trainer(object):
 
         return loss_val, metric_val
 
-    def test_model(self):
+    def test_model(self, dataset=None):
         # Use the current trained model and visualize a prediction
-        # inpt, label = self.valid_datasets[-1][np.random.choice(range(len(self.valid_datasets[-1])))]
-        inpt, label = self.train_datasets[-1][np.random.choice(range(len(self.train_datasets[-1])))]
+        if dataset is None:
+            dataset = self.valid_datasets[-1]
+        inpt, label = dataset[np.random.choice(range(len(dataset)))]
 
         inpt = torch.from_numpy(inpt[None]).to(self.device)
         label = torch.from_numpy(label[None]).to(self.device)
@@ -334,6 +349,8 @@ class Trainer(object):
                   )
 
     def train(self):
+        print(self)
+
         max_metric = -np.Inf
 
         for epoch_n in tqdm(range(self.cfg.n_epochs)):
@@ -356,11 +373,11 @@ class Trainer(object):
 
                 if max_metric <= metric_val or epoch_n % 10 == 0:
 
-                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
+                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_labels_%s_iou_%.2f.pth' % \
                            (self.cfg.architecture,
                             self.cfg.lr, self.cfg.batch_size, epoch_n,
                             '_'.join(self.cfg.datasets), '_'.join(self.train_datasets[0].fields),
-                            self.train_datasets[0].traversability_labels, float(metric_val))
+                            self.train_datasets[0].labels_mapping, float(metric_val))
 
                     print("Saving Model:", name)
                     torch.save(self.model, os.path.join(os.path.dirname(__file__), name))

@@ -199,6 +199,7 @@ class BaseDatasetClouds(data.Dataset):
                  depth_img_W=1024,
                  lidar_fov_up=45.0,
                  lidar_fov_down=-45.0,
+                 labels_mapping=None,
                  ):
         self.path = path
         self.split = None
@@ -214,40 +215,13 @@ class BaseDatasetClouds(data.Dataset):
         self.scan = None
         self.classes_to_correct = []
 
-        self.traversability_labels = None
-        self.flexibility_labels = None
+        assert labels_mapping in [None, 'traversability', 'flexibility']
+        self.labels_mapping = labels_mapping
 
         self.depth_img_W = depth_img_W
         self.depth_img_H = depth_img_H
         self.lidar_fov_up = lidar_fov_up
         self.lidar_fov_down = lidar_fov_down
-
-    def setup_color_map(self, color_map):
-        if not self.traversability_labels:
-            self.label_map = None
-            if not color_map:
-                CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
-                color_map = CFG["color_map"]
-        else:
-            label_map = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis_to_traversability.yaml"), 'r'))
-            assert isinstance(label_map, (dict, list))
-            if isinstance(label_map, dict):
-                label_map = dict((int(k), int(v)) for k, v in label_map.items())
-                n = max(label_map) + 1
-                self.label_map = np.zeros((n,), dtype=np.uint8)
-                for k, v in label_map.items():
-                    self.label_map[k] = v
-            elif isinstance(label_map, list):
-                self.label_map = np.asarray(label_map)
-            # traversability label map is assumed (0: traversable, 1: obstacle)
-            color_map = TRAVERSABILITY_COLOR_MAP
-            self.CLASSES = ["traversable", "obstacle"]
-
-        self.color_map = color_map
-        n_classes = len(self.CLASSES)
-        # TRAVERSABILITY_LABELS = [0, 1, 255]
-        self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist() if self.traversability_labels \
-            else list(range(n_classes))
 
     def get_scan(self):
         self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
@@ -259,7 +233,7 @@ class BaseDatasetClouds(data.Dataset):
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        if not self.traversability_labels and not self.flexibility_labels:
+        if self.labels_mapping is None:
             label = convert_label(label, inverse=True)
         color = self.scan.sem_color_lut[label]
         return color
@@ -299,7 +273,7 @@ class BaseDatasetClouds(data.Dataset):
             if self.label_map is not None:
                 label = self.label_map[label]
 
-        if not self.traversability_labels and not self.flexibility_labels:
+        if self.labels_mapping is None:
             label = convert_label(label, inverse=False)
             for cl in self.classes_to_correct:
                 label = correct_label(label, value_to_correct=self.CLASSES.index(cl), value_to_assign=0)

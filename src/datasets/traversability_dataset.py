@@ -245,11 +245,13 @@ class FlexibilityClouds(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
+                 labels_mapping='flexibility'
                  ):
         super(FlexibilityClouds, self).__init__(path=path, fields=fields,
                                                 depth_img_H=128, depth_img_W=1024,
                                                 lidar_fov_up=45.0, lidar_fov_down=-45.0,
                                                 lidar_beams_step=lidar_beams_step,
+                                                labels_mapping=labels_mapping
                                                 )
         if fields is None:
             fields = ['depth']
@@ -268,7 +270,8 @@ class FlexibilityClouds(BaseDatasetClouds):
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
-        self.flexibility_labels = True
+        assert self.labels_mapping == 'flexibility'
+
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
@@ -334,11 +337,13 @@ class TraversabilityClouds(BaseDatasetClouds):
                  lidar_beams_step=1,
                  color_map=None,
                  annotation_from_img=False,
+                 labels_mapping='traversability',
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
                                                    lidar_fov_up=45.0, lidar_fov_down=-45.0,
                                                    lidar_beams_step=lidar_beams_step,
+                                                   labels_mapping=labels_mapping
                                                    )
         if fields is None:
             fields = ['depth']
@@ -348,8 +353,14 @@ class TraversabilityClouds(BaseDatasetClouds):
         self.path = os.path.join(path, 'clouds')
         self.rng = np.random.default_rng(42)
 
+        self.class_values = [0, 1, 255]
+        self.mask_targets = {value: key for key, value in TRAVERSABILITY_LABELS.items()}
+        self.color_map = TRAVERSABILITY_COLOR_MAP
+
         assert split in [None, 'train', 'val', 'test']
         self.split = split
+
+        assert self.labels_mapping == 'traversability'
 
         # whether to use semantic labels from annotated images
         self.annotation_from_img = annotation_from_img
@@ -357,9 +368,6 @@ class TraversabilityClouds(BaseDatasetClouds):
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
 
-        self.traversability_labels = True
-
-        self.setup_color_map(color_map)
         self.get_scan()
 
         assert labels_mode in ['masks', 'labels']

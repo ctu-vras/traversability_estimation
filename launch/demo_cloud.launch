@@ -14,6 +14,7 @@
     <arg name="topics_to_record" default="fix mag_azimuth path tf tf_static cloud_segmentation/lidar_cloud"/>
     <arg name="lidar_pkgs_to_points" default="false" doc="Where to run convert lidar packages to point cloud."/>
     <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftFalse_iou_0.54.pth"/>
+<!--    <arg name="weights" default='fcn_resnet50_lr_0.0001_bs_6_epoch_43_TraversabilityClouds_depth_travTrue_iou_0.22.pth'/>-->
 
     <param name="use_sim_time" value="true"/>
 
