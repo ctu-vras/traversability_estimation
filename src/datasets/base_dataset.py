@@ -214,6 +214,9 @@ class BaseDatasetClouds(data.Dataset):
         self.scan = None
         self.classes_to_correct = []
 
+        self.traversability_labels = None
+        self.flexibility_labels = None
+
         self.depth_img_W = depth_img_W
         self.depth_img_H = depth_img_H
         self.lidar_fov_up = lidar_fov_up
@@ -296,7 +299,7 @@ class BaseDatasetClouds(data.Dataset):
             if self.label_map is not None:
                 label = self.label_map[label]
 
-        if not self.traversability_labels:
+        if not self.traversability_labels and not self.flexibility_labels:
             label = convert_label(label, inverse=False)
             for cl in self.classes_to_correct:
                 label = correct_label(label, value_to_correct=self.CLASSES.index(cl), value_to_assign=0)

@@ -268,7 +268,7 @@ class FlexibilityClouds(BaseDatasetClouds):
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
-        self.traversability_labels = True
+        self.flexibility_labels = True
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
 
@@ -332,7 +332,8 @@ class TraversabilityClouds(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
-                 color_map=None
+                 color_map=None,
+                 annotation_from_img=False,
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
@@ -349,6 +350,9 @@ class TraversabilityClouds(BaseDatasetClouds):
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
+
+        # whether to use semantic labels from annotated images
+        self.annotation_from_img = annotation_from_img
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
@@ -371,14 +375,17 @@ class TraversabilityClouds(BaseDatasetClouds):
         assert os.path.exists(path)
 
         files = []
-        pts_files = [os.path.join(path, 'destaggered_points', f)
-                     for f in os.listdir(os.path.join(path, 'destaggered_points'))]
-        for f in pts_files:
-            label_f = f.replace('destaggered_points', 'label_id')
+        labels_folder = 'label_id_from_img' if self.annotation_from_img else 'label_id'
+        points_folder = 'destaggered_points_from_img' if self.annotation_from_img else 'destaggered_points'
+
+        labels_files = [os.path.join(path, labels_folder, f)
+                        for f in os.listdir(os.path.join(path, labels_folder))]
+        for label_f in labels_files:
+            pts_f = label_f.replace(labels_folder, points_folder)
             files.append(
                 {
-                    'pts': f,
-                    'label': label_f if os.path.exists(label_f) else None
+                    'pts': pts_f,
+                    'label': label_f
                 }
             )
         return files
@@ -390,18 +397,27 @@ class TraversabilityClouds(BaseDatasetClouds):
     def __getitem__(self, index):
         cloud = self.read_cloud(self.files[index]['pts'])
         label = self.read_cloud(self.files[index]['label'])
+        assert self.files[index]['pts'].split('/')[-1] == self.files[index]['label'].split('/')[-1]
 
         if cloud.dtype.names is not None:
             cloud = structured_to_unstructured(cloud[['x', 'y', 'z', 'intensity']])
 
-        assert cloud.shape[-1] == 4
-        cloud = cloud.reshape((-1, 4))
-        label = label.reshape((self.depth_img_H, self.depth_img_W))
+        assert cloud.shape[-1] == 4 or cloud.shape[-1] == 3
+        cloud = cloud.reshape((-1, cloud.shape[-1]))
+        label = label.reshape(-1)
 
         xyz = cloud[..., :3]
-        intensity = cloud[..., 3]
+        # intensity = cloud[..., 3] if cloud.shape[-1] == 4 else None
 
-        self.scan.set_points(points=xyz, remissions=intensity)
+        self.scan.set_points(points=xyz)
+        # self.scan.set_points(points=xyz, remissions=intensity)
+        bg_value = VOID_VALUE
+        self.scan.proj_sem_label = np.full((self.scan.proj_H, self.scan.proj_W), bg_value,
+                                           dtype=np.uint8)  # [H,W]  label
+        self.scan.set_label(label=label)
+
+        label = self.scan.proj_sem_label
+        assert set(np.unique(label)) <= set(self.class_values)
 
         data, label = self.create_sample(label=label)
 
@@ -450,10 +466,10 @@ def images_save_labels():
 
 
 def flexibility_demo(run_times=1):
-    from matplotlib import pyplot as plt
+    from traversability_estimation.utils import visualize
     import open3d as o3d
 
-    ds = FlexibilityClouds(split='test', labels_mode='labels')
+    ds = FlexibilityClouds(split='test')
 
     for _ in range(run_times):
         depth_img, label = ds[np.random.choice(len(ds))]
@@ -468,16 +484,18 @@ def flexibility_demo(run_times=1):
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
         label_flex = label == ds.mask_targets['flexible']
-        result = (0.3 * depth_img_vis + 0.7 * label_flex).astype("float")
+        label_non_flex = label == ds.mask_targets['non-flexible']
 
-        plt.figure(figsize=(20, 10))
-        plt.imshow(result)
-        plt.title('Depth image with traversable points')
-        plt.tight_layout()
-        plt.show()
+        depth_img_with_flex_points = (0.3 * depth_img_vis + 0.7 * label_flex).astype("float")
+        depth_img_with_non_flex_points = (0.3 * depth_img_vis + 0.7 * label_non_flex).astype("float")
 
         xyz = ds.scan.proj_xyz
-        color = ds.scan.sem_color_lut[label.astype('uint8')]
+        color = ds.label_to_color(label.astype('uint8'))
+
+        visualize(layout='columns',
+                  depth_img_with_flex_points=depth_img_with_flex_points,
+                  depth_img_with_non_flex_points=depth_img_with_non_flex_points,
+                  flexibility=color)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
@@ -486,10 +504,11 @@ def flexibility_demo(run_times=1):
 
 
 def traversability_demo(num_runs=1):
-    from matplotlib import pyplot as plt
+    from traversability_estimation.utils import visualize
     import open3d as o3d
 
-    ds = TraversabilityClouds(split=None)
+    ds = TraversabilityClouds(split=None, annotation_from_img=False)
+    # ds = TraversabilityClouds(split=None, annotation_from_img=True)
 
     for i in range(num_runs):
 
@@ -506,17 +525,19 @@ def traversability_demo(num_runs=1):
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
-        label_trav = label == 0  # ds.mask_targets['traversable']
-        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float32")
+        label_trav = label == 0
+        label_non_trav = label == 1
 
-        plt.figure(figsize=(20, 10))
-        plt.imshow(result)
-        plt.title('Depth image with traversable points')
-        plt.tight_layout()
-        plt.show()
+        traversable_area = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float32")
+        non_traversable_area = (0.3 * depth_img_vis + 0.7 * label_non_trav).astype("float32")
 
         xyz = ds.scan.proj_xyz
-        color = ds.scan.sem_color_lut[label.astype('uint8')]
+        color = ds.label_to_color(label.astype('uint8'))
+
+        visualize(layout='columns',
+                  depth_img_with_trav_points=traversable_area,
+                  depth_img_with_non_trav_points=non_traversable_area,
+                  traversability=color)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
@@ -696,12 +717,48 @@ def images_demo(num_runs=1):
         visualize(img=img_vis, label=mask)
 
 
+def clouds_save_labels():
+    from traversability_estimation.utils import convert_label, convert_color, visualize
+    from .traversability_cloud import TraversabilityCloud
+    from tqdm import tqdm
+    import open3d as o3d
+
+    label_mapping = {0: 255,
+                     1: 0,
+                     255: 1}
+
+    ds = TraversabilityCloud(path="/home/ruslan/data/datasets/TraversabilityDataset/supervised/clouds/predictions_color/")
+
+    if not os.path.exists(os.path.join(ds.path, '..', 'label_id')):
+        os.mkdir(os.path.join(ds.path, '..', 'label_id'))
+    if not os.path.exists(os.path.join(ds.path, '..', 'label_color')):
+        os.mkdir(os.path.join(ds.path, '..', 'label_color'))
+    if not os.path.exists(os.path.join(ds.path, '..', 'destaggered_points')):
+        os.mkdir(os.path.join(ds.path, '..', 'destaggered_points'))
+
+    for i in tqdm(range(len(ds))):
+        cloud, label = ds[i]
+
+        label = convert_label(label, label_mapping=label_mapping, inverse=False)
+        color = convert_color(label, color_map=TRAVERSABILITY_COLOR_MAP)
+
+        # visualize(color=color)
+        # pcd = o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(cloud.reshape((-1, 3)))
+        # pcd.colors = o3d.utility.Vector3dVector(color.reshape((-1, 3)))
+        # o3d.visualization.draw_geometries([pcd])
+
+        np.savez(ds.point_clouds[i].replace('predictions_color', 'destaggered_points').replace('.pcd', '.npz'), cloud)
+        np.savez(ds.point_clouds[i].replace('predictions_color', 'label_id').replace('.pcd', '.npz'), label)
+        np.savez(ds.point_clouds[i].replace('predictions_color', 'label_color').replace('.pcd', '.npz'), color)
+
+
 def main():
-    images_demo(1)
+    # clouds_save_labels()
+    # images_demo(1)
     # images_save_labels()
-    clouds_demo(1)
-    labeled_clouds_self_supervised()
-    labeled_clouds(1)
+    flexibility_demo(1)
+    traversability_demo(1)
     # label_cloud_from_img(visualize=True)
 
 
