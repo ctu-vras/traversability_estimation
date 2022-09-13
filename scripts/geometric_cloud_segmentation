@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+from __future__ import absolute_import, division, print_function
+import numpy as np
+from numpy.lib.recfunctions import merge_arrays, unstructured_to_structured
+from ros_numpy import msgify, numpify
+import rospy
+from sensor_msgs.msg import PointCloud2
+from tf2_ros import Buffer, TransformException, TransformListener
+from traversability_estimation.segmentation import filter_grid, filter_range, compute_support
+
+
+class GeometricCloudSegmentation(object):
+
+    def __init__(self):
+        self.max_age = rospy.get_param('~max_age', 0.2)
+        rospy.loginfo('Max cloud age: %.3f s', self.max_age)
+
+        self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
+        rospy.loginfo('Fixed frame: %s', self.fixed_frame)
+
+        self.range = rospy.get_param('~range', None)
+        if self.range is not None:
+            rospy.loginfo('Range: [%.3f m, %.3f m]', *self.range)
+
+        self.grid = rospy.get_param('~grid', None)
+        if self.grid is not None:
+            rospy.loginfo('Grid: %.3f m', self.grid)
+
+        self.z_support = rospy.get_param('~z_support', None)
+        if self.z_support is not None:
+            if 'scale' in self.z_support:
+                scale = self.z_support['scale']
+                if isinstance(scale, (float, int)):
+                    scale = np.array([1.0, 1.0, scale])
+                scale = scale.reshape((-1, 3))
+                self.z_support['scale'] = scale
+            rospy.loginfo('Z support: %s', self.z_support)
+
+        self.tf = Buffer(rospy.Duration.from_sec(10.0))
+        self.tf_sub = TransformListener(self.tf)
+
+        self.output_pub = rospy.Publisher('output', PointCloud2, queue_size=1)
+        self.input_sub = rospy.Subscriber('input', PointCloud2, self.on_cloud, queue_size=1)
+
+    def preprocess(self, input):
+        output = input
+        if self.range is not None:
+            output = filter_range(output, *self.range)
+        if self.grid is not None:
+            output = filter_grid(output, self.grid)
+        return output
+
+    def compute_features(self, input, input_to_fixed=None):
+        features = {}
+
+        if self.z_support is not None:
+            z_support = compute_support(input, transform=input_to_fixed, **self.z_support)
+            features['z_support'] = z_support
+
+        arrays = []
+        for name in sorted(features):
+            f = features[name]
+            f = f.flatten().reshape((input.size, -1))
+            array = unstructured_to_structured(f, names=[name])
+            array = array.reshape(input.shape)
+            arrays.append(array)
+
+        output = merge_arrays([input] + arrays, flatten=True)
+
+        return output
+
+    def on_cloud(self, input_msg):
+        if (rospy.Time.now() - input_msg.header.stamp).to_sec() > self.max_age:
+            return
+
+        try:
+            input_to_fixed = self.tf.lookup_transform(self.fixed_frame,
+                                                      input_msg.header.frame_id, input_msg.header.stamp,
+                                                      timeout=rospy.Duration.from_sec(1.0))
+        except TransformException as ex:
+            rospy.logwarn('Could not transform input: %s', ex)
+            return
+
+        input_to_fixed = numpify(input_to_fixed.transform)
+        input = numpify(input_msg)
+        output = self.preprocess(input)
+        output = self.compute_features(output, input_to_fixed=input_to_fixed)
+        output_msg = msgify(PointCloud2, output)
+        output_msg.header = input_msg.header
+        self.output_pub.publish(output_msg)
+
+
+def main():
+    rospy.init_node('geometric_cloud_segmentation', log_level=rospy.INFO)
+    node = GeometricCloudSegmentation()
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()

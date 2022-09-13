@@ -16,20 +16,22 @@ from argparse import ArgumentParser
 from glob import glob
 from matplotlib import cm
 import numpy as np
-from numpy.lib.recfunctions import merge_arrays, structured_to_unstructured, unstructured_to_structured
+from numpy.lib.recfunctions import merge_arrays, unstructured_to_structured
 import os
 from ros_numpy import msgify, numpify
 from rosbag import Bag, ROSBagException, Compression
 import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import BufferCore, TransformException
-from traversability_estimation.segmentation import fit_cylinders, fit_planes, fit_sticks
-from traversability_estimation.utils import show_cloud
+from traversability_estimation.geometry import affine, Bodies, Body, Box, Sphere  # needed for eval
+from traversability_estimation.segmentation import compute_support, fit_planes, position, valid_point_mask
+from traversability_estimation.utils import show_cloud, slots
 from tqdm import tqdm
 
 LABEL_FIELD_NAME = 'flexible'
 LABEL_RIGID = 0
 LABEL_FLEXIBLE = 1
+# LABEL_INVALID = 254
 LABEL_IGNORE = 255
 
 
@@ -37,7 +39,7 @@ def str2bool(v):
     return v.lower() in ('1', 'yes', 'true', 't', 'y')
 
 
-def parse_args():
+def arg_parser():
     parser = ArgumentParser(epilog="""Path format uses following placeholders:
     {dir} - parent directory of the first bag file,
     {name} - name without extension of the first bag file,
@@ -55,7 +57,8 @@ def parse_args():
     parser.add_argument('--discard-model', type=str, default=None, help='Model at current position discarding points.')
     parser.add_argument('--flexible-model', type=str, default=None, help='Model to move along robot path marking points flexible.')
     parser.add_argument('--rigid-model', type=str, default=None, help='Model to move along robot path marking points rigid.')
-    parser.add_argument('--rigid-primitives', type=str2bool, default=True, help='Fit primitives and mark the inliers as rigid.')
+    parser.add_argument('--rigid-primitives', type=str2bool, default=False, help='Fit primitives and mark the inliers as rigid.')
+    parser.add_argument('--z-support', type=str, default=None, help='Z support configuration or empty.')
     parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
     parser.add_argument('--time-horizon', '-t', type=float, nargs=2, default=[0.0, 10.0])
     parser.add_argument('--time-step', '-s', type=float, default=0.5)
@@ -64,86 +67,7 @@ def parse_args():
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
     parser.add_argument('bag_paths', type=str, nargs='+')
-    args = parser.parse_args()
-    print(args)
-    return args
-
-
-def affine(tf, x):
-    assert tf.ndim == 2
-    assert x.ndim == 2
-    assert tf.shape[1] == x.shape[0] + 1
-    y = np.matmul(tf[:-1, :-1], x) + tf[:-1, -1:]
-    return y
-
-
-class Body(object):
-    def __init__(self, pose=None):
-        if pose is None:
-            pose = np.eye(4)
-        self.pose = pose
-        self.pose_inv = np.linalg.inv(pose)
-
-    def contains_local(self, x):
-        # return np.zeros((x.shape[1],), dtype=bool)
-        raise NotImplementedError()
-
-    def contains(self, x):
-        return self.contains_local(affine(self.pose_inv, x))
-
-
-class Sphere(Body):
-    def __init__(self, origin=(0, 0, 0), radius=1.0):
-        origin = np.asarray(origin).reshape((3, -1))
-        pose = np.eye(4)
-        pose[:3, 3:] = -origin
-        super(Sphere, self).__init__(pose=pose)
-        self.origin = origin
-        self.radius = radius
-
-    def contains_local(self, x):
-        c = np.linalg.norm(x, axis=0) < self.radius
-        return c
-
-    def __str__(self):
-        return ('Sphere(origin=(%.3f, %.3f, %.3f), radius=%.3f)'
-                % (tuple(self.origin.ravel()) + (self.radius,)))
-
-
-class Box(Body):
-    def __init__(self, extents=((-1.0, 1.0), (-1.0, 1.0), (-1.0, 1.0))):
-        extents = np.asarray(extents)
-        assert extents.shape == (3, 2)
-        super(Box, self).__init__()
-        self.extents = extents
-
-    def contains_local(self, x):
-        c = np.logical_and(self.extents[:, :1] <= x, x <= self.extents[:, 1:]).all(axis=0)
-        return c
-
-    def __str__(self):
-        return ('Box(extents=((%.3f, %.3f), (%.3f, %.3f), (%.3f, %.3f)))'
-                % tuple(self.extents.ravel()))
-
-
-class Bodies(Body):
-    def __init__(self, bodies, pose=None):
-        super(Bodies, self).__init__(pose=pose)
-        self.bodies = bodies
-
-    def contains_local(self, x):
-        c = np.zeros((x.shape[1],), dtype=bool)
-        for body in self.bodies:
-            c = np.logical_or(c, body.contains_local(x))
-        return c
-
-    def __str__(self):
-        return 'Bodies(%s)' % ', '.join(str(b) for b in self.bodies)
-
-
-def slots(msg):
-    """Return message attributes (slots) as list."""
-    return [getattr(msg, var) for var in msg.__slots__]
+    return parser
 
 
 def get_topic_types(bag):
@@ -176,110 +100,75 @@ def load_buffer(bag_paths):
 def fit_primitives(x_valid):
     # Fit obstacle models (trunks or branches as cylinders, ground or walls as plane).
     models = []
-    # models = fit_cylinders(segmented, 0.05, [0.05, 0.25])
-    # models = fit_cylinders(segmented, 0.05, max_iterations=1000, visualize=True, min_support=20, max_models=5)
-    # models = fit_sticks(segmented, 0.25, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
-    # models += fit_planes(segmented, 0.1, max_iterations=10000, visualize=True, min_support=20, cluster_eps=0.1)
-    # models += fit_planes(segmented, 0.05, max_iterations=1000, min_support=20, max_models=20, cluster_eps=0.2,
-    #                      visualize=True)
-    # models += fit_planes(x_valid.T, 0.05, max_iterations=1000, min_support=100, max_models=40, cluster_eps=0.2,
-    #                      verbose=1, visualize=True)
-    # models += fit_planes(x_valid.T, 0.05, normal_z_limits=(0.0, 0.5), max_iterations=1000, min_support=25,
-    #                      max_models=10, cluster_eps=0.25, verbose=1, visualize=True)
-    # models += fit_planes(x_valid.T, 0.025, normal_z_limits=(0.0, 0.2), max_iterations=500, min_support=50,
-    #                      max_models=10, cluster_eps=0.25, cluster_k=10, verbose=1, visualize=True)
-    # models += fit_planes(x_valid.T, 0.025, normal_z_limits=(0.0, 1.0), max_iterations=500, min_support=25,
-    #                      max_models=10, cluster_eps=0.25, cluster_k=10, verbose=1, visualize=True)
     models += fit_planes(x_valid.T, 0.025, normal_z_limits=(0.0, 0.2), max_iterations=200, min_support=25,
                          max_models=10, cluster_eps=0.25, cluster_k=10, verbose=0, visualize=False)
-    # models += fit_cylinders(x_valid.T, 0.05, radius_limits=[0.05, 0.5], max_iterations=100, min_support=100,
-    #                         max_models=10, cluster_eps=0.2, verbose=1, visualize=True)
     return models
 
 
 def segment_cloud(flexible_model, arr, tfs, rigid_model=None, discard_tf=None, discard_model=None,
-                  rigid_primitives=True):
+                  rigid_primitives=True, input_to_fixed=None, z_support=None):
     assert flexible_model is None or isinstance(flexible_model, Body)
     assert isinstance(arr, np.ndarray)
     assert rigid_model is None or isinstance(rigid_model, Body)
     assert discard_model is None or isinstance(discard_model, Body)
 
-    x = structured_to_unstructured(arr.ravel()[['x', 'y', 'z']])
+    # Use only valid points for all operations.
+    # Assign results to valid points in the end.
+    valid = valid_point_mask(arr, discard_tf=discard_tf, discard_model=discard_model)
+    arr_valid = arr[valid]
+    valid_ind = np.flatnonzero(valid)
+    x = position(arr_valid).reshape((-1, 3))
     x = x.T
 
     # Initialize all labels as unknown.
-    # 0: occupied, 1: empty, IGNORE_LABEL: label unknown.
-    labels = np.full((x.shape[1],), LABEL_IGNORE, dtype=np.uint8)
-
-    # Identify valid points, i.e., points with valid depth which are not part
-    # of the robot (contained by the discard model).
-    valid = (x != 0.0).any(axis=0)
-    valid = np.logical_and(valid, np.isfinite(x).all(axis=0))
-    if discard_model:
-        assert discard_tf is not None
-        y = affine(discard_tf, x)
-        valid = np.logical_and(valid, ~discard_model.contains(y))
-    valid_ind = np.flatnonzero(valid)
+    labels = np.full(arr.shape, LABEL_IGNORE, dtype=np.uint8).ravel()
 
     # Mark valid points which are contained by future model poses as empty.
-    x_valid = x[:, valid]
-    flexible_valid = np.zeros((x_valid.shape[1],), dtype=bool)
-    rigid_valid = np.zeros((x_valid.shape[1],), dtype=bool)
+    flexible = np.zeros((x.shape[1],), dtype=bool)
+    rigid = np.zeros((x.shape[1],), dtype=bool)
     for tf in tfs:
         assert isinstance(tf, np.ndarray)
-        y_valid = affine(tf, x_valid)
+        y = affine(tf, x)
         if flexible_model:
-            flexible_valid = np.logical_or(flexible_valid, flexible_model.contains(y_valid))
+            flexible = np.logical_or(flexible, flexible_model.contains(y))
         if rigid_model:
-            rigid_valid = np.logical_or(rigid_valid, rigid_model.contains(y_valid))
+            rigid = np.logical_or(rigid, rigid_model.contains(y))
 
     # Fit geometric primitives to points and mark their inliers as rigid.
     if rigid_primitives:
-        primitives = fit_primitives(x_valid)
+        primitives = fit_primitives(x)
         for primitive, indices in primitives:
-            labels[valid_ind[indices]] = LABEL_RIGID
-        # show_cloud(x.T, labels, min=0, max=2, colormap=cm.jet)
+            rigid[indices] = True
 
-    flexible = np.zeros((x.shape[1],), dtype=bool)
-    flexible[valid] = flexible_valid
-    rigid = np.zeros((x.shape[1],), dtype=bool)
-    rigid[valid] = rigid_valid
-    labels[valid & rigid] = LABEL_RIGID
-    # Flexible overrides rigid label (if robot went through it cannot be rigid).
-    labels[valid & flexible] = LABEL_FLEXIBLE
-    # show_cloud(x.T, labels, min=0, max=2, colormap=cm.jet)
+    if z_support:
+        support = compute_support(arr_valid, transform=input_to_fixed, **z_support)
+        rigid[support > 30] = True
 
-    labels = labels.reshape((-1, 1))
-    labels = unstructured_to_structured(labels, names=[LABEL_FIELD_NAME])
+    labels[valid_ind[rigid]] = LABEL_RIGID
+    # Flexible label takes precedence.
+    labels[valid_ind[flexible]] = LABEL_FLEXIBLE
+
+    # show_cloud(x.T, labels[valid_ind], min=0, max=2, colormap=cm.jet)
+
     labels = labels.reshape(arr.shape)
-    segmented = merge_arrays((arr, labels), flatten=True)
-
-    return segmented
+    return labels
 
 
 def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=None,
                   exclude_times=None, input_step=1, input_start=0.0, input_end=float('inf'),
-                  discard_model=None, flexible_model=None, rigid_model=None, rigid_primitives=True,
+                  discard_model=None, flexible_model=None, rigid_model=None, rigid_primitives=False, z_support=None,
                   discard_empty=False, distance_horizon=None, time_horizon=None, time_step=None,
                   output_path=None, output_bag_path=None, output_topic=None, output_period=None):
     assert bag_paths, bag_paths
-
-    # if exclude_times:
-    #     exclude_times = [[t - time_horizon[0], t + time_horizon[1]] if isinstance(t, (float, int)) else t
-    #                      for t in exclude_times]
     assert not exclude_times or all(len(t) == 2 for t in exclude_times), exclude_times
-    # if len(time_horizon) == 1:
-    #     time_horizon = [0.0] + time_horizon
     assert len(time_horizon) == 2, time_horizon
     # TODO: Always look up t=0.
     assert 0.0 <= time_horizon[0] < time_horizon[1], time_horizon
-    # assert time_horizon[0] <= 0.0, time_horizon
     print('Time horizon:', time_horizon)
 
     dir = os.path.dirname(bag_paths[0])
     name, _ = os.path.splitext(os.path.basename(bag_paths[0]))
 
-    # n = int(np.floor(time_horizon / time_step))
     n = [int(np.floor(h / time_step)) for h in time_horizon]
 
     last_out = {}
@@ -289,8 +178,6 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
         if output_bag_path in bag_paths:
             print('Output %s removed from input bag files.' % output_bag_path)
             del bag_paths[bag_paths.index(output_bag_path)]
-        # else:
-        #     print('%s not in %s.' % (output_bag_path, bag_paths))
         output_bag = Bag(output_bag_path, 'w', compression=Compression.LZ4)
     else:
         output_bag = None
@@ -301,8 +188,6 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
         with Bag(bag_path, 'r') as bag:
 
             topic_types = get_topic_types(bag)
-            # print('Topic types:', *['%s: %s' % (k, v)
-            #                         for k, v in topic_types.items() if k in topics], sep='\n')
             i = -1
             for topic, msg, stamp in tqdm(bag.read_messages(topics=topics),
                                           desc='%s: generating data' % bag_path.split('/')[-1],
@@ -329,6 +214,13 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                 if output_period and topic in last_out and start - last_out[topic] < output_period:
                     continue
 
+                try:
+                    input_to_fixed = buffer.lookup_transform_core(fixed_frame, msg.header.frame_id, msg.header.stamp)
+                except TransformException as ex:
+                    print('Could not transform from %s to %s at %.3f s.' % (msg.header.frame_id, fixed_frame, t))
+                    continue
+                input_to_fixed = numpify(input_to_fixed.transform)
+
                 tfs = []
                 for t in np.linspace(start - n[0] * time_step, start + n[1] * time_step, sum(n) + 1):
                     try:
@@ -348,16 +240,22 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                             break
                     tfs.append(tf)
 
-                # print('%i poses gathered for %s at %.3f s.' % (len(tfs), topic, stamp.to_sec()))
                 if not tfs:
                     continue
 
                 if topic_types[topic] == 'sensor_msgs/PointCloud2':
                     msg = PointCloud2(*slots(msg))
                     arr = numpify(msg)
-                    segmented_arr = segment_cloud(flexible_model, arr, tfs, rigid_model=rigid_model,
-                                                  discard_tf=tfs[n[0]], discard_model=discard_model,
-                                                  rigid_primitives=rigid_primitives)
+
+                    labels = segment_cloud(flexible_model, arr, tfs, rigid_model=rigid_model,
+                                           discard_tf=tfs[n[0]], discard_model=discard_model,
+                                           rigid_primitives=rigid_primitives,
+                                           input_to_fixed=input_to_fixed, z_support=z_support)
+
+                    labels = labels.reshape((arr.size, -1))
+                    labels = unstructured_to_structured(labels, names=[LABEL_FIELD_NAME])
+                    labels = labels.reshape(arr.shape)
+                    segmented_arr = merge_arrays([arr, labels], flatten=True)
 
                     n_valid_labels = (segmented_arr[LABEL_FIELD_NAME] != LABEL_IGNORE).sum()
                     if discard_empty and n_valid_labels == 0:
@@ -383,7 +281,17 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
 
 
 def main():
-    args = parse_args()
+    args = arg_parser().parse_args()
+    print(args)
+    if args.z_support is not None:
+        args.z_support = eval(args.z_support)
+        if 'scale' in args.z_support:
+            scale = args.z_support['scale']
+            if isinstance(scale, (float, int)):
+                scale = [1.0, 1.0, scale]
+            scale = np.asarray(scale).reshape((-1, 3))
+            args.z_support['scale'] = scale
+        print('Z support:', args.z_support)
 
     args.bag_paths = sum((glob(b) for b in args.bag_paths), start=[])
     print('Processing %i bag files:' % len(args.bag_paths), *args.bag_paths, sep='\n')

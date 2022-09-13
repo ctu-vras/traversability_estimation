@@ -12,6 +12,11 @@ import yaml
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
+def slots(msg):
+    """Return message attributes (slots) as list."""
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
 def correct_label(label, value_to_correct=11, value_to_assign=None):
     assert label.ndim == 2
     # value_to_correct = 11: human label

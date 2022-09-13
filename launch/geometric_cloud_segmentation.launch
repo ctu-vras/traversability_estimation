@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+<!--    <arg name="bag" default=""/>-->
+
+    <!-- 22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34.bag -->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34_loc.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34_cloud.bag"/>-->
+
+    <!-- 22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-30-22.bag -->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-30-22.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-30-22_loc.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-30-22_cloud.bag"/>-->
+
+    <!-- 22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17.bag -->
+    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17.bag
+                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17_loc.bag
+                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17_cloud.bag"/>
+
+    <!-- 22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-37-03 -->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-37-03.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-37-03_loc.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-37-03_cloud.bag"/>-->
+
+    <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
+
+    <group if="$(eval bool(bag))">
+        <arg name="bag_name" default="$(eval bag.split()[0].split('.')[0])"/>
+        <arg name="params" default="$(eval bag_name + '.bag.params')"/>
+        <arg name="rate" default="1.0"/>
+
+        <rosparam command="load" file="$(arg params)"/>
+        <param name="use_sim_time" value="true"/>
+
+        <node name="rosbag_play" pkg="rosbag" type="play" output="log" required="true"
+              args="--clock --delay 3.0 --rate $(arg rate) $(arg bag)"/>
+
+        <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
+          args="-d $(dirname)/../config/rviz/geometric_cloud_segmentation.rviz"/>
+    </group>
+
+    <node name="geometric_cloud_segmentation" pkg="traversability_estimation" type="geometric_cloud_segmentation" output="screen">
+        <rosparam>
+            max_age: 0.5
+            fixed_frame: map
+            z_support:
+                range: [0.6, 8.0]
+                grid: 0.05
+                scale: 0.05
+                radius: 0.05
+        </rosparam>
+        <remap from="input" to="/os_cloud_node/destaggered_points"/>
+        <remap from="output" to="/os_cloud_node/geometric_features"/>
+    </node>
+</launch>

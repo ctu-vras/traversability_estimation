@@ -1,10 +1,11 @@
 """Segmentation of points into geometric primitives (planes, etc.)."""
-from .utils import map_colors, show_cloud
+from .geometry import affine
+from .utils import map_colors, show_cloud, timer, timing
 from matplotlib import cm
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
 import open3d as o3d
-from timeit import default_timer as timer
+from scipy.spatial import cKDTree
 import torch
 
 default_rng = np.random.default_rng(135)
@@ -178,13 +179,11 @@ def fit_cylinder_rsc(x, distance_threshold, max_iterations=1000):
 
 def fit_cylinder_ls(x):
     from cylinder_fitting import fit, show_fit
-    # t = timer()
     assert isinstance(x, np.ndarray)
     assert x.shape[1] == 3
     w, c, r, err = fit(x, guess_angles=[(0, np.pi / 2)])
     # show_fit(w, c, r, x)
     model = w, c, r
-    # print('fit_cylinder_ls', timer() - t, point_to_cylinder_dist(x, model))
     return model
 
 
@@ -438,7 +437,7 @@ def filter_range(cloud, min, max, log=False):
     assert min <= max, (min, max)
     min = float(min)
     max = float(max)
-    if min <= 0.0 or max == np.inf:
+    if min <= 0.0 and max == np.inf:
         return cloud
     if cloud.dtype.names:
         cloud = cloud.ravel()
@@ -481,3 +480,48 @@ def filter_grid(cloud, grid, keep='first', log=False, rng=default_rng):
 
     filtered = cloud[ind]
     return filtered
+
+
+def valid_point_mask(arr, discard_tf=None, discard_model=None):
+    # Identify valid points, i.e., points with valid depth which are not part
+    # of the robot (contained by the discard model).
+    x = position(arr)
+    x = x.reshape((-1, 3)).T
+    valid = np.isfinite(x).all(axis=0)
+    valid = np.logical_and(valid, (x != 0.0).any(axis=0))
+    if discard_tf is not None and discard_model is not None:
+        y = affine(discard_tf, x)
+        valid = np.logical_and(valid, ~discard_model.contains(y))
+    return valid.reshape(arr.shape)
+
+
+def valid_point_indices(*args, **kwargs):
+    return np.flatnonzero(valid_point_mask(*args, **kwargs))
+
+
+@timing
+def compute_support(arr, transform=None, range=None, grid=None, scale=1.0, radius=0.1):
+    xyz = position(arr)
+    xyz = xyz.reshape((-1, 3))
+
+    if transform is not None:
+        # xyz = affine(transform, xyz.T).T
+        # Only rotate so that range is applied in sensor frame.
+        xyz = np.matmul(xyz, transform[:3, :3].T)
+
+    filtered = xyz.copy()
+    if range is not None:
+        filtered = filter_range(xyz, *range)
+    if grid is not None:
+        filtered = filter_grid(xyz, grid)
+
+    xyz = scale * xyz
+    filtered = scale * filtered
+
+    tree = cKDTree(filtered, compact_nodes=False, balanced_tree=False)
+    ind = tree.query_ball_point(xyz, radius, n_jobs=-1)
+
+    support = np.array([len(i) for i in ind]).astype(np.uint32)
+    support = support.reshape(arr.shape)
+
+    return support
