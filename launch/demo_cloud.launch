@@ -12,7 +12,7 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
     <arg name="record" default="false" doc="If record topics to a bag file."/>
     <arg name="topics_to_record" default="fix mag_azimuth path tf tf_static cloud_segmentation/lidar_cloud"/>
-    <arg name="destagger" default="false" doc="Where to run ouster lidar points destaggering."/>
+    <arg name="lidar_pkgs_to_points" default="false" doc="Where to run convert lidar packages to point cloud."/>
     <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftFalse_iou_0.54.pth"/>
 
     <param name="use_sim_time" value="true"/>
@@ -20,15 +20,8 @@
     <rosparam command="load" file="$(arg params)"/>
     <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)"/>
 
-    <group if="$(arg destagger)">
+    <group if="$(arg lidar_pkgs_to_points)">
         <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
-
-        <node name="points_destagger" pkg="nodelet" type="nodelet"
-              args="standalone cras_ouster_driver/destagger_nodelet">
-            <remap from="info" to="/os_node/sensor_info"/>
-            <remap from="input" to="/os_cloud_node/points"/>
-            <remap from="output" to="/os_cloud_node/destaggered_points"/>
-        </node>
     </group>
 
     <node name="cloud_to_depth_destaggered" pkg="traversability_estimation" type="cloud_to_depth">
