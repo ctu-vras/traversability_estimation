@@ -18,6 +18,13 @@ TRAVERSABILITY_COLOR_MAP = {0:          [0, 255, 0],
                             1:          [255, 0, 0],
                             VOID_VALUE: [0, 0, 0]}
 
+FLEXIBILITY_LABELS = {1: "flexible",
+                      0: "non-flexible",
+                      VOID_VALUE: "background"}
+FLEXIBILITY_COLOR_MAP = {1:          [0, 255, 0],
+                         0:          [255, 0, 0],
+                         VOID_VALUE: [0, 0, 0]}
+
 
 class BaseDatasetImages(data.Dataset):
     def __init__(self,
@@ -187,8 +194,6 @@ class BaseDatasetClouds(data.Dataset):
     def __init__(self,
                  path=None,
                  fields=None,
-                 color_map=None,
-                 traversability_labels=False,
                  lidar_beams_step=1,
                  depth_img_H=128,
                  depth_img_W=1024,
@@ -204,8 +209,7 @@ class BaseDatasetClouds(data.Dataset):
         # make sure the input fields are supported
         assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
 
-        self.traversability_labels = traversability_labels
-        self.color_map = color_map
+        self.color_map = None
         self.class_values = None
         self.scan = None
         self.classes_to_correct = []
@@ -222,7 +226,7 @@ class BaseDatasetClouds(data.Dataset):
                 CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
                 color_map = CFG["color_map"]
         else:
-            label_map = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis_to_obstacles.yaml"), 'r'))
+            label_map = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis_to_traversability.yaml"), 'r'))
             assert isinstance(label_map, (dict, list))
             if isinstance(label_map, dict):
                 label_map = dict((int(k), int(v)) for k, v in label_map.items())
@@ -252,7 +256,7 @@ class BaseDatasetClouds(data.Dataset):
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        if not self.traversability_labels:
+        if not self.traversability_labels and not self.flexibility_labels:
             label = convert_label(label, inverse=True)
         color = self.scan.sem_color_lut[label]
         return color

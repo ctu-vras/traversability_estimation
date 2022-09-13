@@ -22,9 +22,7 @@ VOID_VALUE = 255
 def parse_arguments():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-    parser.add_argument('--dataset_fine_tune', type=str, default='TraversabilityClouds_SelfSupervised')
-    parser.add_argument('--fine_tune', action='store_true')
+    parser.add_argument('--datasets', nargs='+', type=str, default='Rellis3DClouds')
     parser.add_argument('--trav_labels', action='store_true')
     parser.add_argument('--dont_save_models', action='store_true')
     parser.add_argument('--architecture', type=str, default='fcn_resnet50')
@@ -122,29 +120,34 @@ class CommonBatchSampler(BatchSampler):
 
 
 def create_dataloaders(args):
-    Dataset = eval('datasets.%s' % args.dataset)
+    print('Using datasets for training: %s' % ' '.join(args.datasets))
+
+    Dataset = eval('datasets.%s' % args.datasets[0])
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
-    train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
+    train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.datasets[0] else None,
                             traversability_labels=args.trav_labels,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
-    valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
+    valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.datasets[0] else None,
                             traversability_labels=args.trav_labels,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
 
-    train_datasets = [train_dataset]
-    valid_datasets = [valid_dataset]
+    train_datasets, valid_datasets = [train_dataset], [valid_dataset]
 
-    # fine tuning is only supported for traversability labels
-    if args.fine_tune:
+    if len(args.datasets) > 1:
+        assert len(args.datasets) == 2
+        # fine tuning is only supported for traversability labels
         assert train_dataset.traversability_labels
-        print('Using two datasets for training: %s and %s' % (args.dataset, args.dataset_fine_tune))
-        DatasetFT = eval('datasets.%s' % args.dataset_fine_tune)
+
+        DatasetFT = eval('datasets.%s' % args.datasets[1])
+
         ft_dataset_train = DatasetFT(split='train', traversability_labels=args.trav_labels,
                                      fields=args.data_fields, num_samples=args.n_samples,
                                      labels_mode='labels')
+
         train_dataset_combined = torch.utils.data.ConcatDataset([train_dataset, ft_dataset_train])
+
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
         batch_sampler = CommonBatchSampler(SequentialSampler(train_dataset_combined),
                                            batch_size=args.batch_size,
@@ -159,6 +162,7 @@ def create_dataloaders(args):
                                    fields=args.data_fields, num_samples=args.n_samples,
                                    labels_mode='labels')
         valid_dataset_combined = torch.utils.data.ConcatDataset([valid_dataset, ft_dataset_val])
+
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
         batch_sampler_val = CommonBatchSampler(SequentialSampler(valid_dataset_combined),
                                                batch_size=args.batch_size,
@@ -172,6 +176,8 @@ def create_dataloaders(args):
         train_datasets.append(ft_dataset_train)
         valid_datasets.append(ft_dataset_val)
     else:
+        assert len(args.datasets) == 1
+
         train_loader = DataLoader(train_dataset,
                                   batch_size=args.batch_size,
                                   shuffle=True,
@@ -239,9 +245,10 @@ class Trainer(object):
                                                 from_logits=True,
                                                 ignore_index=ignore_label)
 
-        log_dir = '%s_lr_%g_bs_%d_%s_%s_trav%s_ft%s_%s' % \
-                  (args.architecture, args.lr, args.batch_size, args.dataset, '_'.join(self.train_datasets[0].fields),
-                   self.train_datasets[0].traversability_labels, args.fine_tune, time())
+        log_dir = '%s_lr_%g_bs_%d_%s_%s_trav%s_%s' % \
+                  (args.architecture, args.lr, args.batch_size,
+                   '_'.join(args.datasets), '_'.join(self.train_datasets[0].fields),
+                   self.train_datasets[0].traversability_labels, time())
         self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), 'tb_runs', log_dir))
 
     def prepare_model(self, args):
@@ -345,11 +352,15 @@ class Trainer(object):
                 # save better model
                 if max_metric < metric_val:  # Save model weights
                     max_metric = metric_val
+
                 if max_metric <= metric_val or epoch_n % 10 == 0:
-                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_ft%s_iou_%.2f.pth' % \
+
+                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_trav%s_iou_%.2f.pth' % \
                            (self.cfg.architecture,
-                            self.cfg.lr, self.cfg.batch_size, epoch_n, self.cfg.dataset, '_'.join(self.train_datasets[0].fields),
-                            self.train_datasets[0].traversability_labels, self.cfg.fine_tune, float(metric_val))
+                            self.cfg.lr, self.cfg.batch_size, epoch_n,
+                            '_'.join(self.cfg.datasets), '_'.join(self.train_datasets[0].fields),
+                            self.train_datasets[0].traversability_labels, float(metric_val))
+
                     print("Saving Model:", name)
                     torch.save(self.model, os.path.join(os.path.dirname(__file__), name))
 

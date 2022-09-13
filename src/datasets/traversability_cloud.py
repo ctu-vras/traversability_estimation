@@ -89,6 +89,7 @@ class TraversabilityCloud(object):
 
 def main():
     directory = "/home/ales/Datasets/points_colored"
+    # directory = "/home/ruslan/data/datasets/TraversabilityDataset/supervised/clouds/destaggered_points_predictions/"
     dataset = TraversabilityCloud(directory)
     print(f"INFO: Initialized dataset split type: {dataset.split}")
     print(f"INFO: Split contains {len(dataset)} samples.")

@@ -10,6 +10,7 @@ except:
     print('Fiftyone lib is not installed')
 from datasets.laserscan import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, VOID_VALUE
+from datasets.base_dataset import FLEXIBILITY_LABELS, FLEXIBILITY_COLOR_MAP
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
 from numpy.lib.recfunctions import structured_to_unstructured
 from PIL import Image
@@ -226,9 +227,9 @@ class TraversabilityImages(BaseDatasetImages):
         return image.copy(), mask.copy()
 
 
-class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
+class FlexibilityClouds(BaseDatasetClouds):
     """
-    Traversability dataset, where the traversable area is generated using real robot poses.
+    FlexibilityClouds dataset, where the traversable area is generated using real robot poses.
     For each point cloud frame, points which were traversed by robot's path within constant
     amount of time are labelled as 'traversable'.
     The rest of the points are marked as 'background',
@@ -244,15 +245,12 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
-                 traversability_labels=True,
-                 color_map=None
                  ):
-        super(TraversabilityClouds_SelfSupervised, self).__init__(path=path, fields=fields,
-                                                                  depth_img_H=128, depth_img_W=1024,
-                                                                  lidar_fov_up=45.0, lidar_fov_down=-45.0,
-                                                                  lidar_beams_step=lidar_beams_step,
-                                                                  traversability_labels=traversability_labels,
-                                                                  color_map=color_map)
+        super(FlexibilityClouds, self).__init__(path=path, fields=fields,
+                                                depth_img_H=128, depth_img_W=1024,
+                                                lidar_fov_up=45.0, lidar_fov_down=-45.0,
+                                                lidar_beams_step=lidar_beams_step,
+                                                )
         if fields is None:
             fields = ['depth']
         if path is None:
@@ -262,12 +260,8 @@ class TraversabilityClouds_SelfSupervised(BaseDatasetClouds):
         self.rng = np.random.default_rng(42)
         self.class_values = [0, 1, 255]
 
-        self.mask_targets = {"non-traversable": 0,
-                             "traversable": 1,
-                             "background": VOID_VALUE}
-        self.color_map = {0: [255, 0, 0],
-                          1: [0, 255, 0],
-                          VOID_VALUE: [0, 0, 0]}
+        self.mask_targets = {value: key for key, value in FLEXIBILITY_LABELS.items()}
+        self.color_map = FLEXIBILITY_COLOR_MAP
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
@@ -338,14 +332,13 @@ class TraversabilityClouds(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
-                 traversability_labels=True,
                  color_map=None
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
                                                    lidar_fov_up=45.0, lidar_fov_down=-45.0,
                                                    lidar_beams_step=lidar_beams_step,
-                                                   traversability_labels=traversability_labels, color_map=color_map)
+                                                   )
         if fields is None:
             fields = ['depth']
         if path is None:
@@ -456,11 +449,11 @@ def images_save_labels():
         # plt.show()
 
 
-def clouds_demo(run_times=1):
+def flexibility_demo(run_times=1):
     from matplotlib import pyplot as plt
     import open3d as o3d
 
-    ds = TraversabilityClouds_SelfSupervised(split='test', labels_mode='labels')
+    ds = FlexibilityClouds(split='test', labels_mode='labels')
 
     for _ in range(run_times):
         depth_img, label = ds[np.random.choice(len(ds))]
@@ -474,8 +467,8 @@ def clouds_demo(run_times=1):
         depth_img_vis[depth_img_vis < 0] = 0.5
         assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
 
-        label_trav = label == ds.mask_targets['traversable']
-        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
+        label_flex = label == ds.mask_targets['flexible']
+        result = (0.3 * depth_img_vis + 0.7 * label_flex).astype("float")
 
         plt.figure(figsize=(20, 10))
         plt.imshow(result)
@@ -492,7 +485,7 @@ def clouds_demo(run_times=1):
         o3d.visualization.draw_geometries([pcd])
 
 
-def labeled_clouds(num_runs=1):
+def traversability_demo(num_runs=1):
     from matplotlib import pyplot as plt
     import open3d as o3d
 
@@ -515,50 +508,6 @@ def labeled_clouds(num_runs=1):
 
         label_trav = label == 0  # ds.mask_targets['traversable']
         result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float32")
-
-        plt.figure(figsize=(20, 10))
-        plt.imshow(result)
-        plt.title('Depth image with traversable points')
-        plt.tight_layout()
-        plt.show()
-
-        xyz = ds.scan.proj_xyz
-        color = ds.scan.sem_color_lut[label.astype('uint8')]
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
-        pcd.colors = o3d.utility.Vector3dVector(color.reshape((-1, 3)))
-        o3d.visualization.draw_geometries([pcd])
-
-
-def labeled_clouds_self_supervised(num_runs=1):
-    from matplotlib import pyplot as plt
-    import open3d as o3d
-
-    ds = TraversabilityClouds_SelfSupervised(split=None)
-
-    n_run = 0
-    for i in range(len(ds)):
-        if ds.files[i]['label'] is None:
-            continue
-        n_run += 1
-        if n_run > num_runs:
-            break
-
-        depth_img, _ = ds[np.random.choice(len(ds))]
-        label = np.load(ds.files[i]['label'])['arr_0'].reshape((ds.depth_img_H, ds.depth_img_W))
-
-        power = 16
-        depth_img_vis = np.copy(depth_img).squeeze()  # depth
-        depth_img_vis[depth_img_vis > 0] = depth_img_vis[depth_img_vis > 0] ** (1 / power)
-        depth_img_vis[depth_img_vis > 0] = (depth_img_vis[depth_img_vis > 0] - depth_img_vis[depth_img_vis > 0].min()) / \
-                                           (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[
-                                               depth_img_vis > 0].min())
-        depth_img_vis[depth_img_vis < 0] = 0.5
-        assert depth_img_vis.min() >= 0.0 and depth_img_vis.max() <= 1.0
-
-        label_trav = label == ds.mask_targets['traversable']
-        result = (0.3 * depth_img_vis + 0.7 * label_trav).astype("float")
 
         plt.figure(figsize=(20, 10))
         plt.imshow(result)

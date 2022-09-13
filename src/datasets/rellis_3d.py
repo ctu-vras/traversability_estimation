@@ -7,7 +7,8 @@ from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from traversability_estimation.utils import *
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
-from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS
+from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, FLEXIBILITY_LABELS
 from datasets.laserscan import SemLaserScan
 from copy import copy
 import torch
@@ -290,14 +291,17 @@ class Rellis3DClouds(BaseDatasetClouds):
                  num_samples=None,
                  color_map=None,
                  traversability_labels=False,
+                 flexibility_labels=False,
                  lidar_beams_step=1,
                  labels_mode='labels'
                  ):
         super(Rellis3DClouds, self).__init__(path=path, fields=fields,
                                              depth_img_H=64, depth_img_W=2048,
                                              lidar_fov_up=22.5, lidar_fov_down=-22.5,
-                                             lidar_beams_step=lidar_beams_step,
-                                             traversability_labels=traversability_labels, color_map=color_map)
+                                             lidar_beams_step=lidar_beams_step)
+
+        assert (traversability_labels and flexibility_labels) == False
+
         if path is None:
             path = join(data_dir, 'Rellis_3D')
         assert os.path.exists(path)
@@ -309,7 +313,38 @@ class Rellis3DClouds(BaseDatasetClouds):
         self.classes_to_correct = ['person']
         assert set(self.classes_to_correct) <= set(self.CLASSES)
 
-        self.setup_color_map(color_map)
+        self.traversability_labels = traversability_labels
+        self.flexibility_labels = flexibility_labels
+
+        if not self.traversability_labels and not self.flexibility_labels:
+            self.label_map = None
+            if not color_map:
+                CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+                color_map = CFG["color_map"]
+            self.class_values = list(range(len(color_map)))
+        else:
+            if self.traversability_labels:
+                mapping = 'traversability'
+                color_map = TRAVERSABILITY_COLOR_MAP
+                self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
+            elif self.flexibility_labels:
+                mapping = 'flexibility'
+                color_map = FLEXIBILITY_COLOR_MAP
+                self.class_values = np.sort([k for k in FLEXIBILITY_LABELS.keys()]).tolist()
+            assert mapping in ['traversability', 'flexibility']
+
+            label_map = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis_to_%s.yaml" % mapping), 'r'))
+            assert isinstance(label_map, (dict, list))
+            if isinstance(label_map, dict):
+                label_map = dict((int(k), int(v)) for k, v in label_map.items())
+                n = max(label_map) + 1
+                self.label_map = np.zeros((n,), dtype=np.uint8)
+                for k, v in label_map.items():
+                    self.label_map[k] = v
+            elif isinstance(label_map, list):
+                self.label_map = np.asarray(label_map)
+
+        self.color_map = color_map
         self.get_scan()
 
         self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
@@ -348,10 +383,11 @@ class Rellis3DClouds(BaseDatasetClouds):
 
 def semantic_laser_scan_demo(n_runs=1):
     # split = np.random.choice(['test', 'train', 'val'])
-    split = 'train'
+    split = 'test'
 
     ds = Rellis3DClouds(split=split, lidar_beams_step=2)
     ds_trav = Rellis3DClouds(split=split, lidar_beams_step=2, traversability_labels=True)
+    ds_flex = Rellis3DClouds(split=split, lidar_beams_step=2, flexibility_labels=True)
 
     # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
@@ -362,6 +398,7 @@ def semantic_laser_scan_demo(n_runs=1):
 
         xyzid, label = ds[ind]
         label_trav = ds_trav[ind][1]
+        label_flex = ds_flex[ind][1]
 
         # depth_img = {-1: no data, 0..1: for scaled distances}
         power = 16
@@ -373,6 +410,7 @@ def semantic_laser_scan_demo(n_runs=1):
         # semantic annotation of depth image
         color_gt = ds.label_to_color(label)
         color_trav_gt = ds_trav.label_to_color(label_trav)
+        color_flex_gt = ds_flex.label_to_color(label_flex)
 
         # Apply inference preprocessing transforms
         batch = torch.from_numpy(xyzid[-2:]).unsqueeze(0)  # model takes as input only intensity and depth image
@@ -383,18 +421,21 @@ def semantic_laser_scan_demo(n_runs=1):
         color_pred = ds.label_to_color(pred)
 
         plt.figure(figsize=(20, 10))
-        plt.subplot(4, 1, 1)
+        plt.subplot(5, 1, 1)
         plt.imshow(depth_img)
         plt.title('Depth image')
-        plt.subplot(4, 1, 2)
+        plt.subplot(5, 1, 2)
         plt.imshow(color_gt)
         plt.title('Semantics: GT')
-        plt.subplot(4, 1, 3)
+        plt.subplot(5, 1, 3)
         plt.imshow(color_pred)
         plt.title('Semantics: Pred')
-        plt.subplot(4, 1, 4)
+        plt.subplot(5, 1, 4)
         plt.imshow(color_trav_gt)
         plt.title('Traversability labels')
+        plt.subplot(5, 1, 5)
+        plt.imshow(color_flex_gt)
+        plt.title('Flexibility labels')
         plt.show()
 
 

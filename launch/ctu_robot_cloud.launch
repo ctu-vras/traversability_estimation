@@ -33,7 +33,7 @@
 <!--            weights: fcn_resnet101_lr_0.0001_bs_8_epoch_90_Rellis3DClouds_depth_travTrue_ftTrue_iou_0.45.pth-->
             weights: $(arg weights)
         </rosparam>
-        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
+        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>
 
         <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>
         <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
