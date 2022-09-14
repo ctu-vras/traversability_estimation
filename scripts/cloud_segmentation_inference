@@ -43,7 +43,7 @@ class CloudSegmentor:
         self.device = rospy.get_param('~device', 'cpu')
 
         self.model_weights = rospy.get_param('~weights',
-                                        'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth')
+                                             'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth')
         self.model_path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % self.model_weights)
         assert os.path.exists(self.model_path)
         self.model = self.load_model()
@@ -54,8 +54,12 @@ class CloudSegmentor:
             self.data_fields = ['x', 'y', 'z', 'intensity', 'depth']
         rospy.loginfo('Model takes as input: %s' % ','.join(self.data_fields))
 
-        self.traversability_labels = True if 'travTrue' in self.model_weights else False
-        rospy.loginfo('Model predicts directly traversability labels: %s' % self.traversability_labels)
+        self.label_mapping = None
+        if 'traversability' in self.model_weights.lower():
+            self.label_mapping = 'traversability'
+        elif 'flexibility' in self.model_weights.lower():
+            self.label_mapping = 'flexibility'
+        rospy.loginfo('Model predicts directly traversability labels: %s' % self.label_mapping)
 
         self.label_map = None
         self.color_map = self.setup_color_map()
@@ -79,25 +83,25 @@ class CloudSegmentor:
         self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
         rospy.loginfo('Point cloud segmentation node is ready.')
 
-    def setup_color_map(self, color_map=None):
-        if not self.traversability_labels:
-            if not color_map:
-                CFG = yaml.safe_load(open(os.path.join(pkg_path, "config/rellis.yaml"), 'r'))
-                color_map = CFG["color_map"]
+    def setup_color_map(self):
+        if self.label_mapping is None:
+            CFG = yaml.safe_load(open(os.path.join(pkg_path, "config/rellis.yaml"), 'r'))
+            color_map = CFG["color_map"]
         else:
             # traversability label map is assumed (0: traversable, 1: obstacle)
             color_map = TRAVERSABILITY_COLOR_MAP
 
-        label_map = yaml.safe_load(open(os.path.join(pkg_path, "config/rellis_to_traversability.yaml"), 'r'))
-        assert isinstance(label_map, (dict, list))
-        if isinstance(label_map, dict):
-            label_map = dict((int(k), int(v)) for k, v in label_map.items())
-            n = max(label_map) + 1
-            self.label_map = np.zeros((n,), dtype=np.uint8)
-            for k, v in label_map.items():
-                self.label_map[k] = v
-        elif isinstance(label_map, list):
-            self.label_map = np.asarray(label_map)
+            label_map = yaml.safe_load(open(os.path.join(pkg_path,
+                                                         "config/rellis_to_%s.yaml" % self.label_mapping), 'r'))
+            assert isinstance(label_map, (dict, list))
+            if isinstance(label_map, dict):
+                label_map = dict((int(k), int(v)) for k, v in label_map.items())
+                n = max(label_map) + 1
+                self.label_map = np.zeros((n,), dtype=np.uint8)
+                for k, v in label_map.items():
+                    self.label_map[k] = v
+            elif isinstance(label_map, list):
+                self.label_map = np.asarray(label_map)
 
         return color_map
 
@@ -106,7 +110,7 @@ class CloudSegmentor:
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        if not self.traversability_labels:
+        if self.label_mapping is None:
             label = convert_label(label, inverse=True)
         for l in self.labels_to_correct:
             label = correct_label(label, value_to_correct=l)
@@ -206,7 +210,7 @@ class CloudSegmentor:
         xyzrgb = xyzrgb.reshape((C, -1)).T
         assert xyzrgb.shape == (n_pts, C)
 
-        if not self.traversability_labels:
+        if self.label_mapping is None:
             if self.label_map is not None:
                 label_pred = self.label_map[label_pred]
 
