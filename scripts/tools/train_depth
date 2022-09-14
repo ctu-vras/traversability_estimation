@@ -16,6 +16,7 @@ import segmentation_models_pytorch as smp
 from typing import Iterator, List
 from traversability_estimation.utils import visualize
 from datasets.base_dataset import VOID_VALUE
+import torchmetrics
 
 
 def parse_arguments():
@@ -25,7 +26,8 @@ def parse_arguments():
     parser.add_argument('--labels_mapping', type=str, default=None)
     parser.add_argument('--dont_save_models', action='store_true')
     parser.add_argument('--architecture', type=str, default='fcn_resnet101')
-    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--pretrained_weights', type=str, default=None)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
@@ -197,32 +199,6 @@ def create_dataloaders(args):
     return train_datasets, valid_datasets, train_loader, valid_loader
 
 
-# IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-# background_channel = None
-iou_fn = smp.utils.metrics.IoU(threshold=0.5)
-
-
-def metric_fn(pred, labels, ignore_label=VOID_VALUE):
-    N, C, H, W = pred.shape
-
-    assert labels.shape == (N, H, W)
-    labels_one_hot = labels.clone()
-
-    mask = labels_one_hot != ignore_label
-
-    pred = torch.softmax(pred, dim=1)
-    pred = pred * mask.unsqueeze(1)
-
-    labels_one_hot = F.one_hot((labels_one_hot * mask).to(torch.long).view(N, H * W), C)  # N,H*W -> N,H*W, C
-    labels_one_hot = labels_one_hot.permute(0, 2, 1)  # N, C, H*W
-    labels_one_hot = labels_one_hot.reshape((N, C, H, W))
-
-    assert pred.shape == labels_one_hot.shape == (N, C, H, W)
-    iou = iou_fn.forward(y_pr=pred, y_gt=labels_one_hot)
-
-    return iou
-
-
 class Trainer(object):
 
     def __init__(self, args):
@@ -237,7 +213,7 @@ class Trainer(object):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         # self.device = torch.device('cpu')
 
-        self.model = self.prepare_model(args)
+        self.model = self.prepare_model()
         # Create adam optimizer
         self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=args.lr)
 
@@ -248,6 +224,12 @@ class Trainer(object):
                                                 log_loss=True,
                                                 from_logits=True,
                                                 ignore_index=ignore_label)
+
+        # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
+        # self.metric_fn = smp.utils.metrics.IoU(threshold=0.5)
+        self.metric_fn = torchmetrics.JaccardIndex(num_classes=len(self.train_datasets[0].class_values),
+                                                   ignore_index=ignore_label,
+                                                   multilabel=False).to(self.device)
 
         log_dir = '%s_lr_%g_bs_%d_%s_%s_labels_%s_%s' % \
                   (args.architecture, args.lr, args.batch_size,
@@ -265,14 +247,32 @@ class Trainer(object):
                (self.cfg.architecture, self.cfg.batch_size, ' '.join(self.cfg.data_fields), ' '.join(self.cfg.datasets),\
                 self.cfg.labels_mapping, self.cfg.lr)
 
-    def prepare_model(self, args):
-        n_inputs = self.train_datasets[0][0][0].shape[0]
-        n_classes = len(self.train_datasets[0].class_values)
-        print('Model takes as input %i argument: %s' % (n_inputs, str(args.data_fields)))
+    def prepare_model(self):
+        if self.cfg.pretrained_weights is None:
+            n_inputs = self.train_datasets[0][0][0].shape[0]
+            n_classes = len(self.train_datasets[0].class_values)
+            print('Model takes as input %i argument: %s' % (n_inputs, str(self.cfg.data_fields)))
 
-        model = create_model(args.architecture, n_inputs, n_classes, pretrained_backbone=False)
+            model = create_model(self.cfg.architecture, n_inputs, n_classes, pretrained_backbone=False)
+        else:
+            assert os.path.exists(self.cfg.pretrained_weights)
+            model = torch.load(self.cfg.pretrained_weights)
         model = model.to(self.device)
         return model
+
+    def compute_metric(self, pred, labels, ignore_label=VOID_VALUE):
+        # https://stackoverflow.com/questions/48260415/pytorch-how-to-compute-iou-jaccard-index-for-semantic-segmentation
+        N, C, H, W = pred.shape
+        assert labels.shape == (N, H, W)
+        mask = labels != ignore_label
+
+        pred = torch.softmax(pred, dim=1)
+        pred = pred * mask.unsqueeze(1)
+        labels = labels * mask
+
+        iou = self.metric_fn(pred, labels)
+
+        return iou
 
     def train_epoch(self):
         losses_epoch = []
@@ -303,7 +303,7 @@ class Trainer(object):
             with torch.no_grad():
                 pred = self.model(inpt)['out']  # make prediction
 
-                metric_sample = metric_fn(pred, labels)
+                metric_sample = self.compute_metric(pred, labels)
                 loss_val = self.criterion_fn(pred, labels.long())
 
             iou = metric_sample.cpu().numpy()
@@ -352,7 +352,6 @@ class Trainer(object):
         print(self)
 
         max_metric = -np.Inf
-
         for epoch_n in tqdm(range(self.cfg.n_epochs)):
             print('Starting training epoch %i...' % epoch_n)
             # train epoch
@@ -373,7 +372,7 @@ class Trainer(object):
 
                 if max_metric <= metric_val or epoch_n % 10 == 0:
 
-                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_labels_%s_iou_%.2f.pth' % \
+                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_labels_%s_iou_%.3f.pth' % \
                            (self.cfg.architecture,
                             self.cfg.lr, self.cfg.batch_size, epoch_n,
                             '_'.join(self.cfg.datasets), '_'.join(self.train_datasets[0].fields),
