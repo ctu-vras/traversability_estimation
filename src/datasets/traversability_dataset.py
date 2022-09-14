@@ -238,7 +238,7 @@ class FlexibilityClouds(BaseDatasetClouds):
     CLASSES = ["background", "traversable", "non-traversable"]
 
     def __init__(self,
-                 sequence='ugv_2022-08-12-15-30-22_with_primitives',
+                 sequences=None,
                  path=None,
                  num_samples=None,
                  labels_mode='labels',
@@ -253,12 +253,20 @@ class FlexibilityClouds(BaseDatasetClouds):
                                                 lidar_beams_step=lidar_beams_step,
                                                 labels_mapping=labels_mapping
                                                 )
+        if sequences is None:
+            sequences = ['ugv_2022-08-12-15-30-22',
+                         'ugv_2022-08-12-15-18-34',
+                         'ugv_2022-08-12-16-08-17',
+                         'ugv_2022-08-12-16-37-03'
+                         ]
+        sequences = [s + '_z_support' for s in sequences]
+
         if fields is None:
             fields = ['depth']
         if path is None:
             path = os.path.join(data_dir, 'TraversabilityDataset', 'self_supervised')
         assert os.path.exists(path)
-        self.path = os.path.join(path, 'clouds', sequence, 'os_cloud_node')
+        self.seq_paths = [os.path.join(path, 'clouds', sequence, 'os_cloud_node') for sequence in sequences]
         self.rng = np.random.default_rng(42)
         self.class_values = [0, 1, 255]
 
@@ -283,20 +291,19 @@ class FlexibilityClouds(BaseDatasetClouds):
             self.files = self.files[:num_samples]
 
     def read_files(self):
-        path = os.path.join(self.path)
-        assert os.path.exists(path)
-
         files = []
-        pts_files = [os.path.join(path, 'destaggered_points', f)
-                     for f in os.listdir(os.path.join(path, 'destaggered_points'))]
-        for f in pts_files:
-            label_f = f.replace('destaggered_points', 'label_id')
-            files.append(
-                {
-                    'pts': f,
-                    'label': label_f if os.path.exists(label_f) else None
-                }
-            )
+        for path in self.seq_paths:
+            assert os.path.exists(path)
+            pts_files = [os.path.join(path, 'destaggered_points', f)
+                         for f in os.listdir(os.path.join(path, 'destaggered_points'))]
+            for f in pts_files:
+                label_f = f.replace('destaggered_points', 'label_id')
+                files.append(
+                    {
+                        'pts': f,
+                        'label': label_f if os.path.exists(label_f) else None
+                    }
+                )
         return files
 
     def read_cloud(self, path):
