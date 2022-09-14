@@ -35,15 +35,30 @@ def main():
 
     data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_name]
     print('Model takes as input: %s' % ','.join(data_fields))
+
+    if 'Traversability' in model_name:
+        labels_mapping = 'traversability'
+    elif 'Flexibility' in model_name:
+        labels_mapping = 'flexibility'
+    else:
+        labels_mapping = None
+
     Dataset = eval('datasets.%s' % args.dataset)
-    ds = Dataset(split='test', fields=data_fields, traversability_labels='travTrue' in model_name, lidar_beams_step=2)
+    ds = Dataset(split='test', fields=data_fields,
+                 labels_mapping=labels_mapping,
+                 lidar_beams_step=2 if 'Rellis' in args.dataset else 1)
 
     for _ in range(5):
         # Apply inference preprocessing transforms
         inpt, label = ds[np.random.choice(range(len(ds)))]
 
-        # fix human annotation
-        label_corr = correct_label(label, value_to_correct=11)
+        depth_img = inpt[0]
+        power = 16
+        depth_img_vis = np.copy(depth_img).squeeze()  # depth
+        depth_img_vis[depth_img_vis > 0] = depth_img_vis[depth_img_vis > 0] ** (1 / power)
+        depth_img_vis[depth_img_vis > 0] = (depth_img_vis[depth_img_vis > 0] - depth_img_vis[depth_img_vis > 0].min()) / \
+                                           (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[
+                                               depth_img_vis > 0].min())
 
         # Use the model and visualize the prediction
         batch = torch.from_numpy(inpt).unsqueeze(0).to(args.device)
@@ -52,16 +67,18 @@ def main():
         pred = torch.softmax(pred.squeeze(0), dim=0).cpu().numpy()
         pred = np.argmax(pred, axis=0)
 
-        # fix human prediction
-        pred_corr = correct_label(pred)
-
         color_pred = ds.label_to_color(pred)
-        color_pred_corr = ds.label_to_color(pred_corr)
-
         color_gt = ds.label_to_color(label)
-        color_gt_corr = ds.label_to_color(label_corr)
+
+        # # fix human annotation
+        # label_corr = correct_label(label, value_to_correct=11)
+        # color_gt_corr = ds.label_to_color(label_corr)
+        # # fix human prediction
+        # pred_corr = correct_label(pred)
+        # color_pred_corr = ds.label_to_color(pred_corr)
 
         visualize(layout='columns',
+                  depth_img=depth_img_vis,
                   prediction=color_pred,
                   # prediction_corr=color_pred_corr,
                   ground_truth=color_gt,
