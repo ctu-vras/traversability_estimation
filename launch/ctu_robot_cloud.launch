@@ -23,14 +23,7 @@
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
             output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
-            label_config: $(dirname)/../config/obstacles.yaml
             labels_to_correct: []
-<!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'-->
-<!--            weights: 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'-->
-<!--            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_96_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
-<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth-->
-<!--            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftTrue_iou_0.54.pth-->
-<!--            weights: fcn_resnet101_lr_0.0001_bs_8_epoch_90_Rellis3DClouds_depth_travTrue_ftTrue_iou_0.45.pth-->
             weights: $(arg weights)
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>

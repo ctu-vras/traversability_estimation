@@ -7,7 +7,6 @@ import torch
 from torch.utils.data import DataLoader, BatchSampler
 from torch.utils.data.sampler import SequentialSampler
 from torch.utils.tensorboard import SummaryWriter
-from torch.nn import functional as F
 from argparse import ArgumentParser
 import datasets
 from tqdm import tqdm
@@ -244,8 +243,8 @@ class Trainer(object):
                'on datasets: %s\n' \
                'Rellis labels mapping mode: %s\n' \
                'initial learning rate: %s' % \
-               (self.cfg.architecture, self.cfg.batch_size, ' '.join(self.cfg.data_fields), ' '.join(self.cfg.datasets),\
-                self.cfg.labels_mapping, self.cfg.lr)
+               (self.cfg.architecture, self.cfg.batch_size, ' '.join(self.cfg.data_fields),
+                ' '.join(self.cfg.datasets), self.cfg.labels_mapping, self.cfg.lr)
 
     def prepare_model(self):
         if self.cfg.pretrained_weights is None:
@@ -371,7 +370,6 @@ class Trainer(object):
                     max_metric = metric_val
 
                 if max_metric <= metric_val or epoch_n % 10 == 0:
-
                     name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_labels_%s_iou_%.3f.pth' % \
                            (self.cfg.architecture,
                             self.cfg.lr, self.cfg.batch_size, epoch_n,

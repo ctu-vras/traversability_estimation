@@ -3,7 +3,8 @@
 import os
 import cv2
 from datasets.rellis_3d import SemLaserScan
-from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from datasets.base_dataset import FLEXIBILITY_LABELS, TRAVERSABILITY_LABELS, data_dir
+from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, TRAVERSABILITY_COLOR_MAP
 from traversability_estimation.utils import convert_label, correct_label
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
@@ -38,8 +39,6 @@ class CloudSegmentor:
 
         self.lock = RLock()
 
-        self.input_pc_fields = rospy.get_param('~input_fields', ['x', 'y', 'z', 'i'])
-        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle'])
         self.device = rospy.get_param('~device', 'cpu')
 
         self.model_weights = rospy.get_param('~weights',
@@ -54,14 +53,18 @@ class CloudSegmentor:
             self.data_fields = ['x', 'y', 'z', 'intensity', 'depth']
         rospy.loginfo('Model takes as input: %s' % ','.join(self.data_fields))
 
-        self.label_mapping = None
+        self.labels_mapping = None
         if 'traversability' in self.model_weights.lower():
-            self.label_mapping = 'traversability'
+            self.labels_mapping = 'traversability'
         elif 'flexibility' in self.model_weights.lower():
-            self.label_mapping = 'flexibility'
-        rospy.loginfo('Model predicts directly traversability labels: %s' % self.label_mapping)
+            self.labels_mapping = 'flexibility'
+        rospy.loginfo('Model predicts directly traversability labels: %s' % self.labels_mapping)
+
+        self.input_pc_fields = rospy.get_param('~input_fields', ['x', 'y', 'z', 'i'])
+        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b', self.labels_mapping])
 
         self.label_map = None
+        self.class_values = None
         self.color_map = self.setup_color_map()
         self.n_classes = len(self.color_map)
         self.labels_to_correct = rospy.get_param('~labels_to_correct', [])
@@ -84,15 +87,23 @@ class CloudSegmentor:
         rospy.loginfo('Point cloud segmentation node is ready.')
 
     def setup_color_map(self):
-        if self.label_mapping is None:
-            CFG = yaml.safe_load(open(os.path.join(pkg_path, "config/rellis.yaml"), 'r'))
-            color_map = CFG["color_map"]
-        else:
-            # traversability label map is assumed (0: traversable, 1: obstacle)
-            color_map = TRAVERSABILITY_COLOR_MAP
+        assert self.labels_mapping in [None, 'traversability', 'flexibility']
 
-            label_map = yaml.safe_load(open(os.path.join(pkg_path,
-                                                         "config/rellis_to_%s.yaml" % self.label_mapping), 'r'))
+        if self.labels_mapping is None:
+            self.label_map = None
+            CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+            color_map = CFG["color_map"]
+            self.class_values = list(range(len(color_map)))
+        else:
+            if self.labels_mapping == 'traversability':
+                color_map = TRAVERSABILITY_COLOR_MAP
+                self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
+            elif self.labels_mapping == 'flexibility':
+                color_map = FLEXIBILITY_COLOR_MAP
+                self.class_values = np.sort([k for k in FLEXIBILITY_LABELS.keys()]).tolist()
+
+            label_map = yaml.safe_load(open(os.path.join(data_dir,
+                                                         "../config/rellis_to_%s.yaml" % self.labels_mapping), 'r'))
             assert isinstance(label_map, (dict, list))
             if isinstance(label_map, dict):
                 label_map = dict((int(k), int(v)) for k, v in label_map.items())
@@ -110,7 +121,7 @@ class CloudSegmentor:
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        if self.label_mapping is None:
+        if self.labels_mapping is None:
             label = convert_label(label, inverse=True)
         for l in self.labels_to_correct:
             label = correct_label(label, value_to_correct=l)
@@ -210,7 +221,7 @@ class CloudSegmentor:
         xyzrgb = xyzrgb.reshape((C, -1)).T
         assert xyzrgb.shape == (n_pts, C)
 
-        if self.label_mapping is None:
+        if self.labels_mapping is None:
             if self.label_map is not None:
                 label_pred = self.label_map[label_pred]
 
