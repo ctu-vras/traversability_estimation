@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+import rospy
+from sensor_msgs.msg import PointCloud2
+import yaml
+from ros_numpy import msgify, numpify
+import os
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured
+import rosbag
+from tqdm import tqdm
+import image_geometry
+import torch
+from datasets.laserscan import SemLaserScan
+from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP
+import open3d as o3d
+
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '../..'))
+
+
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx], idx
+
+
+def slots(msg):
+    """Return message attributes (slots) as list."""
+    return [getattr(msg, var) for var in msg.__slots__]
+
+
+class PointsProcessor:
+    def __init__(self, pc_topic='/points'):
+        self.pc_topic = rospy.get_param('~pointcloud_topic', pc_topic)
+        self.bag_fname = rospy.get_param('~bag_file').split('/')[-1]
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.data_path = os.path.join(pkg_path, 'data', 'TraversabilityDataset', 'supervised')
+        self.points_path = os.path.join(self.data_path, 'clouds', pc_topic.split('/')[-1] + '_colored')
+        if not os.path.exists(self.points_path):
+            os.mkdir(self.points_path)
+        self.prec_pc_time = 0.0
+        self.time_period_to_save = rospy.get_param('~time_period', 10.0)
+
+        self.data_fields = ['depth']
+        # self.model = self.load_model()
+        #
+        # self.scan = SemLaserScan(nclasses=2,
+        #                          sem_color_dict=TRAVERSABILITY_COLOR_MAP,
+        #                          project=True,
+        #                          H=128, W=1024,
+        #                          fov_up=45.0, fov_down=-45.0)
+
+        self.pc_sub = rospy.Subscriber(pc_topic, PointCloud2, callback=self.save_clouds, queue_size=2)
+
+    # def load_model(self):
+    #     model_weights = rospy.get_param('~weights',
+    #                                     'fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftTrue_iou_0.54.pth')
+    #     self.data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_weights]
+    #     model_path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % model_weights)
+    #     assert os.path.exists(model_path)
+    #     model = torch.load(model_path, map_location=self.device)
+    #     model = model.eval()
+    #     return model
+
+    def save_clouds(self, pc_msg):
+        # pc_msg = PointCloud2(*slots(pc_msg))
+        assert isinstance(pc_msg, PointCloud2)
+        pc_stamp = pc_msg.header.stamp.to_sec()
+        rospy.logdebug('Point cloud time: %s' % pc_stamp)
+
+        # save point cloud here
+        # rospy.logdebug('Cloud fields: %s' % pc_msg.fields)
+        cloud = numpify(pc_msg)
+
+        # color point cloud with model predictions
+        points = structured_to_unstructured(cloud[['x', 'y', 'z']]).reshape((-1, 3))
+        colors = structured_to_unstructured(cloud[['rgb']]).view(np.uint8)[..., :3].reshape((-1, 3)) / 255.
+
+        # self.scan.set_points(points=points, remissions=cloud['intensity'].reshape(-1,))
+        #
+        # xyzid = {'x': self.scan.proj_xyz[..., 0],  # (H x W)
+        #          'y': self.scan.proj_xyz[..., 1],  # (H x W)
+        #          'z': self.scan.proj_xyz[..., 2],  # (H x W)
+        #          'intensity': self.scan.proj_remission,  # (H x W)
+        #          'depth': self.scan.proj_range}  # (H x W)
+        #
+        # # normalize intensity to be in the same format as in Rellis 3D
+        # if xyzid['intensity'].max() > 1.0:
+        #     xyzid['intensity'] /= 2.0 ** 16
+        #
+        # inpt = np.concatenate([xyzid[f][None] for f in self.data_fields], axis=0)
+        # batch = torch.from_numpy(inpt).unsqueeze(0).to(self.device)
+        # with torch.no_grad():
+        #     pred = self.model(batch)['out']
+        #
+        # pred = torch.softmax(pred.squeeze(0), dim=0).cpu().numpy()
+        # label_pred = np.argmax(pred, axis=0)
+        # colors = self.scan.sem_color_lut[label_pred].reshape((-1, 3))
+        # colors = colors / colors.max()
+
+        # create o3d point cloud and save pcd file
+
+        if pc_stamp - self.prec_pc_time > self.time_period_to_save:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(points)
+            pcd.colors = o3d.utility.Vector3dVector(colors)
+            # o3d.visualization.draw_geometries([pcd])
+
+            fname = '%s_s%s_n%s.pcd' % (self.bag_fname.replace('.bag', ''),
+                                        str(pc_stamp).split('.')[0], str(pc_stamp).split('.')[1])
+            rospy.loginfo('Saving cloud to %s' % os.path.join(self.points_path, fname))
+            o3d.io.write_point_cloud(os.path.join(self.points_path, fname), pcd)
+            self.prec_pc_time = pc_stamp
+
+        if rospy.is_shutdown():
+            exit()
+
+
+if __name__ == '__main__':
+    rospy.init_node('pc_saving_node', log_level=rospy.DEBUG)
+    proc = PointsProcessor(pc_topic=rospy.get_param('~cloud_in', 'os_cloud_node/destaggered_points_colored'))
+    rospy.spin()

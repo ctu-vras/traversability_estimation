@@ -101,9 +101,9 @@
     <!-- Save point clouds -->
     <node if="$(arg save_clouds)" name="save_clouds" pkg="traversability_estimation" type="save_clouds" output="screen">
         <rosparam subst_value="true">
-            t_threshold: 0.1
             bag_file: $(arg bag)
-            cloud_in: /os_cloud_node/destaggered_points_colored
+            cloud_in: os_cloud_node/destaggered_points_colored
+            time_period: 10.0
         </rosparam>
     </node>
     <node if="$(arg record)" name="rosbag_record" pkg="rosbag" type="record" output="screen"
