@@ -289,7 +289,6 @@ class Rellis3DClouds(BaseDatasetClouds):
                  split='train',
                  fields=None,
                  num_samples=None,
-                 color_map=None,
                  labels_mapping=None,
                  lidar_beams_step=1,
                  labels_mode='labels'
@@ -313,42 +312,32 @@ class Rellis3DClouds(BaseDatasetClouds):
         assert self.labels_mapping in [None, 'traversability', 'flexibility']
         if self.labels_mapping is None:
             self.label_map = None
-            if not color_map:
-                CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
-                color_map = CFG["color_map"]
-            self.class_values = list(range(len(color_map)))
+            CFG = yaml.safe_load(open(os.path.join(data_dir, "../config/rellis.yaml"), 'r'))
+            self.color_map = CFG["color_map"]
+            self.class_values = list(range(len(self.color_map)))
+            self.learning_map = CFG["learning_map"]
+            self.learning_map_inv = CFG["learning_map_inv"]
         else:
             if self.labels_mapping == 'traversability':
-                color_map = TRAVERSABILITY_COLOR_MAP
+                self.color_map = TRAVERSABILITY_COLOR_MAP
                 self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
             elif self.labels_mapping == 'flexibility':
-                color_map = FLEXIBILITY_COLOR_MAP
+                self.color_map = FLEXIBILITY_COLOR_MAP
                 self.class_values = np.sort([k for k in FLEXIBILITY_LABELS.keys()]).tolist()
 
-            label_map = yaml.safe_load(open(os.path.join(data_dir,
-                                                         "../config/rellis_to_%s.yaml" % self.labels_mapping), 'r'))
-            assert isinstance(label_map, (dict, list))
-            if isinstance(label_map, dict):
-                label_map = dict((int(k), int(v)) for k, v in label_map.items())
-                n = max(label_map) + 1
-                self.label_map = np.zeros((n,), dtype=np.uint8)
-                for k, v in label_map.items():
-                    self.label_map[k] = v
-            elif isinstance(label_map, list):
-                self.label_map = np.asarray(label_map)
+            self.label_map = self.get_label_map(path=os.path.join(data_dir,
+                                                                  "../config/rellis_to_%s.yaml" % self.labels_mapping))
 
-        self.color_map = color_map
         self.get_scan()
-
-        self.depths_list = [line.strip().split() for line in open(os.path.join(path, 'pt_%s.lst' % split))]
 
         self.files = self.read_files()
         if num_samples:
             self.files = self.files[:num_samples]
 
     def read_files(self):
+        depths_list = [line.strip().split() for line in open(os.path.join(self.path, 'pt_%s.lst' % self.split))]
         files = []
-        for item in self.depths_list:
+        for item in depths_list:
             depth_path, label_path = item
             depth_path = os.path.join(self.path, depth_path)
             label_path = os.path.join(self.path, label_path)
@@ -630,17 +619,18 @@ def traversability_mapping_demo(n_runs=1):
         image_vis = np.uint8(255 * (image * ds.std + ds.mean))
         gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)  # [0, 1, 2]
         gt_color = convert_color(gt_arg, color_map)
-        visualize(image=image_vis, label=gt_color)
+        visualize_imgs(image=image_vis, label=gt_color)
 
 
 def main():
-    colored_cloud_demo(1)
-    semantic_laser_scan_demo(1)
-    semseg_test(1)
+    # colored_cloud_demo(1)
+    # trav_cloud_demo(1)
+    semantic_laser_scan_demo(4)
+    # semseg_test(1)
     # lidar_map_demo()
-    lidar2cam_demo(1)
-    semseg_demo(1)
-    traversability_mapping_demo(1)
+    # lidar2cam_demo(1)
+    # semseg_demo(1)
+    # traversability_mapping_demo(1)
 
 
 if __name__ == '__main__':

@@ -334,6 +334,8 @@ def convert_label(label, inverse=False, label_mapping=None):
                          # 32: 4,
                          33: 17,
                          34: 18}
+    if isinstance(label, list):
+        label = np.asarray(label)
     if isinstance(label, np.ndarray):
         temp = label.copy()
     elif isinstance(label, torch.Tensor):

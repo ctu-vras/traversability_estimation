@@ -204,6 +204,8 @@ class BaseDatasetClouds(data.Dataset, ABC):
                  ):
         self.path = path
         self.split = None
+        self.files = None
+        self.rng = np.random.default_rng(42)
         self.lidar_beams_step = lidar_beams_step
         if fields is None:
             fields = ['x', 'y', 'z', 'intensity', 'depth']
@@ -212,6 +214,8 @@ class BaseDatasetClouds(data.Dataset, ABC):
         assert set(self.fields) <= {'x', 'y', 'z', 'intensity', 'depth'}
 
         self.color_map = None
+        self.learning_map = None
+        self.learning_map_inv = None
         self.class_values = None
         self.scan = None
         self.classes_to_correct = []
@@ -235,7 +239,10 @@ class BaseDatasetClouds(data.Dataset, ABC):
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
         if self.labels_mapping is None:
-            label = convert_label(label, inverse=True)
+            if self.learning_map_inv:
+                label = convert_label(label, inverse=False, label_mapping=self.learning_map_inv)
+            else:
+                label = convert_label(label, inverse=True, label_mapping=self.learning_map)
         color = self.scan.sem_color_lut[label]
         return color
 
@@ -257,6 +264,19 @@ class BaseDatasetClouds(data.Dataset, ABC):
 
         return files
 
+    def get_label_map(self, path):
+        label_map = yaml.safe_load(open(path, 'r'))
+        assert isinstance(label_map, (dict, list))
+        if isinstance(label_map, dict):
+            label_map_dict = dict((int(k), int(v)) for k, v in label_map.items())
+            n = max(label_map_dict) + 1
+            label_map = np.zeros((n,), dtype=np.uint8)
+            for k, v in label_map_dict.items():
+                label_map[k] = v
+        elif isinstance(label_map, list):
+            label_map = np.asarray(label_map)
+        return label_map
+
     def create_sample(self, label=None):
 
         # following SalsaNext approach: (x, y, z, intensity, depth)
@@ -275,7 +295,7 @@ class BaseDatasetClouds(data.Dataset, ABC):
                 label = self.label_map[label]
 
         if self.labels_mapping is None:
-            label = convert_label(label, inverse=False)
+            label = convert_label(label, inverse=False, label_mapping=self.learning_map)
             for cl in self.classes_to_correct:
                 label = correct_label(label, value_to_correct=self.CLASSES.index(cl), value_to_assign=0)
 

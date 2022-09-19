@@ -358,7 +358,6 @@ class TraversabilityClouds(BaseDatasetClouds):
             path = os.path.join(data_dir, 'TraversabilityDataset', 'supervised')
         assert os.path.exists(path)
         self.path = os.path.join(path, 'clouds')
-        self.rng = np.random.default_rng(42)
 
         self.class_values = [0, 1, 255]
         self.mask_targets = {value: key for key, value in TRAVERSABILITY_LABELS.items()}
