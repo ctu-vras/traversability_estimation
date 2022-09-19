@@ -16,15 +16,16 @@
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
-            max_age: 0.2
+            max_age: 0.3
             lidar_channels: 128
             lidar_beams: 1024
             lidar_fov_up: 45.0
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
-            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
+            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle', 'obstacle_soft']
             labels_to_correct: []
             weights: $(arg weights)
+            trav_threshold: 0.9  <!-- from 0 to 1: from nothing to everything is traversable -->
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>
 

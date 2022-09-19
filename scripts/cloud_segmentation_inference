@@ -36,14 +36,11 @@ class CloudSegmentor:
         self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 45.0)
         self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -45.0)
         self.lidar_height_above_ground = rospy.get_param('~lidar_height_above_ground', 0.0)
-
-        self.lock = RLock()
-
         self.device = rospy.get_param('~device', 'cpu')
-
         self.model_weights = rospy.get_param('~weights',
                                              'fcn_resnet50_lr_0.0001_bs_16_epoch_12_Rellis3DClouds_z_depth_iou_0.66.pth')
         self.model_path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % self.model_weights)
+
         assert os.path.exists(self.model_path)
         self.model = self.load_model()
         rospy.loginfo('Loaded cloud segmentation model: %s', self.model_weights)
@@ -61,7 +58,9 @@ class CloudSegmentor:
         rospy.loginfo('Model predicts directly traversability labels: %s' % self.labels_mapping)
 
         self.input_pc_fields = rospy.get_param('~input_fields', ['x', 'y', 'z', 'i'])
-        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b', self.labels_mapping])
+        self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z', 'r', 'g', 'b',
+                                                                    self.labels_mapping, self.labels_mapping + '_soft'])
+        self.trav_threshold = rospy.get_param('~trav_threshold', None)
 
         self.label_map = None
         self.class_values = None
@@ -75,6 +74,7 @@ class CloudSegmentor:
                                  H=self.lidar_channels, W=self.lidar_beams,
                                  fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
 
+        self.lock = RLock()
         # point cloud which time stamp is older is not being processed
         self.max_age = rospy.get_param('~max_age', 2.0)
 
@@ -117,10 +117,7 @@ class CloudSegmentor:
         return color_map
 
     def label_to_color(self, label):
-        if len(label.shape) == 3:
-            C, H, W = label.shape
-            label = np.argmax(label, axis=0)
-            assert label.shape == (H, W)
+        assert label.ndim == 2
         if self.labels_mapping is None:
             label = convert_label(label, inverse=True)
         for l in self.labels_to_correct:
@@ -197,12 +194,22 @@ class CloudSegmentor:
         if isinstance(xyzid, dict):
             xyzid = np.concatenate([xyzid[f][None] for f in ['x', 'y', 'z', 'intensity', 'depth']], axis=0)
 
-        label_pred = torch.softmax(label_pred.squeeze(0), dim=0).cpu().numpy()
-        # n_classes, H, W = label_pred.shape
+        label_pred = label_pred.squeeze(0)
+        label_pred = torch.log_softmax(label_pred, dim=0)
+        label_pred = label_pred.cpu().numpy()
+
+        n_classes, H, W = label_pred.shape
         assert label_pred.ndim == 3
 
-        colors, label_pred = self.label_to_color(label_pred)
-        assert label_pred.ndim == 2
+        label_soft = label_pred[1]
+        if rospy.has_param('~trav_threshold'):
+            label_threshold = np.asarray(label_soft > np.log(rospy.get_param('~trav_threshold')), dtype=int)
+        else:
+            label_threshold = np.argmax(label_pred, axis=0).astype(int)
+        assert label_threshold.shape == (H, W)
+
+        colors, label_threshold = self.label_to_color(label_threshold)
+        assert label_threshold.ndim == 2
 
         # colors_vis = cv2.resize(colors.astype('float'),
         #                         (colors.shape[1] // 2, colors.shape[0] // 2),
@@ -223,14 +230,15 @@ class CloudSegmentor:
 
         if self.labels_mapping is None:
             if self.label_map is not None:
-                label_pred = self.label_map[label_pred]
+                label_threshold = self.label_map[label_threshold]
 
-        label_pred = label_pred.reshape((n_pts, 1))
-        xyz_rgb_l = np.concatenate([xyzrgb, label_pred], axis=1)
-        assert xyz_rgb_l.shape == (n_pts, C+1)
+        label_threshold = label_threshold.reshape((n_pts, 1))
+        label_soft = label_soft.reshape((n_pts, 1))
+        xyz_rgb_l_lsoft = np.concatenate([xyzrgb, label_threshold, label_soft], axis=1)
+        assert xyz_rgb_l_lsoft.shape == (n_pts, C+2)
 
-        rospy.logdebug('XYZ_RGB_L cloud shape: %s', xyz_rgb_l.shape)
-        return np.asarray(xyz_rgb_l, dtype=np.float32)
+        rospy.logdebug('XYZ_RGB_L_Lsoft cloud shape: %s', xyz_rgb_l_lsoft.shape)
+        return np.asarray(xyz_rgb_l_lsoft, dtype=np.float32)
 
     def segment_cloud_cb(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
@@ -262,13 +270,13 @@ class CloudSegmentor:
             t2 = rospy.Time.now().to_sec()
             rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
 
-            xyz_rgb_l = self.postprocessing(pred, xyzid=xyzid)
+            xyz_rgb_l_lsoft = self.postprocessing(pred, xyzid=xyzid)
             t3 = rospy.Time.now().to_sec()
             rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
 
             # publish segmented point cloud
             stamp = rospy.Time.now()
-            segm_pc_msg = msgify_cloud(xyz_rgb_l, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
+            segm_pc_msg = msgify_cloud(xyz_rgb_l_lsoft, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_filelds)
             self.segm_cloud_pub.publish(segm_pc_msg)
 
             # publish depth image

@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /Point Map1/Autocompute Value Bounds1
         - /Segmented Points1/Autocompute Value Bounds1
-        - "/Segmented Points: Obstacles1/Autocompute Value Bounds1"
+        - /Thresholded predictions1/Autocompute Value Bounds1
       Splitter Ratio: 0.48691099882125854
     Tree Height: 365
   - Class: rviz/Selection
@@ -29,7 +29,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: "Segmented Points: Obstacles"
+    SyncSource: Thresholded predictions
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -78,56 +78,50 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        back:
-          Value: true
-        back_fisheye:
+        antenna:
           Value: true
         base_link:
           Value: true
-        body:
+        battery1:
           Value: true
-        flat_body:
+        battery2:
           Value: true
-        front_left_hip:
+        bottom_plate:
           Value: true
-        front_left_lower_leg:
+        camera_fisheye_front:
           Value: true
-        front_left_upper_leg:
+        camera_fisheye_rear:
           Value: true
-        front_rail:
+        camera_front:
           Value: true
-        front_right_hip:
+        camera_left:
           Value: true
-        front_right_lower_leg:
+        camera_rear:
           Value: true
-        front_right_upper_leg:
+        camera_right:
           Value: true
-        frontleft:
+        camera_up:
           Value: true
-        frontleft_fisheye:
+        deck:
           Value: true
-        frontright:
+        front_left_flipper:
           Value: true
-        frontright_fisheye:
+        front_left_flipper_end_point:
           Value: true
-        gpe:
+        front_left_flipper_end_point_inflated:
           Value: true
-        gps:
+        front_left_motor:
           Value: true
-        head:
+        front_right_flipper:
+          Value: true
+        front_right_flipper_end_point:
+          Value: true
+        front_right_flipper_end_point_inflated:
+          Value: true
+        front_right_motor:
           Value: true
         imu:
           Value: false
-        left:
-          Value: true
-        left_fisheye:
-          Value: true
-        lidar_mount:
-          Value: true
-        markers:
-          Value: true
-        middle_camera_mount:
-          Value: true
         odom:
           Value: true
         os_imu:
@@ -136,7 +130,11 @@ Visualization Manager:
           Value: false
         os_sensor:
           Value: false
-        payload:
+        ouster_calib:
+          Value: true
+        pylon_camera_fisheye_front:
+          Value: true
+        pylon_camera_fisheye_rear:
           Value: true
         pylon_camera_front:
           Value: true
@@ -148,25 +146,27 @@ Visualization Manager:
           Value: true
         pylon_camera_up:
           Value: true
-        rear_left_hip:
+        rear_left_flipper:
           Value: true
-        rear_left_lower_leg:
+        rear_left_flipper_end_point:
           Value: true
-        rear_left_upper_leg:
+        rear_left_flipper_end_point_inflated:
           Value: true
-        rear_rail:
+        rear_left_motor:
           Value: true
-        rear_right_hip:
+        rear_right_box:
           Value: true
-        rear_right_lower_leg:
+        rear_right_flipper:
           Value: true
-        rear_right_upper_leg:
+        rear_right_flipper_end_point:
           Value: true
-        right:
+        rear_right_flipper_end_point_inflated:
           Value: true
-        right_fisheye:
+        rear_right_motor:
           Value: true
-        vision:
+        top_box:
+          Value: true
+        total_mass_60_006:
           Value: true
       Marker Alpha: 1
       Marker Scale: 1
@@ -176,72 +176,78 @@ Visualization Manager:
       Show Names: true
       Tree:
         odom:
-          body:
-            base_link:
-              markers:
-                {}
-            flat_body:
+          base_link:
+            battery1:
               {}
-            front_left_hip:
-              front_left_upper_leg:
-                front_left_lower_leg:
+            battery2:
+              {}
+            bottom_plate:
+              {}
+            camera_fisheye_front:
+              pylon_camera_fisheye_front:
+                {}
+            camera_fisheye_rear:
+              pylon_camera_fisheye_rear:
+                {}
+            deck:
+              {}
+            front_left_flipper:
+              front_left_flipper_end_point:
+                {}
+              front_left_flipper_end_point_inflated:
+                {}
+            front_left_motor:
+              {}
+            front_right_flipper:
+              front_right_flipper_end_point:
+                {}
+              front_right_flipper_end_point_inflated:
+                {}
+            front_right_motor:
+              {}
+            imu:
+              {}
+            rear_left_flipper:
+              rear_left_flipper_end_point:
+                {}
+              rear_left_flipper_end_point_inflated:
+                {}
+            rear_left_motor:
+              {}
+            rear_right_box:
+              camera_front:
+                pylon_camera_front:
                   {}
-            front_rail:
-              payload:
-                imu:
-                  gps:
-                    {}
-                lidar_mount:
-                  os_sensor:
-                    os_imu:
-                      {}
-                    os_lidar:
-                      {}
-                  pylon_camera_front:
-                    {}
-                middle_camera_mount:
-                  pylon_camera_left:
-                    {}
-                  pylon_camera_right:
-                    {}
+              camera_rear:
                 pylon_camera_rear:
                   {}
+            rear_right_flipper:
+              rear_right_flipper_end_point:
+                {}
+              rear_right_flipper_end_point_inflated:
+                {}
+            rear_right_motor:
+              {}
+            top_box:
+              antenna:
+                {}
+              camera_left:
+                pylon_camera_left:
+                  {}
+              camera_right:
+                pylon_camera_right:
+                  {}
+              camera_up:
                 pylon_camera_up:
                   {}
-            front_right_hip:
-              front_right_upper_leg:
-                front_right_lower_leg:
-                  {}
-            head:
-              back:
-                back_fisheye:
-                  {}
-              frontleft:
-                frontleft_fisheye:
-                  {}
-              frontright:
-                frontright_fisheye:
-                  {}
-              left:
-                left_fisheye:
-                  {}
-              right:
-                right_fisheye:
-                  {}
-            rear_left_hip:
-              rear_left_upper_leg:
-                rear_left_lower_leg:
-                  {}
-            rear_rail:
+              ouster_calib:
+                os_sensor:
+                  os_imu:
+                    {}
+                  os_lidar:
+                    {}
+            total_mass_60_006:
               {}
-            rear_right_hip:
-              rear_right_upper_leg:
-                rear_right_lower_leg:
-                  {}
-            vision:
-              {}
-          gpe:
-            {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -278,6 +284,191 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        antenna:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        battery1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        battery2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bottom_plate:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_fisheye_front:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_fisheye_rear:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_front:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_left:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_rear:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_right:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_up:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        deck:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_left_flipper:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_left_flipper_end_point:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_left_flipper_end_point_inflated:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_left_motor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_right_flipper:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_right_flipper_end_point:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_right_flipper_end_point_inflated:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_right_motor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        imu:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        os_sensor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_calib:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_fisheye_front:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_fisheye_rear:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_front:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_left:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_rear:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_right:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        pylon_camera_up:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_left_flipper:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_left_flipper_end_point:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_left_flipper_end_point_inflated:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_left_motor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_box:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_flipper:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_right_flipper_end_point:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_flipper_end_point_inflated:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_motor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_box:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        total_mass_60_006:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
       Name: Marv Robot Model
       Robot Description: /marv/robot_description
       TF Prefix: ""
@@ -672,7 +863,7 @@ Visualization Manager:
       Max Intensity: 1
       Min Color: 115; 210; 22
       Min Intensity: 0
-      Name: "Segmented Points: Obstacles"
+      Name: Thresholded predictions
       Position Transformer: XYZ
       Queue Size: 2
       Selectable: false
@@ -684,10 +875,40 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: false
       Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 8
+        Min Value: -1.5
+        Value: false
+      Axis: Z
+      Channel Name: obstacle_soft
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 204; 0; 0
+      Max Intensity: 0
+      Min Color: 115; 210; 22
+      Min Intensity: -1
+      Name: Soft predictions
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Spheres
+      Topic: /cloud_segmentation/lidar_cloud
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: /bumper_bbx
-      Name: Marker
+      Name: Virtual Bumper
       Namespaces:
         {}
       Queue Size: 100
