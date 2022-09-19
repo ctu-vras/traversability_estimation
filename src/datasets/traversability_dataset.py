@@ -481,7 +481,7 @@ def images_save_labels():
 
 
 def flexibility_demo(run_times=1):
-    from traversability_estimation.utils import visualize
+    from traversability_estimation.utils import visualize_imgs
     import open3d as o3d
 
     ds = FlexibilityClouds(split='test')
@@ -507,10 +507,10 @@ def flexibility_demo(run_times=1):
         xyz = ds.scan.proj_xyz
         color = ds.label_to_color(label.astype('uint8'))
 
-        visualize(layout='columns',
-                  depth_img_with_flex_points=depth_img_with_flex_points,
-                  depth_img_with_non_flex_points=depth_img_with_non_flex_points,
-                  flexibility=color)
+        visualize_imgs(layout='columns',
+                       depth_img_with_flex_points=depth_img_with_flex_points,
+                       depth_img_with_non_flex_points=depth_img_with_non_flex_points,
+                       flexibility=color)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
@@ -519,7 +519,7 @@ def flexibility_demo(run_times=1):
 
 
 def traversability_demo(num_runs=1):
-    from traversability_estimation.utils import visualize
+    from traversability_estimation.utils import visualize_imgs
     import open3d as o3d
 
     ds = TraversabilityClouds(split=None, annotation_from_img=False)
@@ -549,10 +549,10 @@ def traversability_demo(num_runs=1):
         xyz = ds.scan.proj_xyz
         color = ds.label_to_color(label.astype('uint8'))
 
-        visualize(layout='columns',
-                  depth_img_with_trav_points=traversable_area,
-                  depth_img_with_non_trav_points=non_traversable_area,
-                  traversability=color)
+        visualize_imgs(layout='columns',
+                       depth_img_with_trav_points=traversable_area,
+                       depth_img_with_non_trav_points=non_traversable_area,
+                       traversability=color)
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
@@ -717,7 +717,7 @@ def label_cloud_from_img(visualize=False, save_clouds=True, n_runs=1):
 
 
 def images_demo(num_runs=1):
-    from traversability_estimation.utils import visualize, convert_color
+    from traversability_estimation.utils import visualize_imgs, convert_color
 
     ds = TraversabilityImages(split='val')
 
@@ -729,11 +729,11 @@ def images_demo(num_runs=1):
         label = label.argmax(axis=0)
         mask = convert_color(label, ds.color_map)
 
-        visualize(img=img_vis, label=mask)
+        visualize_imgs(img=img_vis, label=mask)
 
 
 def clouds_save_labels():
-    from traversability_estimation.utils import convert_label, convert_color, visualize
+    from traversability_estimation.utils import convert_label, convert_color, visualize_imgs
     from .traversability_cloud import TraversabilityCloud
     from tqdm import tqdm
     import open3d as o3d

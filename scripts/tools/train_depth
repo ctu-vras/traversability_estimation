@@ -13,7 +13,7 @@ from tqdm import tqdm
 from time import time
 import segmentation_models_pytorch as smp
 from typing import Iterator, List
-from traversability_estimation.utils import visualize
+from traversability_estimation.utils import visualize_imgs
 from datasets.base_dataset import VOID_VALUE
 import torchmetrics
 
@@ -341,11 +341,11 @@ class Trainer(object):
         depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
                                    (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
 
-        visualize(layout='columns',
-                  prediction=color_pred,
-                  ground_truth=color_gt,
-                  depth_img=depth_img,
-                  )
+        visualize_imgs(layout='columns',
+                       prediction=color_pred,
+                       ground_truth=color_gt,
+                       depth_img=depth_img,
+                       )
 
     def train(self):
         print(self)

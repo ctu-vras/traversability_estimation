@@ -280,10 +280,10 @@ class BaseDatasetClouds(data.Dataset, ABC):
                 label = correct_label(label, value_to_correct=self.CLASSES.index(cl), value_to_assign=0)
 
         assert data.shape[1:] == label.shape  # (N, H, W) and (H, W)
-        assert set(np.unique(label)) <= set(self.class_values)  # label should contain only valid class values
 
         # 'masks': label.shape == (C, H, W) or 'labels': label.shape == (H, W)
         if self.labels_mode == 'masks':
+            assert set(np.unique(label)) <= set(self.class_values)  # label should contain only valid class values
             # extract certain classes from mask (one hot encoding)
             masks = [(label == v) for v in self.class_values]
             label = np.stack(masks, axis=0).astype('float')

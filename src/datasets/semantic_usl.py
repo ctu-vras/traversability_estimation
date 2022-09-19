@@ -1,5 +1,6 @@
 import os
 from datasets.base_dataset import BaseDatasetClouds, data_dir
+from datasets.laserscan import SemLaserScan
 import yaml
 import numpy as np
 
@@ -17,7 +18,6 @@ class SemanticUSL(BaseDatasetClouds):
                  split='train',
                  fields=None,
                  num_samples=None,
-                 traversability_labels=False,
                  lidar_beams_step=1,
                  labels_mode='labels'
                  ):
@@ -25,16 +25,15 @@ class SemanticUSL(BaseDatasetClouds):
                                           depth_img_H=64, depth_img_W=2048,
                                           lidar_fov_up=16.6, lidar_fov_down=-16.6,
                                           lidar_beams_step=lidar_beams_step,
-                                          traversability_labels=traversability_labels)
+                                          )
         if path is None:
             path = os.path.join(data_dir, 'SemanticUSL', 'SemanticUSL', 'sequences', seq)
         assert os.path.exists(path)
         self.path = path
 
+        if not seq in ['03', '12', '21', '32']:
+            print("Sequence %s does not have ground truth (only '03', '12', '21', '32' do)" % seq)
         self.seq = seq
-
-        assert split in ['train', 'val', 'test']
-        self.split = split
 
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
@@ -44,11 +43,13 @@ class SemanticUSL(BaseDatasetClouds):
         self.CLASSES = list(cfg['labels'].values())
         self.color_map = cfg['color_map']
         self.label_map = None
-        # self.setup_color_map(color_map)
 
-        self.get_scan()
+        self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
+                                 project=True, H=self.depth_img_H, W=self.depth_img_W,
+                                 fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
 
-        self.depths_list = [os.path.join(self.path, 'velodyne', f) for f in os.listdir(os.path.join(self.path, 'velodyne'))]
+        self.depths_list = [os.path.join(self.path, 'velodyne', f) for f in
+                            os.listdir(os.path.join(self.path, 'velodyne'))]
 
         self.files = self.read_files()
         if num_samples:
@@ -57,7 +58,6 @@ class SemanticUSL(BaseDatasetClouds):
     def read_files(self):
         files = []
         for depth_path in self.depths_list:
-
             label_path = depth_path.replace('velodyne', 'labels').replace('.bin', '.label')
             id = os.path.splitext(os.path.basename(label_path))[0]
 
@@ -90,26 +90,33 @@ class SemanticUSL(BaseDatasetClouds):
         return len(self.files)
 
 
-def demo():
-    import matplotlib.pyplot as plt
+def demo(n_runs=1):
+    from traversability_estimation.utils import visualize_imgs, visualize_cloud
 
-    ds = SemanticUSL()
-    data, label = ds[0]
+    seq = np.random.choice(['03', '12', '21', '32'])
+    ds = SemanticUSL(seq=seq)
 
-    range_image = data[0]
-    color = ds.label_to_color(label)
+    for _ in range(n_runs):
+        data, label = ds[np.random.choice(range(len(ds)))]
 
-    plt.figure(figsize=(20, 10))
-    plt.subplot(2, 1, 1)
-    plt.imshow(color)
-    plt.subplot(2, 1, 2)
-    plt.imshow(range_image)
-    plt.tight_layout()
-    plt.show()
+        depth_img = data[-1]
+
+        power = 16
+        depth_img_vis = np.copy(depth_img)
+        depth_img_vis[depth_img_vis > 0] = depth_img_vis[depth_img_vis > 0] ** (1 / power)
+        depth_img_vis[depth_img_vis > 0] = (depth_img_vis[depth_img_vis > 0] - depth_img_vis[depth_img_vis > 0].min()) / \
+                                           (depth_img_vis[depth_img_vis > 0].max() - depth_img_vis[
+                                               depth_img_vis > 0].min())
+
+        color = ds.label_to_color(label)
+
+        visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color.reshape((-1, 3)))
+
+        visualize_imgs(segmentation=color, range_image=depth_img_vis, layout='columns')
 
 
 def main():
-    demo()
+    demo(5)
 
 
 if __name__ == '__main__':

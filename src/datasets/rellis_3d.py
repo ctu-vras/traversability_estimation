@@ -454,7 +454,7 @@ def semseg_test(n_runs=1):
         gt_arg = convert_label(gt_arg, inverse=True)
         gt_color = convert_color(gt_arg, color_map)
 
-        visualize(
+        visualize_imgs(
             image=image_vis,
             label=gt_color,
         )

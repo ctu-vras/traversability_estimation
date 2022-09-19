@@ -108,7 +108,7 @@ def demo():
         gt_arg = np.argmax(gt_mask, axis=0).astype(np.uint8)
         gt_color = convert_color(gt_arg, ds.color_map)
 
-        visualize(
+        visualize_imgs(
             image=image_vis,
             label=gt_color,
         )

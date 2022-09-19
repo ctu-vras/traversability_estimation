@@ -5,7 +5,7 @@ import torch
 from argparse import ArgumentParser
 import datasets
 import os
-from traversability_estimation.utils import visualize
+from traversability_estimation.utils import visualize_imgs
 
 
 def main():
@@ -64,11 +64,11 @@ def main():
         color_pred = ds.label_to_color(pred)
         color_gt = ds.label_to_color(label)
 
-        visualize(layout='columns',
-                  depth_img=depth_img_vis,
-                  prediction=color_pred,
-                  ground_truth=color_gt,
-                  )
+        visualize_imgs(layout='columns',
+                       depth_img=depth_img_vis,
+                       prediction=color_pred,
+                       ground_truth=color_gt,
+                       )
 
 
 if __name__ == '__main__':

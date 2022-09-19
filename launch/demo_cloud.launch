@@ -5,6 +5,7 @@
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
 <!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
     <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-13-03-45.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/dev/kn_square_total_station.bag"/>-->
 
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
