@@ -8,7 +8,10 @@ import rospy
 from timeit import default_timer as timer
 import torch
 import yaml
-import open3d as o3d
+try:
+    import open3d as o3d
+except:
+    print('No open3d installed')
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 

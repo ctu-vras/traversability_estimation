@@ -1,4 +1,4 @@
-from abc import ABC
+#from abc import ABC
 import cv2
 import numpy as np
 import random
@@ -191,7 +191,7 @@ class BaseDatasetImages(data.Dataset):
         return encoded_labelmap
 
 
-class BaseDatasetClouds(data.Dataset, ABC):
+class BaseDatasetClouds(data.Dataset):
     def __init__(self,
                  path=None,
                  fields=None,
