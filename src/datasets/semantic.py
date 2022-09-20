@@ -148,12 +148,14 @@ def demo(n_runs=1):
 
     ds = SemanticUSL()
     ds_trav = SemanticUSL(labels_mapping='traversability')
+    ds_flex = SemanticUSL(labels_mapping='flexibility')
 
     for _ in range(n_runs):
         idx = np.random.choice(range(len(ds)))
 
         data, label = ds[idx]
         label_trav = ds_trav[idx][1]
+        label_flex = ds_flex[idx][1]
 
         depth_img = data[-1]
 
@@ -166,13 +168,16 @@ def demo(n_runs=1):
 
         color = ds.label_to_color(label)
         color_trav = ds_trav.label_to_color(label_trav)
+        color_flex = ds_flex.label_to_color(label_flex)
 
-        # visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color.reshape((-1, 3)))
-        visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color_trav.reshape((-1, 3)))
+        visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color.reshape((-1, 3)))
+        # visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color_trav.reshape((-1, 3)))
+        # visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color_flex.reshape((-1, 3)))
 
         visualize_imgs(range_image=depth_img_vis,
                        segmentation=color,
                        traversability=color_trav,
+                       flexibility=color_flex,
                        layout='columns')
 
 

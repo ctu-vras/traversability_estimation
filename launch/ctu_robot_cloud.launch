@@ -2,7 +2,7 @@
 
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_travTrue_ftFalse_iou_0.54.pth"
+    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"
          doc="Point cloud segmentation network weights file (located in '../config/weights/depth_cloud/' folder)"/>
 
     <node name="points_destagger" pkg="nodelet" type="nodelet"
