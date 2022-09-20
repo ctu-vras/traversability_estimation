@@ -9,13 +9,16 @@
     <arg name="img_segmentation" default="false" doc="Whether to run image segmentation node"/>
 
     <!--Bag file player -->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-13-03-45.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>-->
+
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <rosparam command="load" file="$(arg params)"/>
     <param name="use_sim_time" value="true"/>
 
-    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)"/>
+    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 3.0 --rate 1.0 --start 500 $(arg bag)"/>
 
     <group if="$(arg destagger)">
         <!-- Lidar packets to point cloud -->

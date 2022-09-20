@@ -4,8 +4,8 @@
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
 <!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
-<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-13-03-45.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/dev/kn_square_total_station.bag"/>-->
 
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
@@ -19,11 +19,12 @@
     <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"/>
 <!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_37_FlexibilityClouds_depth_labels_flexibility_iou_0.559.pth"/>-->
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_66_FlexibilityClouds_depth_labels_flexibility_iou_0.537.pth"/>-->
+<!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_50_TraversabilityClouds_depth_labels_traversability_iou_0.609.pth"/>-->
 
     <param name="use_sim_time" value="true"/>
 
     <rosparam command="load" file="$(arg params)"/>
-    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 6.0 --rate 1.0 --start 400 $(arg bag)"/>
+    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 6.0 --rate 1.0 --start 550 $(arg bag)"/>
 
     <group if="$(arg lidar_pkgs_to_points)">
         <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
@@ -34,7 +35,7 @@
         <remap from="image" to="/os_cloud_node/destaggered_points_depth"/>
     </node>
 
-    <include file="$(dirname)/ctu_robot_cloud.launch" pass_all_args="true">
+    <include file="$(dirname)/ctu_robot_cloud.launch">
         <arg name="weights" value="$(arg weights)"/>
     </include>
 
