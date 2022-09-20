@@ -732,16 +732,16 @@ def images_demo(num_runs=1):
 
 
 def clouds_save_labels():
-    from traversability_estimation.utils import convert_label, convert_color, visualize_imgs
-    from .traversability_cloud import TraversabilityCloud
+    from traversability_estimation.utils import convert_label, convert_color, visualize_imgs, visualize_cloud
+    from traversability_cloud import TraversabilityCloud
     from tqdm import tqdm
-    import open3d as o3d
 
     label_mapping = {0: 255,
                      1: 0,
                      255: 1}
 
-    ds = TraversabilityCloud(path="/home/ruslan/data/datasets/TraversabilityDataset/supervised/clouds/predictions_color/")
+    ds = TraversabilityCloud(path="/home/ruslan/data/datasets/TraversabilityDataset/supervised/clouds/"
+                                  "destaggered_points_colored/")
 
     if not os.path.exists(os.path.join(ds.path, '..', 'label_id')):
         os.mkdir(os.path.join(ds.path, '..', 'label_id'))

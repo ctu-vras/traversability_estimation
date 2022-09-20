@@ -8,7 +8,7 @@ import yaml
 import numpy as np
 
 
-class SemanticUSL(BaseDatasetClouds):
+class SemanticKITTI(BaseDatasetClouds):
     CLASSES = ['unlabeled', 'outlier', 'car', 'bicycle', 'bus', 'motorcycle', 'on-rails', 'truck', 'other-vehicle',
                'person', 'bicyclist', 'motorcyclist', 'road', 'parking', 'sidewalk', 'other-ground', 'building',
                'fence', 'other-structure', 'lane-marking', 'vegetation', 'trunk', 'terrain', 'pole', 'traffic-sign',
@@ -25,19 +25,20 @@ class SemanticUSL(BaseDatasetClouds):
                  labels_mode='labels',
                  labels_mapping=None,
                  ):
-        super(SemanticUSL, self).__init__(path=path, fields=fields,
-                                          depth_img_H=64, depth_img_W=2048,
-                                          lidar_fov_up=16.6, lidar_fov_down=-16.6,
-                                          lidar_beams_step=lidar_beams_step,
-                                          )
+        super(SemanticKITTI, self).__init__(path=path, fields=fields,
+                                            depth_img_H=64, depth_img_W=2048,
+                                            lidar_fov_up=16.6, lidar_fov_down=-16.6,
+                                            lidar_beams_step=lidar_beams_step,
+                                            )
         if path is None:
-            path = os.path.join(data_dir, 'SemanticUSL', 'SemanticUSL', 'sequences')
+            path = os.path.join(data_dir, 'SemanticKITTI', 'sequences')
         assert os.path.exists(path)
         self.path = path
 
         if not sequences:
-            sequences = ['03', '12', '21', '32']
-        assert set(sequences) <= {'03', '12', '21', '32'}
+            # sequences = ['04']
+            sequences = ['%02d' % i for i in range(11)]
+        assert set(sequences) <= {'%02d' % i for i in range(11)}
         self.sequences = sequences
 
         assert labels_mode in ['masks', 'labels']
@@ -109,6 +110,39 @@ class SemanticUSL(BaseDatasetClouds):
         return len(self.files)
 
 
+class SemanticUSL(SemanticKITTI):
+
+    def __init__(self,
+                 path=None,
+                 sequences=None,
+                 split=None,
+                 fields=None,
+                 num_samples=None,
+                 lidar_beams_step=2,
+                 labels_mode='labels',
+                 labels_mapping=None
+                 ):
+        super(SemanticUSL, self).__init__(path=path, fields=fields,
+                                          split=split, num_samples=num_samples,
+                                          lidar_beams_step=lidar_beams_step, labels_mode=labels_mode,
+                                          labels_mapping=labels_mapping
+                                          )
+        if path is None:
+            path = os.path.join(data_dir, 'SemanticUSL', 'SemanticUSL', 'sequences')
+        assert os.path.exists(path)
+        self.path = path
+
+        if not sequences:
+            sequences = ['03', '12', '21', '32']
+        assert set(sequences) <= {'03', '12', '21', '32'}
+        self.sequences = sequences
+
+        self.files = self.read_files()
+        self.files = self.generate_split()
+        if num_samples:
+            self.files = self.files[:num_samples]
+
+
 def demo(n_runs=1):
     from traversability_estimation.utils import visualize_imgs, visualize_cloud
 
@@ -133,7 +167,7 @@ def demo(n_runs=1):
         color = ds.label_to_color(label)
         color_trav = ds_trav.label_to_color(label_trav)
 
-        visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color.reshape((-1, 3)))
+        # visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color.reshape((-1, 3)))
         visualize_cloud(xyz=data[:3].reshape((3, -1)).T, color=color_trav.reshape((-1, 3)))
 
         visualize_imgs(range_image=depth_img_vis,
