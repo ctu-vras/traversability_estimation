@@ -21,7 +21,7 @@ class SemanticUSL(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  num_samples=None,
-                 lidar_beams_step=1,
+                 lidar_beams_step=2,
                  labels_mode='labels',
                  labels_mapping=None,
                  ):

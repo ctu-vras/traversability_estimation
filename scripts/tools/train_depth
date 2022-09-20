@@ -124,11 +124,11 @@ def create_dataloaders(args):
 
     Dataset = eval('datasets.%s' % args.datasets[0])
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
-    train_dataset = Dataset(split='train', lidar_beams_step=2 if 'Rellis' in args.datasets[0] else None,
+    train_dataset = Dataset(split='train',
                             labels_mapping=args.labels_mapping,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
-    valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.datasets[0] else None,
+    valid_dataset = Dataset(split='val',
                             labels_mapping=args.labels_mapping,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')

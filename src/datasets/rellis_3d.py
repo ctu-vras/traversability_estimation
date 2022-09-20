@@ -290,7 +290,7 @@ class Rellis3DClouds(BaseDatasetClouds):
                  fields=None,
                  num_samples=None,
                  labels_mapping=None,
-                 lidar_beams_step=1,
+                 lidar_beams_step=2,
                  labels_mode='labels'
                  ):
         super(Rellis3DClouds, self).__init__(path=path, fields=fields,
