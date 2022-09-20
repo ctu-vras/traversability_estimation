@@ -342,7 +342,6 @@ class TraversabilityClouds(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
-                 color_map=None,
                  annotation_from_img=False,
                  labels_mapping='traversability',
                  ):

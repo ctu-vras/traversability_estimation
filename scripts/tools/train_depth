@@ -316,10 +316,13 @@ class Trainer(object):
         return loss_val, metric_val
 
     def test_model(self, dataset=None):
+        self.model = self.model.eval()
+
         # Use the current trained model and visualize a prediction
         if dataset is None:
             ds_i = np.random.choice(range(len(self.valid_datasets)))
             dataset = self.valid_datasets[ds_i]
+
         inpt, label = dataset[np.random.choice(range(len(dataset)))]
 
         inpt = torch.from_numpy(inpt[None]).to(self.device)
@@ -340,11 +343,16 @@ class Trainer(object):
         depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
                                    (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
 
-        visualize_imgs(layout='columns',
-                       prediction=color_pred,
-                       ground_truth=color_gt,
-                       depth_img=depth_img,
-                       )
+        self.tb_logger.add_image('Prediction', color_pred, dataformats='HWC')
+        self.tb_logger.add_image('Ground truth', color_gt, dataformats='HWC')
+        self.tb_logger.add_image('Depth image', depth_img, dataformats='HW')
+
+        if self.cfg.vis_preds:
+            visualize_imgs(layout='columns',
+                           prediction=color_pred,
+                           ground_truth=color_gt,
+                           depth_img=depth_img,
+                           )
 
     def train(self):
         print(self)
@@ -387,11 +395,9 @@ class Trainer(object):
                 self.optimizer.param_groups[0]['lr'] /= 10.0
                 print('Decrease decoder learning rate to %f !' % self.optimizer.param_groups[0]['lr'])
 
-            if self.cfg.vis_preds:
-                self.model = self.model.eval()
-                self.test_model()
+            self.test_model()
 
-            self.tb_logger.close()
+        self.tb_logger.close()
 
 
 def main():
