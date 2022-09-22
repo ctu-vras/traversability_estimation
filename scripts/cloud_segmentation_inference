@@ -84,6 +84,7 @@ class CloudSegmentor:
         self.max_age = rospy.get_param('~max_age', 0.3)
 
         self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
+        self.segm_cloud_sampled_pub = rospy.Publisher(rospy.get_param('~cloud_out_sampled', 'cloud_out_sampled'), PointCloud2, queue_size=1)
         self.resized_cloud_pub = rospy.Publisher('resized_cloud', PointCloud2, queue_size=1)
         self.depth_pub = rospy.Publisher('depth', Image, queue_size=1)
         self.segm_pub = rospy.Publisher('segmentation', Image, queue_size=1)
@@ -263,10 +264,16 @@ class CloudSegmentor:
 
             # publish segmented point cloud
             stamp = rospy.Time.now()
+
             segm_pc_msg = msgify_cloud(xyz_l_lsoft.cpu().numpy(),
                                        frame=self.lidar_frame, stamp=stamp,
                                        names=self.output_pc_filelds)
             self.segm_cloud_pub.publish(segm_pc_msg)
+
+            segm_pc_msg_sampled = msgify_cloud(xyz_l_lsoft.cpu().numpy()[::10],
+                                               frame=self.lidar_frame, stamp=stamp,
+                                               names=self.output_pc_filelds)
+            self.segm_cloud_sampled_pub.publish(segm_pc_msg_sampled)
 
             if self.debug:
                 # publish depth image

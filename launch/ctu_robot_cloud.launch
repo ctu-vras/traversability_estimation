@@ -4,6 +4,7 @@
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"
          doc="Point cloud segmentation network weights file (located in '../config/weights/depth_cloud/' folder)"/>
+    <arg name="max_age" default="0.3"/>
 
     <node name="points_destagger" pkg="nodelet" type="nodelet"
           args="standalone cras_ouster_driver/destagger_nodelet">
@@ -16,7 +17,7 @@
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
-            max_age: 0.3
+            max_age: $(arg max_age)
             lidar_channels: 128
             lidar_beams: 1024
             lidar_fov_up: 45.0
@@ -30,7 +31,8 @@
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>
 
         <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>
-        <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
+        <remap from="cloud_out" to="/cloud_segmentation/points"/>
+        <remap from="cloud_out_sampled" to="/cloud_segmentation/points_sampled"/>
     </node>
 
 </launch>
