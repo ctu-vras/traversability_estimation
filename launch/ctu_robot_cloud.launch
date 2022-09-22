@@ -13,7 +13,7 @@
             keep: 2
             azimuth_only: true
         </rosparam>
-        <remap from="input" to="points_filtered_slow_jetson"/>
+        <remap from="input" to="points_filtered_5hz"/>
         <remap from="output" to="points_projected"/>
     </node>
 
