@@ -1,19 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"
          doc="Point cloud segmentation network weights file (located in '../config/weights/depth_cloud/' folder)"/>
     <arg name="max_age" default="0.3"/>
+    <arg name="nodelet_manager" default="laser_nodelet_manager"/>
 
-    <node name="points_destagger" pkg="nodelet" type="nodelet"
-          args="standalone cras_ouster_driver/destagger_nodelet">
-        <remap from="info" to="/os_node/sensor_info"/>
-        <remap from="input" to="/os_cloud_node/points"/>
-        <remap from="output" to="/os_cloud_node/destaggered_points"/>
+    <node name="cloud_projection" pkg="nodelet" type="nodelet"
+          args="load cloud_proc/projection $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            keep: 2
+            azimuth_only: true
+        </rosparam>
+        <remap from="input" to="points_filtered_slow_jetson"/>
+        <remap from="output" to="points_projected"/>
     </node>
 
-    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
@@ -31,9 +35,49 @@
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>
 
-        <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>
-        <remap from="cloud_out" to="/cloud_segmentation/points"/>
-        <remap from="cloud_out_sampled" to="/cloud_segmentation/points_sampled"/>
+        <remap from="cloud_in" to="points_projected"/>
+        <remap from="cloud_out" to="~points"/>
+        <remap from="cloud_out_sampled" to="~points_sampled"/>
+    </node>
+
+    <node name="cloud_voxel_filter_10cm" pkg="nodelet" type="nodelet"
+          args="load cloud_proc/voxel_filter $(arg nodelet_manager)"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.1
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points"/>
+        <remap from="output" to="cloud_segmentation/points_10cm"/>
+    </node>
+
+    <node name="cloud_voxel_filter_20cm" pkg="nodelet" type="nodelet"
+          args="load cloud_proc/voxel_filter $(arg nodelet_manager)"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.2
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points_10cm"/>
+        <remap from="output" to="cloud_segmentation/points_20cm"/>
+    </node>
+
+    <node name="traversability" pkg="nodelet" type="nodelet"
+          args="load naex/traversability $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            radius: 0.5
+            max_dist: 0.5
+            min_support: 3
+            inclination_weight: 1.0
+            normal_std_weight: 1.0
+            fixed_frame: map
+            timeout: 1.0
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points_20cm"/>
+        <remap from="output" to="geometric_traversability"/>
     </node>
 
 </launch>
