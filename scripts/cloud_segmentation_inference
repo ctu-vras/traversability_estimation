@@ -34,7 +34,7 @@ class CloudSegmentor:
         self.lidar_beams_W = rospy.get_param('~lidar_beams', 1024)
         self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 45.0)
         self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -45.0)
-        self.proj_range = np.full((self.lidar_channels_H, self.lidar_beams_W), -1, dtype=np.float32)
+        self.range_image = np.full((self.lidar_channels_H, self.lidar_beams_W), -1, dtype=np.float32)
 
         self.device = rospy.get_param('~device', 'cpu')
         self.model_weights = rospy.get_param('~weights')
@@ -73,12 +73,6 @@ class CloudSegmentor:
 
         self.n_classes = len(self.color_map)
 
-        self.scan = SemLaserScan(nclasses=self.n_classes,
-                                 sem_color_dict=self.color_map,
-                                 project=True,
-                                 H=self.lidar_channels_H, W=self.lidar_beams_W,
-                                 fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
-
         self.lock = RLock()
         # point cloud which time stamp is older is not being processed
         self.max_age = rospy.get_param('~max_age', 0.3)
@@ -86,8 +80,8 @@ class CloudSegmentor:
         self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
         self.segm_cloud_sampled_pub = rospy.Publisher(rospy.get_param('~cloud_out_sampled', 'cloud_out_sampled'), PointCloud2, queue_size=1)
         self.resized_cloud_pub = rospy.Publisher('resized_cloud', PointCloud2, queue_size=1)
-        self.depth_pub = rospy.Publisher('depth', Image, queue_size=1)
-        self.segm_pub = rospy.Publisher('segmentation', Image, queue_size=1)
+        self.depth_pub = rospy.Publisher('~depth', Image, queue_size=1)
+        self.segm_pub = rospy.Publisher('~segmentation', Image, queue_size=1)
         self.debug = rospy.get_param('~debug', False)
 
         self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
@@ -108,14 +102,9 @@ class CloudSegmentor:
             if self.lidar_channels_H != cloud.shape[0] or self.lidar_beams_W != cloud.shape[1]:
                 self.lidar_channels_H = H
                 self.lidar_beams_W = W
-                self.scan = SemLaserScan(nclasses=self.n_classes,
-                                         sem_color_dict=self.color_map,
-                                         project=True,
-                                         H=self.lidar_channels_H, W=self.lidar_beams_W,
-                                         fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
                 resized = []
                 for i in range(cloud.shape[2]):
-                    c = cv2.resize(cloud[..., i], (self.lidar_channels_H, self.lidar_beams_W),
+                    c = cv2.resize(cloud[..., i].cpu().numpy(), (self.lidar_channels_H, self.lidar_beams_W),
                                    interpolation=cv2.INTER_LINEAR)
                     resized.append(c)
                 resized = np.stack(resized, axis=-1)
@@ -128,58 +117,24 @@ class CloudSegmentor:
                     resized_msg = msgify(PointCloud2, resized_struct)
                     self.resized_cloud_pub.publish(resized_msg)
 
+                cloud = torch.from_numpy(cloud).to(self.device)
+
             cloud = cloud.reshape([H * W, C])
         assert cloud.shape == (self.lidar_channels_H * self.lidar_beams_W, C)
 
-        self.scan.set_points(points=cloud[..., 0:3])
-        self.proj_range = self.scan.proj_range  # only range image as input
+        assert cloud.ndim == 2
+        depth = torch.linalg.norm(cloud[:, :3], ord=2, axis=1)
 
-        # TODO: rewrite preprocessing with pytorch to run on GPU
-        # self.proj_range = np.full((self.lidar_channels_H, self.lidar_beams_W), -1, dtype=np.float32)
-        #
-        # fov_up = self.lidar_fov_up / 180.0 * np.pi  # field of view up in rad
-        # fov_down = self.lidar_fov_down / 180.0 * np.pi  # field of view down in rad
-        # fov = abs(fov_down) + abs(fov_up)  # get field of view total in rad
-        #
-        # depth = np.linalg.norm(cloud[:, :3], ord=2, axis=1)
-        #
-        # scan_x = cloud[:, 0]
-        # scan_y = cloud[:, 1]
-        # scan_z = cloud[:, 2]
-        #
-        # # get angles of all points
-        # yaw = -np.arctan2(scan_y, scan_x)
-        # pitch = np.arcsin(scan_z / (depth + 1e-8))
-        #
-        # # get projections in image coords
-        # proj_x = 0.5 * (yaw / np.pi + 1.0)  # in [0.0, 1.0]
-        # proj_y = 1.0 - (pitch + abs(fov_down)) / fov  # in [0.0, 1.0]
-        #
-        # # scale to image size using angular resolution
-        # proj_x *= self.lidar_beams_W  # in [0.0, W]
-        # proj_y *= self.lidar_channels_H  # in [0.0, H]
-        #
-        # # round and clamp for use as index
-        # proj_x = np.floor(proj_x)
-        # proj_x = np.minimum(self.lidar_beams_W - 1, proj_x)
-        # proj_x = np.maximum(0, proj_x).astype(np.int32)  # in [0,W-1]
-        #
-        # proj_y = np.floor(proj_y)
-        # proj_y = np.minimum(self.lidar_channels_H - 1, proj_y)
-        # proj_y = np.maximum(0, proj_y).astype(np.int32)  # in [0,H-1]
-        #
-        # order = np.argsort(depth)[::-1]
-        # depth = depth[order]
-        # self.proj_range[proj_y, proj_x] = depth
+        self.range_image = depth.reshape((self.lidar_channels_H, self.lidar_beams_W))
 
-        rospy.logdebug('Model input shape: %s', self.proj_range.shape)
-        assert self.proj_range.shape == (self.lidar_channels_H, self.lidar_beams_W)
+        rospy.logdebug('Model input shape: %s', self.range_image.shape)
+        assert self.range_image.shape == (self.lidar_channels_H, self.lidar_beams_W)
 
-        return self.proj_range[None]
+        return self.range_image[None]
 
     def model_inference(self, input):
         # Apply inference preprocessing transforms
-        batch = torch.from_numpy(input).unsqueeze(0).to(self.device)
+        batch = input.unsqueeze(0)
         with torch.no_grad():
             pred = self.model(batch)['out']
         rospy.loginfo('Segmented result shape: %s', pred.shape)
@@ -249,7 +204,9 @@ class CloudSegmentor:
         rospy.logdebug('Point cloud of shape %s is received', cloud.shape)
 
         with self.lock:
-            input = self.preprocessing(cloud)
+            xyz = torch.from_numpy(cloud[..., :3]).to(self.device)
+
+            input = self.preprocessing(xyz)
             t1 = rospy.Time.now().to_sec()
             rospy.logdebug('Preprocessing took: %.3f [sec]' % (t1 - t0))
 
@@ -257,7 +214,6 @@ class CloudSegmentor:
             t2 = rospy.Time.now().to_sec()
             rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
 
-            xyz = torch.from_numpy(cloud[..., :3]).to(self.device)
             xyz_l_lsoft = self.postprocessing(pred, xyz=xyz)
             t3 = rospy.Time.now().to_sec()
             rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
@@ -270,7 +226,7 @@ class CloudSegmentor:
                                        names=self.output_pc_filelds)
             self.segm_cloud_pub.publish(segm_pc_msg)
 
-            segm_pc_msg_sampled = msgify_cloud(xyz_l_lsoft.cpu().numpy()[::10],
+            segm_pc_msg_sampled = msgify_cloud(xyz_l_lsoft.cpu().numpy()[::rospy.get_param('~pts_sample_step', 10)],
                                                frame=self.lidar_frame, stamp=stamp,
                                                names=self.output_pc_filelds)
             self.segm_cloud_sampled_pub.publish(segm_pc_msg_sampled)
@@ -278,7 +234,7 @@ class CloudSegmentor:
             if self.debug:
                 # publish depth image
                 power = 16
-                depth_img = np.copy(input[-1])  # depth
+                depth_img = np.copy(input[-1].cpu().numpy())  # depth
                 depth_img[depth_img > 0] = depth_img[depth_img > 0] ** (1 / power)
                 depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
                                            (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())

@@ -27,6 +27,7 @@
             labels_to_correct: []
             weights: $(arg weights)
             debug: false
+            pts_sample_step: 10
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>
 
