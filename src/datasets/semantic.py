@@ -32,11 +32,9 @@ class SemanticKITTI(BaseDatasetClouds):
                                             )
         if path is None:
             path = os.path.join(data_dir, 'SemanticKITTI', 'sequences')
-        assert os.path.exists(path)
         self.path = path
 
         if not sequences:
-            # sequences = ['04']
             sequences = ['%02d' % i for i in range(11)]
         assert set(sequences) <= {'%02d' % i for i in range(11)}
         self.sequences = sequences
@@ -73,11 +71,13 @@ class SemanticKITTI(BaseDatasetClouds):
         self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
                                  project=True, H=self.depth_img_H, W=self.depth_img_W,
                                  fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
-
-        self.files = self.read_files()
-        self.files = self.generate_split()
-        if num_samples:
-            self.files = self.files[:num_samples]
+        if os.path.exists(self.path):
+            self.files = self.read_files()
+            self.files = self.generate_split()
+            if num_samples:
+                self.files = self.files[:num_samples]
+        else:
+            print('Path to Semantic KITTI does not exist: %s' % self.path)
 
     def read_files(self):
         depths_list = []
