@@ -16,15 +16,15 @@
     <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
 <!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_labels_traversability_iou_0.54.pth"/>-->
 <!--    <arg name="weights" default='fcn_resnet50_lr_0.0001_bs_6_epoch_43_TraversabilityClouds_depth_travTrue_iou_0.22.pth'/>-->
-    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"/>
+<!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"/>-->
 <!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_37_FlexibilityClouds_depth_labels_flexibility_iou_0.559.pth"/>-->
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_66_FlexibilityClouds_depth_labels_flexibility_iou_0.537.pth"/>-->
-<!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_50_TraversabilityClouds_depth_labels_traversability_iou_0.609.pth"/>-->
+    <arg name="weights" default="fcn_resnet101_lr_1e-05_bs_8_epoch_87_TraversabilityClouds_depth_labels_traversability_iou_0.642.pth"/>
 
     <param name="use_sim_time" value="true"/>
 
     <rosparam command="load" file="$(arg params)"/>
-    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 6.0 --rate 1.0 --start 550 $(arg bag)"/>
+    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 6.0 --rate 1.0 --start 300 $(arg bag)"/>
 
     <group if="$(arg lidar_pkgs_to_points)">
         <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
@@ -37,6 +37,7 @@
 
     <include file="$(dirname)/ctu_robot_cloud.launch">
         <arg name="weights" value="$(arg weights)"/>
+        <arg name="device" value="$(arg device)"/>
     </include>
 
     <!--    Virtual bumper     -->

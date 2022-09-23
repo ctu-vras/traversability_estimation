@@ -185,6 +185,7 @@ def create_dataloaders(args):
                                   batch_size=args.batch_size,
                                   shuffle=True,
                                   num_workers=args.n_workers,
+                                  drop_last=True,
                                   pin_memory=True)
 
         valid_loader = DataLoader(valid_dataset,
@@ -232,7 +233,7 @@ class Trainer(object):
                   (args.architecture, args.lr, args.batch_size,
                    '_'.join(args.datasets), '_'.join(self.train_datasets[0].fields),
                    self.train_datasets[0].labels_mapping, time())
-        self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), 'tb_runs', log_dir))
+        self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), '../../config/tb_runs', log_dir))
 
     def __str__(self):
         return 'Training a model: %s\n' \
@@ -391,7 +392,7 @@ class Trainer(object):
             self.tb_logger.add_scalar('Valid_Dice_Loss(epoch)', loss_val, epoch_n)
 
             # change learning rate
-            if epoch_n == 60:
+            if epoch_n % 30 == 0:
                 self.optimizer.param_groups[0]['lr'] /= 10.0
                 print('Decrease decoder learning rate to %f !' % self.optimizer.param_groups[0]['lr'])
 

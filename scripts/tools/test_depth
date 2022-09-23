@@ -5,15 +5,15 @@ import torch
 from argparse import ArgumentParser
 import datasets
 import os
-from traversability_estimation.utils import visualize_imgs
+from traversability_estimation.utils import visualize_imgs, visualize_cloud
 
 
 def main():
     parser = ArgumentParser()
     # parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
-    parser.add_argument('--dataset', type=str, default='FlexibilityClouds')
-    parser.add_argument('--weights', type=str, default='deeplabv3_resnet101_lr_0.0001_bs_8_epoch_66_FlexibilityClouds_depth_labels_flexibility_iou_0.537.pth')
+    parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
+    # parser.add_argument('--dataset', type=str, default='FlexibilityClouds')
+    parser.add_argument('--weights', type=str, default='fcn_resnet101_lr_0.0001_bs_4_epoch_86_SemanticKITTI_SemanticUSL_TraversabilityClouds_depth_labels_traversability_iou_0.599.pth')
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
     print(args)
@@ -30,9 +30,9 @@ def main():
     data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in model_name]
     print('Model takes as input: %s' % ','.join(data_fields))
 
-    if 'Traversability' in model_name:
+    if 'traversability' in model_name.lower():
         labels_mapping = 'traversability'
-    elif 'Flexibility' in model_name:
+    elif 'flexibility' in model_name.lower():
         labels_mapping = 'flexibility'
     else:
         labels_mapping = None
@@ -69,6 +69,8 @@ def main():
                        prediction=color_pred,
                        ground_truth=color_gt,
                        )
+
+        visualize_cloud(xyz=ds.scan.proj_xyz.reshape((-1, 3)), color=color_pred.reshape((-1, 3)))
 
 
 if __name__ == '__main__':

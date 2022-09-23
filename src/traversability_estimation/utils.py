@@ -358,9 +358,13 @@ def convert_color(label, color_map):
     if isinstance(label, np.ndarray):
         temp = np.zeros(label.shape + (3,)).astype(np.uint8)
     elif isinstance(label, torch.Tensor):
-        temp = torch.zeros(label.shape + (3,), dtype=torch.uint8)
+        temp = torch.zeros(label.shape + (3,), dtype=torch.uint8).to(label.device)
     else:
         raise ValueError('Supported types: np.ndarray, torch.Tensor')
     for k, v in color_map.items():
+        if isinstance(label, np.ndarray):
+            v = np.asarray(v).astype(np.uint8)
+        elif isinstance(label, torch.Tensor):
+            v = torch.as_tensor(v, dtype=torch.uint8).to(label.device)
         temp[label == k] = v
     return temp

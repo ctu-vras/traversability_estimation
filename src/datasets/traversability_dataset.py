@@ -739,8 +739,8 @@ def clouds_save_labels():
                      1: 0,
                      255: 1}
 
-    ds = TraversabilityCloud(path="/home/ruslan/data/datasets/TraversabilityDataset/supervised/clouds/"
-                                  "destaggered_points_colored/")
+    ds = TraversabilityCloud(path=os.path.join(data_dir, "TraversabilityDataset/supervised/clouds/"
+                                                         "destaggered_points_colored/"))
 
     if not os.path.exists(os.path.join(ds.path, '..', 'label_id')):
         os.mkdir(os.path.join(ds.path, '..', 'label_id'))
@@ -750,28 +750,25 @@ def clouds_save_labels():
         os.mkdir(os.path.join(ds.path, '..', 'destaggered_points'))
 
     for i in tqdm(range(len(ds))):
-        cloud, label = ds[i]
+        points, label = ds[i]
 
         label = convert_label(label, label_mapping=label_mapping, inverse=False)
         color = convert_color(label, color_map=TRAVERSABILITY_COLOR_MAP)
 
-        # visualize(color=color)
-        # pcd = o3d.geometry.PointCloud()
-        # pcd.points = o3d.utility.Vector3dVector(cloud.reshape((-1, 3)))
-        # pcd.colors = o3d.utility.Vector3dVector(color.reshape((-1, 3)))
-        # o3d.visualization.draw_geometries([pcd])
+        # visualize_imgs(color=color)
+        # visualize_cloud(xyz=points.reshape((-1, 3)), color=color.reshape((-1, 3)))
 
-        np.savez(ds.point_clouds[i].replace('predictions_color', 'destaggered_points').replace('.pcd', '.npz'), cloud)
+        np.savez(ds.point_clouds[i].replace('predictions_color', 'destaggered_points').replace('.pcd', '.npz'), points)
         np.savez(ds.point_clouds[i].replace('predictions_color', 'label_id').replace('.pcd', '.npz'), label)
         np.savez(ds.point_clouds[i].replace('predictions_color', 'label_color').replace('.pcd', '.npz'), color)
 
 
 def main():
-    # clouds_save_labels()
+    clouds_save_labels()
     # images_demo(1)
     # images_save_labels()
-    flexibility_demo(1)
-    traversability_demo(1)
+    # flexibility_demo(1)
+    # traversability_demo(1)
     # label_cloud_from_img(visualize=True)
 
 
