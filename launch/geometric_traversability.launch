@@ -67,4 +67,10 @@
         <remap from="input" to="max_points_125mm"/>
         <remap from="output" to="geometric_traversability_raw"/>
     </node>
+    <node pkg="augmented_robot_trackers" type="virtual_bumper_marv_sys.py" name="virtual_bumper" output="screen">
+        <rosparam command="load" file="$(find augmented_robot_trackers)/src/utilities/configs/virtual_bumper_husky_sys.yaml"/>
+        <remap from="cmd_vel_in" to="nav/cmd_vel"/>
+        <remap from="cmd_vel_out" to="nav_safety/cmd_vel"/>
+        <remap from="points_filtered" to="max_points_125mm"/>
+    </node>
 </launch>
