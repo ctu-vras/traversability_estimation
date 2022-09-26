@@ -358,7 +358,7 @@ class TraversabilityClouds(BaseDatasetClouds):
         assert os.path.exists(path)
         self.path = os.path.join(path, 'clouds')
 
-        self.class_values = [0, 1, 255]
+        self.class_values = [0, 1, VOID_VALUE]
         self.mask_targets = {value: key for key, value in TRAVERSABILITY_LABELS.items()}
         self.color_map = TRAVERSABILITY_COLOR_MAP
 

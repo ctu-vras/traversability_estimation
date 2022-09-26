@@ -92,31 +92,7 @@ class CloudSegmentor:
     def preprocessing(self, cloud):
         C = cloud.shape[-1]
         if cloud.ndim == 3:
-            H, W, C = cloud.shape
-
-            # Resize if needed.
-            # if False and (self.lidar_channels != cloud.shape[0] or self.lidar_beams != cloud.shape[1]):
-            if self.lidar_channels_H != cloud.shape[0] or self.lidar_beams_W != cloud.shape[1]:
-                self.lidar_channels_H = H
-                self.lidar_beams_W = W
-                resized = []
-                for i in range(cloud.shape[2]):
-                    c = cv2.resize(cloud[..., i].cpu().numpy(), (self.lidar_channels_H, self.lidar_beams_W),
-                                   interpolation=cv2.INTER_LINEAR)
-                    resized.append(c)
-                resized = np.stack(resized, axis=-1)
-                cloud = resized
-                rospy.loginfo('Point cloud resized to %s', resized.shape)
-
-                if self.debug:
-                    # Publish resized point cloud for debugging.
-                    resized_struct = unstructured_to_structured(resized, names=self.input_pc_fields)
-                    resized_msg = msgify(PointCloud2, resized_struct)
-                    self.resized_cloud_pub.publish(resized_msg)
-
-                cloud = torch.from_numpy(cloud).to(self.device)
-
-            cloud = cloud.reshape([H * W, C])
+            cloud = cloud.reshape((-1, C))
         assert cloud.shape == (self.lidar_channels_H * self.lidar_beams_W, C)
 
         assert cloud.ndim == 2
@@ -172,7 +148,7 @@ class CloudSegmentor:
 
         label_threshold = label_threshold.reshape((n_pts, 1))
         label_soft = label_soft.reshape((n_pts, 1))
-        xyz_l_lsoft = torch.concat([xyz, label_threshold, label_soft], dim=1)
+        xyz_l_lsoft = torch.cat([xyz, label_threshold, label_soft], dim=1)
         assert xyz_l_lsoft.shape == (n_pts, 5)
 
         rospy.logdebug('XYZ_L_Lsoft cloud shape: %s', xyz_l_lsoft.shape)
@@ -222,11 +198,6 @@ class CloudSegmentor:
                                             frame=self.lidar_frame, stamp=stamp,
                                             names=self.output_pc_filelds)
             self.segm_cloud_pub.publish(segm_pc_msg)
-
-            segm_pc_msg_sampled = self.msgify_cloud(xyz_l_lsoft.cpu().numpy()[::rospy.get_param('~pts_sample_step', 10)],
-                                                    frame=self.lidar_frame, stamp=stamp,
-                                                    names=self.output_pc_filelds)
-            self.segm_cloud_sampled_pub.publish(segm_pc_msg_sampled)
 
             if self.debug:
                 # publish depth image

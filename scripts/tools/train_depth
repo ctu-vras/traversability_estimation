@@ -24,7 +24,7 @@ def parse_arguments():
     parser.add_argument('--datasets', nargs='+', type=str, default='Rellis3DClouds')
     parser.add_argument('--labels_mapping', type=str, default=None)
     parser.add_argument('--dont_save_models', action='store_true')
-    parser.add_argument('--architecture', type=str, default='fcn_resnet101')
+    parser.add_argument('--architecture', type=str, default='deeplabv3')
     parser.add_argument('--pretrained_weights', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_epochs', type=int, default=100)
