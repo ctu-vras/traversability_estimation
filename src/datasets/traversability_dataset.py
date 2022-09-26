@@ -365,7 +365,7 @@ class TraversabilityClouds(BaseDatasetClouds):
         assert split in [None, 'train', 'val', 'test']
         self.split = split
 
-        assert self.labels_mapping == 'traversability'
+        self.labels_mapping = 'traversability'
 
         # whether to use semantic labels from annotated images
         self.annotation_from_img = annotation_from_img

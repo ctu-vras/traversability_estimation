@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<launch>
+    <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-06-30-14-23-28.bag $(dirname)/../data/bags/traversability/tradr/ugv_2022-06-30-14-23-28_cameras.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
+<!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/dev/kn_square_total_station.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-09-17-50-13.bag"/>-->
+
+    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
+    <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
+    <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_labels_None_iou_0.34.pth"/>-->
+    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_89_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.282.pth"/>
+
+    <param name="use_sim_time" value="true"/>
+
+    <rosparam command="load" file="$(arg params)"/>
+    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 6.0 --rate 1.0 --start 300 $(arg bag)"/>
+
+    <group if="$(arg lidar_pkgs_to_points)">
+        <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
+    </group>
+
+    <node name="points_destagger" pkg="nodelet" type="nodelet"
+          args="standalone cras_ouster_driver/destagger_nodelet">
+        <remap from="info" to="/os_node/sensor_info"/>
+        <remap from="input" to="/os_cloud_node/points"/>
+        <remap from="output" to="/os_cloud_node/destaggered_points"/>
+    </node>
+
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb" output="screen">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            max_age: 1.0
+            lidar_channels: 64
+            lidar_beams: 2048
+            lidar_fov_up: 22.5
+            lidar_fov_down: -22.5
+            input_filelds: ['x', 'y', 'z', 'i']
+            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
+            weights: $(arg weights)
+        </rosparam>
+        <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>
+        <remap from="cloud_out" to="/cloud_segmentation/points"/>
+    </node>
+
+    <!-- RVIZ -->
+    <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find traversability_estimation)/config/rviz/demo_cloud.rviz"/>
+
+</launch>

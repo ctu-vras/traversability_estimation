@@ -38,6 +38,7 @@
     <include file="$(dirname)/ctu_robot_cloud.launch">
         <arg name="weights" value="$(arg weights)"/>
         <arg name="device" value="$(arg device)"/>
+        <arg name="debug" value="true"/>
     </include>
 
     <!--    Virtual bumper     -->

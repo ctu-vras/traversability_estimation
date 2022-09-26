@@ -5,6 +5,7 @@
     <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"
          doc="Point cloud segmentation network weights file (located in '../config/weights/depth_cloud/' folder)"/>
     <arg name="max_age" default="0.3"/>
+    <arg name="debug" default="false"/>
 
     <node name="points_destagger" pkg="nodelet" type="nodelet"
           args="standalone cras_ouster_driver/destagger_nodelet">
@@ -13,7 +14,7 @@
         <remap from="output" to="/os_cloud_node/destaggered_points"/>
     </node>
 
-    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation" output="screen">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
@@ -24,9 +25,8 @@
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
             output_fields: ['x', 'y', 'z', 'obstacle', 'obstacle_soft']
-            labels_to_correct: []
             weights: $(arg weights)
-            debug: false
+            debug: $(arg debug)
             pts_sample_step: 10
         </rosparam>
         <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>

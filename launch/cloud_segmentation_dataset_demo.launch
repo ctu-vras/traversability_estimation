@@ -11,7 +11,7 @@
         <arg name="pose_step" value="10"/>
     </include>
 
-    <node name="cloud_segmentation_inference" pkg="traversability_estimation" type="cloud_segmentation_inference" output="screen">
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb" output="screen">
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: 1.0
@@ -21,12 +21,10 @@
             lidar_fov_down: -22.5
             input_filelds: ['x', 'y', 'z', 'i']
             output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
-<!--            weights: 'fcn_resnet101_lr_0.0001_bs_16_epoch_22_Rellis3DClouds_depth_iou_0.67.pth'-->
-            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth
+            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_5_Rellis3DClouds_intensity_z_depth_iou_0.63.pth
         </rosparam>
-        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
-        <remap from="cloud_out" to="/cloud_segmentation/lidar_cloud"/>
+        <remap from="cloud_out" to="/cloud_segmentation/points"/>
     </node>
 
     <!-- RVIZ -->
