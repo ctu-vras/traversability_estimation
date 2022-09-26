@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="cloud" default="points_filtered_jetson"/>
+    <arg name="nodelet_manager" default="laser_nodelet_manager"/>
+    <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+
+    <node name="max_filter_projection" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) cloud_proc/projection $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <rosparam>
+            height: 64
+            f_elevation: -40.74366543152521  <!-- 90 deg -->
+<!--            azimuth_only: true-->
+            width: 256
+            keep: 3  <!-- max depth -->
+        </rosparam>
+        <remap from="input" to="$(arg cloud)"/>
+        <remap from="output" to="max_points"/>
+    </node>
+    <node name="max_filter_depth" pkg="traversability_estimation" type="cloud_to_depth">
+        <rosparam>
+            negative: true
+        </rosparam>
+        <remap from="cloud" to="max_points"/>
+        <remap from="image" to="max_points_depth"/>
+    </node>
+    <node name="cloud_range_filter_max" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) cloud_proc/range_filter $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <rosparam>
+            field: x
+            min: 0.8
+            max: 8.0
+        </rosparam>
+        <remap from="input" to="max_points"/>
+        <remap from="output" to="max_points_in_range"/>
+    </node>
+    <node name="cloud_voxel_filter_max" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) cloud_proc/voxel_filter $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <rosparam>
+            field: x
+            grid: 0.125
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="max_points_in_range"/>
+        <remap from="output" to="max_points_125mm"/>
+    </node>
+    <node name="traversability_estimation_max" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) naex/traversability $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <rosparam>
+            radius: 0.4
+            max_dist: 0.4
+            min_support: 3
+            inclination_weight: 1.0
+            normal_std_weight: 0.5
+            fixed_frame: odom
+            timeout: 1.0
+        </rosparam>
+        <remap from="input" to="max_points_125mm"/>
+        <remap from="output" to="max_points_traversability"/>
+    </node>
+</launch>
