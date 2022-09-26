@@ -24,7 +24,7 @@ def parse_arguments():
     parser.add_argument('--datasets', nargs='+', type=str, default='Rellis3DClouds')
     parser.add_argument('--labels_mapping', type=str, default=None)
     parser.add_argument('--dont_save_models', action='store_true')
-    parser.add_argument('--architecture', type=str, default='deeplabv3')
+    parser.add_argument('--architecture', type=str, default='deeplabv3_resnet101')
     parser.add_argument('--pretrained_weights', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_epochs', type=int, default=100)
@@ -32,6 +32,7 @@ def parse_arguments():
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--vis_preds', action='store_true')
+    parser.add_argument('--loss_fn', type=str, default='cross_entropy')
     args = parser.parse_args()
 
     return args
@@ -218,10 +219,16 @@ class Trainer(object):
         # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
         ignore_label = 0 if not VOID_VALUE in self.train_datasets[0].class_values else VOID_VALUE
         print('Ignoring label value: %i' % ignore_label)
-        self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
-                                                log_loss=True,
-                                                from_logits=True,
-                                                ignore_index=ignore_label)
+        assert self.cfg.loss_fn in ['cross_entropy', 'dice']
+        if self.cfg.loss_fn == 'dice':
+            self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
+                                                    log_loss=True,
+                                                    from_logits=True,
+                                                    ignore_index=ignore_label)
+        elif self.cfg.loss_fn == 'cross_entropy':
+            weights = torch.as_tensor([0.8, 0.2], device=self.device) if self.cfg.labels_mapping == 'flexibility' else None
+            self.criterion_fn = torch.nn.CrossEntropyLoss(ignore_index=ignore_label,
+                                                          weight=weights)
 
         # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
         # self.metric_fn = smp.utils.metrics.IoU(threshold=0.5)

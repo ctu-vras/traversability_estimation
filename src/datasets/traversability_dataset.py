@@ -8,7 +8,6 @@ try:
     import fiftyone as fo
 except:
     print('Fiftyone lib is not installed')
-from datasets.laserscan import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_LABELS, FLEXIBILITY_COLOR_MAP
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
