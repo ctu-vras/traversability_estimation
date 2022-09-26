@@ -4,9 +4,10 @@
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
 <!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
-<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/dev/kn_square_total_station.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-09-17-50-13.bag"/>-->
 
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
@@ -14,31 +15,82 @@
     <arg name="record" default="false" doc="If record topics to a bag file."/>
     <arg name="topics_to_record" default="fix mag_azimuth path tf tf_static cloud_segmentation/lidar_cloud"/>
     <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
+    <arg name="nodelet_manager" default="laser_nodelet_manager"/>
+
 <!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_z_intensity_depth_labels_traversability_iou_0.54.pth"/>-->
 <!--    <arg name="weights" default='fcn_resnet50_lr_0.0001_bs_6_epoch_43_TraversabilityClouds_depth_travTrue_iou_0.22.pth'/>-->
 <!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"/>-->
 <!--    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_37_FlexibilityClouds_depth_labels_flexibility_iou_0.559.pth"/>-->
-<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_66_FlexibilityClouds_depth_labels_flexibility_iou_0.537.pth"/>-->
-    <arg name="weights" default="fcn_resnet101_lr_1e-05_bs_8_epoch_87_TraversabilityClouds_depth_labels_traversability_iou_0.642.pth"/>
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_6_FlexibilityClouds_depth_labels_flexibility_iou_0.507.pth"/>-->
+<!--    <arg name="weights" default="fcn_resnet101_lr_1e-05_bs_8_epoch_87_TraversabilityClouds_depth_labels_traversability_iou_0.642.pth"/>-->
+    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_42_TraversabilityClouds_depth_labels_traversability_iou_0.627.pth"/>
 
     <param name="use_sim_time" value="true"/>
 
     <rosparam command="load" file="$(arg params)"/>
-    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 6.0 --rate 1.0 --start 300 $(arg bag)"/>
 
-    <group if="$(arg lidar_pkgs_to_points)">
-        <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
-    </group>
+    <remap from="/os_cloud_node/points" to="points"/>
+    <node name="rosbag_play" pkg="rosbag" type="play" args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)"/>
 
-    <node name="cloud_to_depth_destaggered" pkg="traversability_estimation" type="cloud_to_depth">
-        <remap from="cloud" to="/os_cloud_node/destaggered_points"/>
-        <remap from="image" to="/os_cloud_node/destaggered_points_depth"/>
+    <node name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <param name="num_worker_threads" value="16"/>
+    </node>
+
+    <node name="play_tf_static" pkg="traversability_estimation" type="play_tf_static"
+         args="$(arg bag)" output="log">
+        <remap from="~tf_static" to="/tf_static"/>
+    </node>
+
+    <include if="$(arg lidar_pkgs_to_points)" file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
+        <arg name="nodelet_manager" value="$(arg nodelet_manager)"/>
+    </include>
+
+    <node name="laser_filter" pkg="nodelet" type="nodelet"
+          args="load cloud_proc/CropBoxImproved $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            min_x: -0.5
+            max_x: 0.5
+            min_y: -0.3
+            max_y: 0.3
+            min_z: -0.14
+            max_z: 0.6
+            negative: true
+            keep_organized: true
+            input_frame: base_link
+            output_frame: os_sensor
+            receive:
+                rate:
+                    desired: 10
+                delay:
+                    min: 0.1
+                    max: 0.2
+            publish:
+                rate:
+                    desired: 10
+                delay:
+                    min: 0.1
+                    max: 0.2
+        </rosparam>
+        <remap from="~input" to="points"/>
+        <remap from="~output" to="points_filtered"/>
+    </node>
+
+    <node name="points_filtered_throttle_5hz" pkg="nodelet" type="nodelet"
+          args="load cras_nodelet_topic_tools/throttle_messages $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <param name="frequency" value="5.0"/>
+        <remap from="~input" to="points_filtered"/>
+        <remap from="~output" to="points_filtered_5hz"/>
     </node>
 
     <include file="$(dirname)/ctu_robot_cloud.launch">
         <arg name="weights" value="$(arg weights)"/>
         <arg name="device" value="$(arg device)"/>
         <arg name="debug" value="true"/>
+        <arg name="nodelet_manager" value="$(arg nodelet_manager)"/>
+        <arg name="cloud_in" value="points_filtered_5hz"/>
     </include>
 
     <!--    Virtual bumper     -->

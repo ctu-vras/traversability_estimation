@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_4_epoch_5_TraversabilityClouds_depth_labels_traversability_iou_0.636.pth"
-         doc="Point cloud segmentation network weights file (located in '../config/weights/depth_cloud/' folder)"/>
+    <arg name="labels_mapping" default="traversability"
+         doc="Point cloud segmentation network output type, weights files must be located in
+         '../config/weights/depth_cloud/' folder"/>
     <arg name="max_age" default="0.3"/>
+    <arg name="cloud_in" default="points_filtered_5hz"/>
     <arg name="debug" default="false"/>
-
     <arg name="nodelet_manager" default="laser_nodelet_manager"/>
 
     <node name="cloud_projection" pkg="nodelet" type="nodelet"
@@ -15,7 +16,7 @@
             keep: 2
             azimuth_only: true
         </rosparam>
-        <remap from="input" to="points_filtered_5hz"/>
+        <remap from="input" to="$(arg cloud_in)"/>
         <remap from="output" to="points_projected"/>
     </node>
 
@@ -30,14 +31,15 @@
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
             output_fields: ['x', 'y', 'z', 'obstacle', 'obstacle_soft']
-            weights: $(arg weights)
+            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_8_FlexibilityClouds_depth_labels_flexibility_iou_0.512.pth
+            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_42_TraversabilityClouds_depth_labels_traversability_iou_0.627.pth
+            labels_mapping: $(arg labels_mapping)
             debug: $(arg debug)
             pts_sample_step: 10
         </rosparam>
 
         <remap from="cloud_in" to="points_projected"/>
         <remap from="cloud_out" to="~points"/>
-        <remap from="cloud_out_sampled" to="~points_sampled"/>
     </node>
 
     <node name="cloud_voxel_filter_10cm" pkg="nodelet" type="nodelet"
