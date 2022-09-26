@@ -1,4 +1,3 @@
-#from abc import ABC
 import cv2
 import numpy as np
 import random
@@ -280,9 +279,11 @@ class BaseDatasetClouds(data.Dataset):
     def create_sample(self, label=None):
 
         # following SalsaNext approach: (x, y, z, intensity, depth)
+        # depth = self.scan.unproj_range.reshape([self.depth_img_H, self.depth_img_W])
+        depth = self.scan.proj_range
         xyzid = np.concatenate([self.scan.proj_xyz.transpose([2, 0, 1]),  # (3 x H x W)
                                 self.scan.proj_remission[None],  # (1 x H x W)
-                                self.scan.proj_range[None]], axis=0)  # (1 x H x W)
+                                depth[None]], axis=0)  # (1 x H x W)
 
         # select input data according to the fields list
         ids = [['x', 'y', 'z', 'intensity', 'depth'].index(f) for f in self.fields]

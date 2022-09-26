@@ -8,7 +8,6 @@ try:
     import fiftyone as fo
 except:
     print('Fiftyone lib is not installed')
-from datasets.laserscan import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_LABELS, FLEXIBILITY_COLOR_MAP
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
@@ -358,7 +357,7 @@ class TraversabilityClouds(BaseDatasetClouds):
         assert os.path.exists(path)
         self.path = os.path.join(path, 'clouds')
 
-        self.class_values = [0, 1, 255]
+        self.class_values = [0, 1, VOID_VALUE]
         self.mask_targets = {value: key for key, value in TRAVERSABILITY_LABELS.items()}
         self.color_map = TRAVERSABILITY_COLOR_MAP
 
