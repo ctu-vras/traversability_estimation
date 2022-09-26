@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
     <arg name="cloud" default="points_filtered_jetson"/>
-    <arg name="nodelet_manager" default="laser_nodelet_manager"/>
+    <arg name="nodelet_manager" default="geometric_traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+
+    <node if="$(eval nodelet_manager == 'geometric_traversability_manager')"
+          name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <param name="num_worker_threads" value="16"/>
+    </node>
 
     <node name="max_filter_projection" pkg="nodelet" type="nodelet"
           args="$(arg nodelet_action) cloud_proc/projection $(arg nodelet_manager)"
