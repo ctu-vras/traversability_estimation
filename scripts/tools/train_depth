@@ -248,7 +248,7 @@ class Trainer(object):
     def prepare_model(self):
         if self.cfg.pretrained_weights is None:
             n_inputs = self.train_datasets[0][0][0].shape[0]
-            n_classes = len(self.train_datasets[0].class_values)
+            n_classes = len(self.train_datasets[0].class_values) - 1
             print('Model takes as input %i argument: %s' % (n_inputs, str(self.cfg.data_fields)))
 
             model = create_model(self.cfg.architecture, n_inputs, n_classes, pretrained_backbone=False)
@@ -392,7 +392,7 @@ class Trainer(object):
             self.tb_logger.add_scalar('Valid_Dice_Loss(epoch)', loss_val, epoch_n)
 
             # change learning rate
-            if epoch_n % 30 == 0:
+            if epoch_n % 30 == 0 and epoch_n > 0:
                 self.optimizer.param_groups[0]['lr'] /= 10.0
                 print('Decrease decoder learning rate to %f !' % self.optimizer.param_groups[0]['lr'])
 
