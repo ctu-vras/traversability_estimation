@@ -65,6 +65,6 @@
             timeout: 1.0
         </rosparam>
         <remap from="input" to="max_points_125mm"/>
-        <remap from="output" to="max_points_traversability"/>
+        <remap from="output" to="geometric_traversability_raw"/>
     </node>
 </launch>
