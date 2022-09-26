@@ -5,7 +5,7 @@
 	             doc="Point cloud segmentation network output type, weights files must be located in
 		              '../config/weights/depth_cloud/' folder"/>
     <arg name="max_age" default="0.3"/>
-    <arg name="nodelet_manager" default="laser_nodelet_manager"/>
+    <arg name="nodelet_manager" default="segmentation_nodelet_manager"/>
 
     <node name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
           respawn="true" respawn_delay="1.0" output="screen">
@@ -74,49 +74,4 @@
         <remap from="input" to="cloud_segmentation/points_10cm"/>
         <remap from="output" to="cloud_segmentation/points_20cm"/>
     </node>
-
-    <node name="traversability" pkg="nodelet" type="nodelet"
-          args="load naex/traversability $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            radius: 0.5
-            max_dist: 0.5
-            min_support: 3
-            inclination_weight: 1.0
-            normal_std_weight: 1.0
-            fixed_frame: odom
-            timeout: 5.0
-        </rosparam>
-        <remap from="input" to="cloud_segmentation/points_20cm"/>
-        <remap from="output" to="geometric_traversability"/>
-    </node>
-
-    <node name="$(anon cloud_voxel_filter_20cm)" pkg="nodelet" type="nodelet"
-          args="load cloud_proc/voxel_filter $(arg nodelet_manager)"
-            respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            field: x
-            grid: 0.2
-            zero_valid: false
-        </rosparam>
-        <remap from="input" to="points_filtered_5hz"/>
-        <remap from="output" to="points_20cm"/>
-    </node>
-    
-    <node name="traversability_raw" pkg="nodelet" type="nodelet"
-          args="load naex/traversability $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            radius: 0.5
-            max_dist: 0.5
-            min_support: 3
-            inclination_weight: 1.0
-            normal_std_weight: 1.0
-            fixed_frame: odom
-            timeout: 5.0
-        </rosparam>
-        <remap from="input" to="points_20cm"/>
-        <remap from="output" to="geometric_traversability_raw"/>
-    </node>
-
 </launch>
