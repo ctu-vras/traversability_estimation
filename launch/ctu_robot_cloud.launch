@@ -2,12 +2,23 @@
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="labels_mapping" default="traversability"
-         doc="Point cloud segmentation network output type, weights files must be located in
-         '../config/weights/depth_cloud/' folder"/>
+	             doc="Point cloud segmentation network output type, weights files must be located in
+		              '../config/weights/depth_cloud/' folder"/>
     <arg name="max_age" default="0.3"/>
-    <arg name="cloud_in" default="points_filtered_5hz"/>
-    <arg name="debug" default="false"/>
     <arg name="nodelet_manager" default="laser_nodelet_manager"/>
+
+    <node name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <param name="num_worker_threads" value="8"/>
+    </node>
+
+    <node name="points_filtered_throttle_5hz" pkg="nodelet" type="nodelet"
+          args="load cras_nodelet_topic_tools/throttle_messages $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <param name="frequency" value="5.0"/>
+        <remap from="~input" to="points_filtered_jetson"/>
+        <remap from="~output" to="points_filtered_5hz"/>
+    </node>
 
     <node name="cloud_projection" pkg="nodelet" type="nodelet"
           args="load cloud_proc/projection $(arg nodelet_manager)"
@@ -16,7 +27,7 @@
             keep: 2
             azimuth_only: true
         </rosparam>
-        <remap from="input" to="$(arg cloud_in)"/>
+        <remap from="input" to="points_filtered_5hz"/>
         <remap from="output" to="points_projected"/>
     </node>
 
@@ -31,13 +42,11 @@
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
             output_fields: ['x', 'y', 'z', 'obstacle', 'obstacle_soft']
-            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_8_FlexibilityClouds_depth_labels_flexibility_iou_0.512.pth
+            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_6_FlexibilityClouds_depth_labels_flexibility_iou_0.507.pth
             traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_42_TraversabilityClouds_depth_labels_traversability_iou_0.627.pth
             labels_mapping: $(arg labels_mapping)
-            debug: $(arg debug)
-            pts_sample_step: 10
+            debug: false
         </rosparam>
-
         <remap from="cloud_in" to="points_projected"/>
         <remap from="cloud_out" to="~points"/>
     </node>
@@ -75,11 +84,39 @@
             min_support: 3
             inclination_weight: 1.0
             normal_std_weight: 1.0
-            fixed_frame: map
-            timeout: 1.0
+            fixed_frame: odom
+            timeout: 5.0
         </rosparam>
         <remap from="input" to="cloud_segmentation/points_20cm"/>
         <remap from="output" to="geometric_traversability"/>
+    </node>
+
+    <node name="$(anon cloud_voxel_filter_20cm)" pkg="nodelet" type="nodelet"
+          args="load cloud_proc/voxel_filter $(arg nodelet_manager)"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.2
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="points_filtered_5hz"/>
+        <remap from="output" to="points_20cm"/>
+    </node>
+    
+    <node name="traversability_raw" pkg="nodelet" type="nodelet"
+          args="load naex/traversability $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            radius: 0.5
+            max_dist: 0.5
+            min_support: 3
+            inclination_weight: 1.0
+            normal_std_weight: 1.0
+            fixed_frame: odom
+            timeout: 5.0
+        </rosparam>
+        <remap from="input" to="points_20cm"/>
+        <remap from="output" to="geometric_traversability_raw"/>
     </node>
 
 </launch>

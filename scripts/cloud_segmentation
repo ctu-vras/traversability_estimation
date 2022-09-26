@@ -96,7 +96,8 @@ class CloudSegmentor:
         assert cloud.shape == (self.lidar_channels_H * self.lidar_beams_W, C)
 
         assert cloud.ndim == 2
-        depth = torch.linalg.norm(cloud[:, :3], ord=2, axis=1)
+        #depth = torch.linalg.norm(cloud[:, :3], ord=2, axis=1)
+        depth = (cloud[:, :3]**2).sum(axis=1).sqrt()
 
         self.range_image = depth.reshape((self.lidar_channels_H, self.lidar_beams_W))
 
@@ -130,7 +131,7 @@ class CloudSegmentor:
             label_threshold = label_soft > np.log(rospy.get_param('~trav_threshold'))
         else:
             label_threshold = torch.argmax(label_pred, dim=0)
-        label_threshold = torch.as_tensor(label_threshold, dtype=torch.int)
+        label_threshold = torch.as_tensor(label_threshold, dtype=torch.float, device=self.device)
         assert label_threshold.shape == (H, W)
 
         if self.debug:
@@ -148,6 +149,7 @@ class CloudSegmentor:
 
         label_threshold = label_threshold.reshape((n_pts, 1))
         label_soft = label_soft.reshape((n_pts, 1))
+
         xyz_l_lsoft = torch.cat([xyz, label_threshold, label_soft], dim=1)
         assert xyz_l_lsoft.shape == (n_pts, 5)
 
