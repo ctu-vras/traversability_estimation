@@ -313,7 +313,7 @@ class Trainer(object):
             with torch.no_grad():
                 pred = self.model(inpt)['out']  # make prediction
 
-                metric_sample = self.compute_metric(pred, labels, itr)
+                metric_sample = self.compute_metric(pred, labels, itr=itr)
                 loss_val = self.criterion_fn(pred, labels.long())
 
             iou = metric_sample.cpu().numpy()

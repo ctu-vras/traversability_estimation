@@ -33,15 +33,15 @@ def main():
     print('Model takes as input: %s' % ','.join(data_fields))
 
     if 'traversability' in model_name.lower():
-        labels_mapping = 'traversability'
+        output = 'traversability'
     elif 'flexibility' in model_name.lower():
-        labels_mapping = 'flexibility'
+        output = 'flexibility'
     else:
-        labels_mapping = None
+        output = None
 
     Dataset = eval('datasets.%s' % args.dataset)
     ds = Dataset(split='test', fields=data_fields,
-                 labels_mapping=labels_mapping,
+                 output=output,
                  lidar_beams_step=2 if 'Rellis' in args.dataset else 1)
 
     for _ in range(5):
