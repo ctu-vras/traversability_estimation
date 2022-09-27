@@ -266,7 +266,7 @@ class Trainer(object):
         model = model.to(self.device)
         return model
 
-    def compute_metric(self, pred, labels, ignore_label=VOID_VALUE):
+    def compute_metric(self, pred, labels, ignore_label=VOID_VALUE, itr=None):
         # https://stackoverflow.com/questions/48260415/pytorch-how-to-compute-iou-jaccard-index-for-semantic-segmentation
         N, C, H, W = pred.shape
         assert labels.shape == (N, H, W)
@@ -276,7 +276,11 @@ class Trainer(object):
         pred = pred * mask.unsqueeze(1)
         labels = labels * mask
 
-        iou = self.metric_fn(pred, labels)
+        ious = self.metric_fn(pred, labels)
+        for i in range(len(ious)):
+            # print('IOU for class %s: %f' % (self.train_datasets[0].CLASSES[i], ious[i]))
+            self.tb_logger.add_scalar('IOU for class %s' % self.train_datasets[0].CLASSES[i], ious[i], itr)
+        iou = torch.mean(ious)
 
         return iou
 
@@ -309,7 +313,7 @@ class Trainer(object):
             with torch.no_grad():
                 pred = self.model(inpt)['out']  # make prediction
 
-                metric_sample = self.compute_metric(pred, labels)
+                metric_sample = self.compute_metric(pred, labels, itr)
                 loss_val = self.criterion_fn(pred, labels.long())
 
             iou = metric_sample.cpu().numpy()
@@ -390,7 +394,7 @@ class Trainer(object):
                            (self.cfg.architecture,
                             self.cfg.lr, self.cfg.batch_size, epoch_n,
                             '_'.join(self.cfg.datasets), '_'.join(self.train_datasets[0].fields),
-                            self.train_datasets[0].labels_mapping, float(metric_val))
+                            self.train_datasets[0].output, float(metric_val))
 
                     print("Saving Model:", name)
                     torch.save(self.model, os.path.join(os.path.dirname(__file__), name))

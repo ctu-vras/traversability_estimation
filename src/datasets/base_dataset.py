@@ -199,7 +199,7 @@ class BaseDatasetClouds(data.Dataset):
                  depth_img_W=1024,
                  lidar_fov_up=45.0,
                  lidar_fov_down=-45.0,
-                 labels_mapping=None,
+                 output=None,
                  ):
         self.path = path
         self.split = None
@@ -219,8 +219,8 @@ class BaseDatasetClouds(data.Dataset):
         self.scan = None
         self.classes_to_correct = []
 
-        assert labels_mapping in [None, 'traversability', 'flexibility']
-        self.labels_mapping = labels_mapping
+        assert output in [None, 'traversability', 'flexibility']
+        self.output = output
 
         self.depth_img_W = depth_img_W
         self.depth_img_H = depth_img_H
@@ -237,7 +237,7 @@ class BaseDatasetClouds(data.Dataset):
             C, H, W = label.shape
             label = np.argmax(label, axis=0)
             assert label.shape == (H, W)
-        if self.labels_mapping is None:
+        if self.output is None:
             if self.learning_map_inv:
                 label = convert_label(label, inverse=False, label_mapping=self.learning_map_inv)
             else:
@@ -295,7 +295,7 @@ class BaseDatasetClouds(data.Dataset):
             if self.label_map is not None:
                 label = self.label_map[label]
 
-        if self.labels_mapping is None:
+        if self.output is None:
             label = convert_label(label, inverse=False, label_mapping=self.learning_map)
             for cl in self.classes_to_correct:
                 label = correct_label(label, value_to_correct=self.CLASSES.index(cl), value_to_assign=0)
