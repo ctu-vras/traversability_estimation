@@ -29,11 +29,11 @@ class CloudSegmentor:
 
         self.device = rospy.get_param('~device', 'cpu')
 
-        self.labels_mapping = rospy.get_param('~labels_mapping', 'traversability')
-        assert self.labels_mapping in ['traversability', 'flexibility']
-        rospy.loginfo('Model predicts %s labels' % self.labels_mapping.upper())
+        self.model_output = rospy.get_param('~model_output', 'traversability')
+        assert self.model_output in ['traversability', 'flexibility']
+        rospy.loginfo('Model predicts %s labels' % self.model_output.upper())
 
-        self.model_weights = rospy.get_param('~%s_weights' % self.labels_mapping)
+        self.model_weights = rospy.get_param('~%s_weights' % self.model_output)
         self.model_path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % self.model_weights)
 
         assert os.path.exists(self.model_path)
@@ -48,15 +48,15 @@ class CloudSegmentor:
 
         self.input_pc_fields = rospy.get_param('~input_fields', ['x', 'y', 'z', 'i'])
         self.output_pc_filelds = rospy.get_param('~output_fields', ['x', 'y', 'z',
-                                                                    self.labels_mapping, self.labels_mapping + '_soft'])
+                                                                    self.model_output, self.model_output + '_soft'])
         self.trav_threshold = rospy.get_param('~trav_threshold', None)
 
-        assert self.labels_mapping in ['traversability', 'flexibility']
+        assert self.model_output in ['traversability', 'flexibility']
 
-        if self.labels_mapping == 'traversability':
+        if self.model_output == 'traversability':
             self.color_map = TRAVERSABILITY_COLOR_MAP
             self.class_values = np.sort([k for k in TRAVERSABILITY_LABELS.keys()]).tolist()
-        elif self.labels_mapping == 'flexibility':
+        elif self.model_output == 'flexibility':
             self.color_map = FLEXIBILITY_COLOR_MAP
             self.class_values = np.sort([k for k in FLEXIBILITY_LABELS.keys()]).tolist()
 

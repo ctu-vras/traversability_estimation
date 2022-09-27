@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 from argparse import ArgumentParser
 import datasets
 from tqdm import tqdm
-import segmentation_models_pytorch as smp
+import torchmetrics
 import matplotlib.pyplot as plt
 
 
@@ -17,44 +17,38 @@ VOID_VALUE = 255
 def main():
     parser = ArgumentParser()
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
-    # parser.add_argument('--dataset', type=str, default='TraversabilityClouds_SelfSupervised')
-    parser.add_argument('--model', type=str, default='deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_travFalse_iou_0.34.pth')
-    parser.add_argument('--trav_labels', action='store_true')
-    parser.add_argument('--batch_size', type=int, default=6)
-    parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
+    parser.add_argument('--weights', type=str, default='deeplabv3_resnet101.pth')
+    parser.add_argument('--output', type=str, default=None)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--n_workers', type=int, default=os.cpu_count())
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--vis_preds', action='store_true')
     args = parser.parse_args()
     print(args)
 
-    data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in args.model]
+    data_fields = [f[1:-1] for f in ['_x_', '_y_', '_z_', '_intensity_', '_depth_'] if f in args.weights]
     print('Model takes as input: %s' % ','.join(data_fields))
-    trav_labels = True if 'travTrue' in args.model else args.trav_labels
-    print('Model predicts traversability labels: %s' % trav_labels)
 
     Dataset = eval('datasets.%s' % args.dataset)
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     valid_dataset = Dataset(split='val', lidar_beams_step=2 if 'Rellis' in args.dataset else None,
-                            traversability_labels=trav_labels,
+                            output=args.output,
                             fields=data_fields, num_samples=args.n_samples,
-                            labels_mode='masks')
+                            labels_mode='labels')
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False, num_workers=args.n_workers)
 
     # --------------Load and set model and optimizer-------------------------------------
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     # device = torch.device('cpu')
 
-    model = torch.load(args.model)
+    model = torch.load(args.weights)
     model = model.to(device)
 
     # ----------------Evaluation----------------------------------------------------------
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    background_channel = [0] if not VOID_VALUE in valid_dataset.class_values \
-        else [valid_dataset.class_values.index(VOID_VALUE)]
-    # background_channel = None
-    metric_fn = smp.utils.metrics.IoU(threshold=0.5,
-                                      activation='softmax2d',
-                                      ignore_channels=background_channel)
+    metric_fn = torchmetrics.JaccardIndex(num_classes=len(valid_dataset.class_values) - 1,
+                                          ignore_index=VOID_VALUE,
+                                          multilabel=False).to(device)
 
     # validation epoch
     metrics = []
@@ -66,8 +60,15 @@ def main():
         with torch.no_grad():
             pred = model(inpt)['out']  # make prediction
 
-            assert pred.shape == labels.shape
-            metric_sample = metric_fn(pred, labels)
+            N, C, H, W = pred.shape
+            assert labels.shape == (N, H, W)
+            mask = labels != VOID_VALUE
+
+            pred = torch.softmax(pred, dim=1)
+            pred = pred * mask.unsqueeze(1)
+            labels = labels * mask
+
+            metric_sample = metric_fn(pred, labels.long())
 
         metrics.append(metric_sample.cpu().numpy())
 

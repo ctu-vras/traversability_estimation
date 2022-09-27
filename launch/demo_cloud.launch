@@ -17,7 +17,7 @@
     <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
     <arg name="nodelet_manager" default="laser_nodelet_manager"/>
 
-    <arg name="labels_mapping" default="traversability"/>
+    <arg name="model_output" default="traversability"/>
     <param name="use_sim_time" value="true"/>
 
     <rosparam command="load" file="$(arg params)"/>
@@ -71,7 +71,7 @@
     </node>
 
     <include file="$(dirname)/ctu_robot_cloud.launch">
-        <arg name="labels_mapping" value="$(arg labels_mapping)"/>
+        <arg name="model_output" value="$(arg model_output)"/>
         <arg name="device" value="$(arg device)"/>
         <arg name="debug" value="true"/>
 <!--        <arg name="nodelet_manager" value="$(arg nodelet_manager)"/>-->
