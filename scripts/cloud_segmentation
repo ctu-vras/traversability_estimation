@@ -96,7 +96,7 @@ class CloudSegmentor:
         assert cloud.shape == (self.lidar_channels_H * self.lidar_beams_W, C)
 
         assert cloud.ndim == 2
-        #depth = torch.linalg.norm(cloud[:, :3], ord=2, axis=1)
+        # depth = torch.linalg.norm(cloud[:, :3], ord=2, axis=1)
         depth = (cloud[:, :3]**2).sum(axis=1).sqrt()
 
         self.range_image = depth.reshape((self.lidar_channels_H, self.lidar_beams_W))

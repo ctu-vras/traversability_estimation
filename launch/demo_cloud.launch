@@ -70,20 +70,12 @@
         <remap from="~output" to="points_filtered"/>
     </node>
 
-    <node name="points_filtered_throttle_5hz" pkg="nodelet" type="nodelet"
-          args="load cras_nodelet_topic_tools/throttle_messages $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="log">
-        <param name="frequency" value="5.0"/>
-        <remap from="~input" to="points_filtered"/>
-        <remap from="~output" to="points_filtered_5hz"/>
-    </node>
-
     <include file="$(dirname)/ctu_robot_cloud.launch">
         <arg name="labels_mapping" value="$(arg labels_mapping)"/>
         <arg name="device" value="$(arg device)"/>
         <arg name="debug" value="true"/>
-        <arg name="nodelet_manager" value="$(arg nodelet_manager)"/>
-        <arg name="cloud_in" value="points_filtered_5hz"/>
+<!--        <arg name="nodelet_manager" value="$(arg nodelet_manager)"/>-->
+        <arg name="cloud_in" value="points_filtered"/>
     </include>
 
     <!--    Virtual bumper     -->

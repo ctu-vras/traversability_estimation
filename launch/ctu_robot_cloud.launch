@@ -6,6 +6,8 @@
 		              '../config/weights/depth_cloud/' folder"/>
     <arg name="max_age" default="0.3"/>
     <arg name="nodelet_manager" default="segmentation_nodelet_manager"/>
+    <arg name="cloud_in" default="points_filtered_jetson"/>
+    <arg name="debug" default="false"/>
 
     <node name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
           respawn="true" respawn_delay="1.0" output="screen">
@@ -16,7 +18,7 @@
           args="load cras_nodelet_topic_tools/throttle_messages $(arg nodelet_manager)"
           respawn="true" respawn_delay="1.0" output="log">
         <param name="frequency" value="5.0"/>
-        <remap from="~input" to="points_filtered_jetson"/>
+        <remap from="~input" to="$(arg cloud_in)"/>
         <remap from="~output" to="points_filtered_5hz"/>
     </node>
 
@@ -42,10 +44,10 @@
             lidar_fov_down: -45.0
             input_fields: ['x', 'y', 'z', 'intensity']
             output_fields: ['x', 'y', 'z', 'obstacle', 'obstacle_soft']
-            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_6_FlexibilityClouds_depth_labels_flexibility_iou_0.507.pth
+            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_62_FlexibilityClouds_depth_labels_flexibility_iou_0.534.pth
             traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_42_TraversabilityClouds_depth_labels_traversability_iou_0.627.pth
             labels_mapping: $(arg labels_mapping)
-            debug: false
+            debug: $(arg debug)
         </rosparam>
         <remap from="cloud_in" to="points_projected"/>
         <remap from="cloud_out" to="~points"/>
