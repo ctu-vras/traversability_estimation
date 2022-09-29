@@ -21,7 +21,7 @@ import torchmetrics
 def parse_arguments():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--datasets', nargs='+', type=str, default='Rellis3DClouds')
+    parser.add_argument('--datasets', nargs='+', type=str, default=['Rellis3DClouds'])
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--dont_save_models', action='store_true')
     parser.add_argument('--architecture', type=str, default='deeplabv3_resnet101')
@@ -29,7 +29,7 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_epochs', type=int, default=100)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count() // 2)
-    parser.add_argument('--data_fields', nargs='+', type=str, default=None)
+    parser.add_argument('--data_fields', nargs='+', type=str, default=['depth'])
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--vis_preds', action='store_true')
     parser.add_argument('--loss_fn', type=str, default='cross_entropy')
