@@ -212,28 +212,33 @@ class Trainer(object):
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         # self.device = torch.device('cpu')
 
+        self.class_values = self.train_datasets[0].class_values
+        self.ignore_label = VOID_VALUE if VOID_VALUE in self.class_values else 0
+        print('Ignoring label value: %i' % self.ignore_label)
+
+        self.classes = self.train_datasets[0].CLASSES
+        self.non_bg_classes = np.asarray(self.classes)[np.asarray(self.class_values) != self.ignore_label]
+
         self.model = self.prepare_model()
         # Create adam optimizer
         self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=args.lr)
 
         # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-        ignore_label = 0 if not VOID_VALUE in self.train_datasets[0].class_values else VOID_VALUE
-        print('Ignoring label value: %i' % ignore_label)
         assert self.cfg.loss_fn in ['cross_entropy', 'dice']
         if self.cfg.loss_fn == 'dice':
             self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
                                                     log_loss=True,
                                                     from_logits=True,
-                                                    ignore_index=ignore_label)
+                                                    ignore_index=self.ignore_label)
         elif self.cfg.loss_fn == 'cross_entropy':
             weights = torch.as_tensor([0.8, 0.2], device=self.device) if self.cfg.output == 'flexibility' else None
-            self.criterion_fn = torch.nn.CrossEntropyLoss(ignore_index=ignore_label,
+            self.criterion_fn = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_label,
                                                           weight=weights)
 
         # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
         # self.metric_fn = smp.utils.metrics.IoU(threshold=0.5)
-        self.metric_fn = torchmetrics.JaccardIndex(num_classes=len(self.train_datasets[0].class_values) - 1,
-                                                   ignore_index=ignore_label,
+        self.metric_fn = torchmetrics.JaccardIndex(num_classes=len(self.non_bg_classes),
+                                                   ignore_index=self.ignore_label,
                                                    multilabel=False,
                                                    average='none').to(self.device)
 
@@ -242,6 +247,8 @@ class Trainer(object):
                    '_'.join(args.datasets), '_'.join(self.train_datasets[0].fields),
                    self.train_datasets[0].output, time())
         self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), '../../config/tb_runs', log_dir))
+        self.train_itr = 0
+        self.val_itr = 0
 
     def __str__(self):
         return 'Training a model: %s\n' \
@@ -256,7 +263,7 @@ class Trainer(object):
     def prepare_model(self):
         if self.cfg.pretrained_weights is None:
             n_inputs = self.train_datasets[0][0][0].shape[0]
-            n_classes = len(self.train_datasets[0].class_values) - 1
+            n_classes = len(self.non_bg_classes)
             print('Model takes as input %i argument: %s' % (n_inputs, str(self.cfg.data_fields)))
 
             model = create_model(self.cfg.architecture, n_inputs, n_classes, pretrained_backbone=False)
@@ -266,27 +273,30 @@ class Trainer(object):
         model = model.to(self.device)
         return model
 
-    def compute_metric(self, pred, labels, ignore_label=VOID_VALUE, itr=None):
+    def compute_metric(self, pred, labels):
         # https://stackoverflow.com/questions/48260415/pytorch-how-to-compute-iou-jaccard-index-for-semantic-segmentation
         N, C, H, W = pred.shape
         assert labels.shape == (N, H, W)
-        mask = labels != ignore_label
+        mask = labels != self.ignore_label
 
         pred = torch.softmax(pred, dim=1)
         pred = pred * mask.unsqueeze(1)
         labels = labels * mask
 
         ious = self.metric_fn(pred, labels)
+        classes = self.non_bg_classes
+        # assert len(classes) == len(ious)
+
         for i in range(len(ious)):
             # print('IOU for class %s: %f' % (self.train_datasets[0].CLASSES[i], ious[i]))
-            self.tb_logger.add_scalar('IOU for class %s' % self.train_datasets[0].CLASSES[i], ious[i], itr)
+            self.tb_logger.add_scalar('IOU for class %s' % classes[i], ious[i], self.val_itr)
         iou = torch.mean(ious)
 
         return iou
 
     def train_epoch(self):
         losses_epoch = []
-        for itr, sample in tqdm(enumerate(self.train_loader)):
+        for sample in tqdm(self.train_loader):
             inpt, labels = sample
             inpt, labels = inpt.to(self.device), labels.to(self.device)
 
@@ -298,7 +308,9 @@ class Trainer(object):
             self.optimizer.step()  # Apply gradient descent change to weight
 
             losses_epoch.append(loss.item())
-            self.tb_logger.add_scalar('Train_Dice_Loss(iter) during one epoch', loss.item(), itr)
+
+            self.tb_logger.add_scalar('Train_Dice_Loss (iter)', loss.item(), self.train_itr)
+            self.train_itr += 1
 
         return np.mean(losses_epoch)
 
@@ -306,22 +318,23 @@ class Trainer(object):
         # validation epoch
         metrics_epoch = []
         losses_epoch = []
-        for itr, sample in tqdm(enumerate(self.valid_loader)):
+        for sample in tqdm(self.valid_loader):
             inpt, labels = sample
             inpt, labels = inpt.to(self.device), labels.to(self.device)
 
             with torch.no_grad():
                 pred = self.model(inpt)['out']  # make prediction
 
-                metric_sample = self.compute_metric(pred, labels, itr=itr)
+                metric_sample = self.compute_metric(pred, labels)
                 loss_val = self.criterion_fn(pred, labels.long())
 
             iou = metric_sample.cpu().numpy()
             metrics_epoch.append(iou)
             losses_epoch.append(loss_val.item())
 
-            self.tb_logger.add_scalar('Valid_mIoU(iter) during one epoch', iou, itr)
-            self.tb_logger.add_scalar('Valid_Dice_Loss(iter) during one epoch', loss_val.item(), itr)
+            self.tb_logger.add_scalar('Valid_mIoU (iter)', iou, self.val_itr)
+            self.tb_logger.add_scalar('Val_Dice_Loss (iter)', loss_val.item(), self.val_itr)
+            self.val_itr += 1
 
         metric_val = np.mean(metrics_epoch)
         loss_val = np.mean(losses_epoch)
