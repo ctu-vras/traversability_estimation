@@ -8,7 +8,6 @@ try:
     import fiftyone as fo
 except:
     print('Fiftyone lib is not installed')
-from datasets.laserscan import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_LABELS, FLEXIBILITY_COLOR_MAP
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
@@ -245,13 +244,13 @@ class FlexibilityClouds(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  lidar_beams_step=1,
-                 labels_mapping='flexibility'
+                 output='flexibility'
                  ):
         super(FlexibilityClouds, self).__init__(path=path, fields=fields,
                                                 depth_img_H=128, depth_img_W=1024,
                                                 lidar_fov_up=45.0, lidar_fov_down=-45.0,
                                                 lidar_beams_step=lidar_beams_step,
-                                                labels_mapping=labels_mapping
+                                                output=output
                                                 )
         if sequences is None:
             sequences = ['ugv_2022-08-12-15-30-22',
@@ -271,6 +270,7 @@ class FlexibilityClouds(BaseDatasetClouds):
         self.class_values = [0, 1, 255]
 
         self.mask_targets = {value: key for key, value in FLEXIBILITY_LABELS.items()}
+        self.CLASSES = [v for k, v in FLEXIBILITY_LABELS.items()]
         self.color_map = FLEXIBILITY_COLOR_MAP
 
         assert split in [None, 'train', 'val', 'test']
@@ -278,7 +278,7 @@ class FlexibilityClouds(BaseDatasetClouds):
 
         self.fields = fields
         self.lidar_beams_step = lidar_beams_step
-        assert self.labels_mapping == 'flexibility'
+        assert self.output == 'flexibility'
 
         assert labels_mode in ['masks', 'labels']
         self.labels_mode = labels_mode
@@ -343,13 +343,13 @@ class TraversabilityClouds(BaseDatasetClouds):
                  fields=None,
                  lidar_beams_step=1,
                  annotation_from_img=False,
-                 labels_mapping='traversability',
+                 output='traversability',
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
                                                    lidar_fov_up=45.0, lidar_fov_down=-45.0,
                                                    lidar_beams_step=lidar_beams_step,
-                                                   labels_mapping=labels_mapping
+                                                   output=output
                                                    )
         if fields is None:
             fields = ['depth']
@@ -358,14 +358,15 @@ class TraversabilityClouds(BaseDatasetClouds):
         assert os.path.exists(path)
         self.path = os.path.join(path, 'clouds')
 
-        self.class_values = [0, 1, 255]
+        self.class_values = [0, 1, VOID_VALUE]
         self.mask_targets = {value: key for key, value in TRAVERSABILITY_LABELS.items()}
+        self.CLASSES = [v for k, v in TRAVERSABILITY_LABELS.items()]
         self.color_map = TRAVERSABILITY_COLOR_MAP
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
 
-        assert self.labels_mapping == 'traversability'
+        self.labels_mapping = 'traversability'
 
         # whether to use semantic labels from annotated images
         self.annotation_from_img = annotation_from_img

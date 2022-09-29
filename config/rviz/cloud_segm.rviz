@@ -186,7 +186,7 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.07999999821186066
           Style: Spheres
-          Topic: /cloud_segmentation/lidar_cloud
+          Topic: /cloud_segmentation/points
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true

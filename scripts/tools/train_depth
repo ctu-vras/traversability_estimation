@@ -22,9 +22,9 @@ def parse_arguments():
     parser = ArgumentParser()
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--datasets', nargs='+', type=str, default='Rellis3DClouds')
-    parser.add_argument('--labels_mapping', type=str, default=None)
+    parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--dont_save_models', action='store_true')
-    parser.add_argument('--architecture', type=str, default='fcn_resnet101')
+    parser.add_argument('--architecture', type=str, default='deeplabv3_resnet101')
     parser.add_argument('--pretrained_weights', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_epochs', type=int, default=100)
@@ -32,6 +32,7 @@ def parse_arguments():
     parser.add_argument('--data_fields', nargs='+', type=str, default=None)
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--vis_preds', action='store_true')
+    parser.add_argument('--loss_fn', type=str, default='cross_entropy')
     args = parser.parse_args()
 
     return args
@@ -125,11 +126,11 @@ def create_dataloaders(args):
     Dataset = eval('datasets.%s' % args.datasets[0])
     # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     train_dataset = Dataset(split='train',
-                            labels_mapping=args.labels_mapping,
+                            output=args.output,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
     valid_dataset = Dataset(split='val',
-                            labels_mapping=args.labels_mapping,
+                            output=args.output,
                             fields=args.data_fields, num_samples=args.n_samples,
                             labels_mode='labels')
 
@@ -141,10 +142,10 @@ def create_dataloaders(args):
         DatasetFT = eval('datasets.%s' % args.datasets[1])
 
         ft_dataset_train = DatasetFT(split='train',
-                                     labels_mapping=args.labels_mapping,
+                                     output=args.output,
                                      fields=args.data_fields, num_samples=args.n_samples,
                                      labels_mode='labels')
-        assert ft_dataset_train.labels_mapping == train_dataset.labels_mapping
+        assert ft_dataset_train.output == train_dataset.output
 
         train_dataset_combined = torch.utils.data.ConcatDataset([train_dataset, ft_dataset_train])
 
@@ -159,10 +160,10 @@ def create_dataloaders(args):
                                   pin_memory=True)
 
         ft_dataset_val = DatasetFT(split='val',
-                                   labels_mapping=args.labels_mapping,
+                                   output=args.output,
                                    fields=args.data_fields, num_samples=args.n_samples,
                                    labels_mode='labels')
-        assert ft_dataset_val.labels_mapping == valid_dataset.labels_mapping
+        assert ft_dataset_val.output == valid_dataset.output
 
         valid_dataset_combined = torch.utils.data.ConcatDataset([valid_dataset, ft_dataset_val])
 
@@ -218,21 +219,28 @@ class Trainer(object):
         # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
         ignore_label = 0 if not VOID_VALUE in self.train_datasets[0].class_values else VOID_VALUE
         print('Ignoring label value: %i' % ignore_label)
-        self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
-                                                log_loss=True,
-                                                from_logits=True,
-                                                ignore_index=ignore_label)
+        assert self.cfg.loss_fn in ['cross_entropy', 'dice']
+        if self.cfg.loss_fn == 'dice':
+            self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
+                                                    log_loss=True,
+                                                    from_logits=True,
+                                                    ignore_index=ignore_label)
+        elif self.cfg.loss_fn == 'cross_entropy':
+            weights = torch.as_tensor([0.8, 0.2], device=self.device) if self.cfg.output == 'flexibility' else None
+            self.criterion_fn = torch.nn.CrossEntropyLoss(ignore_index=ignore_label,
+                                                          weight=weights)
 
         # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
         # self.metric_fn = smp.utils.metrics.IoU(threshold=0.5)
-        self.metric_fn = torchmetrics.JaccardIndex(num_classes=len(self.train_datasets[0].class_values),
+        self.metric_fn = torchmetrics.JaccardIndex(num_classes=len(self.train_datasets[0].class_values) - 1,
                                                    ignore_index=ignore_label,
-                                                   multilabel=False).to(self.device)
+                                                   multilabel=False,
+                                                   average='none').to(self.device)
 
         log_dir = '%s_lr_%g_bs_%d_%s_%s_labels_%s_%s' % \
                   (args.architecture, args.lr, args.batch_size,
                    '_'.join(args.datasets), '_'.join(self.train_datasets[0].fields),
-                   self.train_datasets[0].labels_mapping, time())
+                   self.train_datasets[0].output, time())
         self.tb_logger = SummaryWriter(log_dir=os.path.join(os.path.dirname(__file__), '../../config/tb_runs', log_dir))
 
     def __str__(self):
@@ -240,15 +248,15 @@ class Trainer(object):
                'with batch size: %s\n' \
                'using input: %s\n' \
                'on datasets: %s\n' \
-               'labels mapping mode: %s\n' \
+               'model output mode: %s\n' \
                'initial learning rate: %s' % \
                (self.cfg.architecture, self.cfg.batch_size, ' '.join(self.cfg.data_fields),
-                ' '.join(self.cfg.datasets), self.cfg.labels_mapping, self.cfg.lr)
+                ' '.join(self.cfg.datasets), self.cfg.output, self.cfg.lr)
 
     def prepare_model(self):
         if self.cfg.pretrained_weights is None:
             n_inputs = self.train_datasets[0][0][0].shape[0]
-            n_classes = len(self.train_datasets[0].class_values)
+            n_classes = len(self.train_datasets[0].class_values) - 1
             print('Model takes as input %i argument: %s' % (n_inputs, str(self.cfg.data_fields)))
 
             model = create_model(self.cfg.architecture, n_inputs, n_classes, pretrained_backbone=False)
@@ -258,7 +266,7 @@ class Trainer(object):
         model = model.to(self.device)
         return model
 
-    def compute_metric(self, pred, labels, ignore_label=VOID_VALUE):
+    def compute_metric(self, pred, labels, ignore_label=VOID_VALUE, itr=None):
         # https://stackoverflow.com/questions/48260415/pytorch-how-to-compute-iou-jaccard-index-for-semantic-segmentation
         N, C, H, W = pred.shape
         assert labels.shape == (N, H, W)
@@ -268,7 +276,11 @@ class Trainer(object):
         pred = pred * mask.unsqueeze(1)
         labels = labels * mask
 
-        iou = self.metric_fn(pred, labels)
+        ious = self.metric_fn(pred, labels)
+        for i in range(len(ious)):
+            # print('IOU for class %s: %f' % (self.train_datasets[0].CLASSES[i], ious[i]))
+            self.tb_logger.add_scalar('IOU for class %s' % self.train_datasets[0].CLASSES[i], ious[i], itr)
+        iou = torch.mean(ious)
 
         return iou
 
@@ -301,7 +313,7 @@ class Trainer(object):
             with torch.no_grad():
                 pred = self.model(inpt)['out']  # make prediction
 
-                metric_sample = self.compute_metric(pred, labels)
+                metric_sample = self.compute_metric(pred, labels, itr=itr)
                 loss_val = self.criterion_fn(pred, labels.long())
 
             iou = metric_sample.cpu().numpy()
@@ -382,7 +394,7 @@ class Trainer(object):
                            (self.cfg.architecture,
                             self.cfg.lr, self.cfg.batch_size, epoch_n,
                             '_'.join(self.cfg.datasets), '_'.join(self.train_datasets[0].fields),
-                            self.train_datasets[0].labels_mapping, float(metric_val))
+                            self.train_datasets[0].output, float(metric_val))
 
                     print("Saving Model:", name)
                     torch.save(self.model, os.path.join(os.path.dirname(__file__), name))
@@ -392,7 +404,7 @@ class Trainer(object):
             self.tb_logger.add_scalar('Valid_Dice_Loss(epoch)', loss_val, epoch_n)
 
             # change learning rate
-            if epoch_n % 30 == 0:
+            if epoch_n % 30 == 0 and epoch_n > 0:
                 self.optimizer.param_groups[0]['lr'] /= 10.0
                 print('Decrease decoder learning rate to %f !' % self.optimizer.param_groups[0]['lr'])
 
