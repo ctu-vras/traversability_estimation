@@ -30,8 +30,8 @@ def msgify_cloud(cloud, frame, stamp, names):
 class CloudSegmentor:
     def __init__(self, cloud_topic='cloud'):
         self.lidar_frame = None
-        self.lidar_channels = rospy.get_param('~lidar_channels', 128)
-        self.lidar_beams = rospy.get_param('~lidar_beams', 1024)
+        self.lidar_channels_H = rospy.get_param('~lidar_channels', 128)
+        self.lidar_beams_W = rospy.get_param('~lidar_beams', 1024)
         self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 45.0)
         self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -45.0)
         self.lidar_height_above_ground = rospy.get_param('~lidar_height_above_ground', 0.0)
@@ -68,7 +68,7 @@ class CloudSegmentor:
         self.scan = SemLaserScan(nclasses=self.n_classes,
                                  sem_color_dict=self.color_map,
                                  project=True,
-                                 H=self.lidar_channels, W=self.lidar_beams,
+                                 H=self.lidar_channels_H, W=self.lidar_beams_W,
                                  fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
 
         # point cloud which time stamp is older is not being processed
@@ -96,6 +96,21 @@ class CloudSegmentor:
         model = model.eval()
         return model
 
+    def resize_cloud(self, cloud):
+        H, W = cloud.shape[:2]
+        self.lidar_channels_H = H
+        self.lidar_beams_W = W
+        resized = []
+        for i in range(cloud.shape[2]):
+            c = cv2.resize(cloud[..., i], (self.lidar_channels_H, self.lidar_beams_W),
+                           interpolation=cv2.INTER_LINEAR)
+            resized.append(c)
+        resized = np.stack(resized, axis=-1)
+        cloud = resized
+        rospy.loginfo('Point cloud resized to %s', resized.shape)
+
+        return cloud
+
     def preprocessing(self, cloud):
         C = cloud.shape[-1]
         if len(cloud.shape) == 3:
@@ -103,29 +118,23 @@ class CloudSegmentor:
 
             # Resize if needed.
             # if False and (self.lidar_channels != cloud.shape[0] or self.lidar_beams != cloud.shape[1]):
-            if self.lidar_channels != cloud.shape[0] or self.lidar_beams != cloud.shape[1]:
-                self.lidar_channels = H
-                self.lidar_beams = W
+            if self.lidar_channels_H != cloud.shape[0] or self.lidar_beams_W != cloud.shape[1]:
+                self.lidar_channels_H = H
+                self.lidar_beams_W = W
                 self.scan = SemLaserScan(nclasses=self.n_classes,
                                          sem_color_dict=self.color_map,
                                          project=True,
-                                         H=self.lidar_channels, W=self.lidar_beams,
+                                         H=self.lidar_channels_H, W=self.lidar_beams_W,
                                          fov_up=self.lidar_fov_up, fov_down=self.lidar_fov_down)
-                resized = []
-                for i in range(cloud.shape[2]):
-                    c = cv2.resize(cloud[..., i], (self.lidar_channels, self.lidar_beams),
-                                   interpolation=cv2.INTER_LINEAR)
-                    resized.append(c)
-                resized = np.stack(resized, axis=-1)
-                cloud = resized
-                rospy.loginfo('Point cloud resized to %s', resized.shape)
+                cloud = self.resize_cloud(cloud)
+                rospy.loginfo('Point cloud resized to %s', cloud.shape)
                 # Publish resized point cloud for debugging.
-                resized_struct = unstructured_to_structured(resized, names=self.input_pc_fields)
+                resized_struct = unstructured_to_structured(cloud, names=self.input_pc_fields)
                 resized_msg = msgify(PointCloud2, resized_struct)
                 self.resized_cloud_pub.publish(resized_msg)
 
             cloud = cloud.reshape([H * W, C])
-        assert cloud.shape == (self.lidar_channels * self.lidar_beams, C)
+        assert cloud.shape == (self.lidar_channels_H * self.lidar_beams_W, C)
 
         self.scan.set_points(points=cloud[..., 0:3], remissions=cloud[..., 3] if cloud.shape[-1] >= 4 else None)
         # rospy.logdebug('Depth image shape: %s', self.scan.proj_range.shape)
@@ -141,7 +150,7 @@ class CloudSegmentor:
         
         input = np.concatenate([xyzid[f][None] for f in self.data_fields], axis=0)
         rospy.logdebug('Model input shape: %s', input.shape)
-        assert input.shape == (len(self.data_fields), self.lidar_channels, self.lidar_beams)
+        assert input.shape == (len(self.data_fields), self.lidar_channels_H, self.lidar_beams_W)
 
         return input, xyzid
 

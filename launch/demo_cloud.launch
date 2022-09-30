@@ -70,12 +70,13 @@
         <remap from="~output" to="points_filtered"/>
     </node>
 
-    <include file="$(dirname)/ctu_robot_cloud.launch">
+    <include file="$(dirname)/semantic_cloud_segmentation.launch">
         <arg name="model_output" value="$(arg model_output)"/>
         <arg name="device" value="$(arg device)"/>
         <arg name="debug" value="true"/>
 <!--        <arg name="nodelet_manager" value="$(arg nodelet_manager)"/>-->
         <arg name="cloud_in" value="points_filtered"/>
+        <arg name="max_age" value="1.5"/>
     </include>
 
     <!--    Virtual bumper     -->

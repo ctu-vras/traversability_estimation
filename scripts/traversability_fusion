@@ -12,7 +12,7 @@ import scipy.spatial
 
 def fuse_traversability(trav, eps=1e-6):
     assert isinstance(trav, np.ndarray)
-    assert len(trav.shape) >= 2
+    assert trav.ndim >= 2
     n_pts = trav.shape[0]  # (n, >=2)
     trav = trav.reshape([n_pts, -1])
     trav = np.clip(trav, eps, 1 - eps)

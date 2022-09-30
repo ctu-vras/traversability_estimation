@@ -61,9 +61,10 @@ class RobotData:
         self.lidar_frame = rospy.get_param('~lidar_frame', 'ouster_lidar')
         self.camera_frame = rospy.get_param('~camera_frame', 'pylon_camera')
         self.publish_global_map = rospy.get_param('~publish_global_map', False)
+        self.lidar_channels_H = rospy.get_param('~lidar_channels', 64)
+        self.lidar_beams_W = rospy.get_param('~lidar_beams', 2048)
         self.path = Path()
         self.path.header.frame_id = self.origin_frame
-        self.map_step = rospy.get_param('~map_step', 10)
         self.ds = Rellis3DSequence(seq=sequence)
         self.delay_start = rospy.get_param('~delay_start', 1.0)
         self.period = rospy.get_param('~period', 1.0)
@@ -121,7 +122,7 @@ class RobotData:
         self.current_pose = pose
         self.poses.append(self.current_pose)
 
-        cloud_lid = structured_to_unstructured(cloud)[::self.map_step]
+        cloud_lid = structured_to_unstructured(cloud)
 
         if self.publish_global_map:
             cloud_map = cloud_lid.copy()
@@ -134,7 +135,7 @@ class RobotData:
 
         self.rgb = rgb
         self.semseg = semseg
-        self.lidar_cloud = cloud_lid
+        self.lidar_cloud = cloud_lid  # .reshape([self.lidar_channels_H, self.lidar_beams_W, -1])
 
     def run(self, evt):
         t0 = rospy.Time.now()

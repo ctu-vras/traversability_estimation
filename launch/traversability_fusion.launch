@@ -4,7 +4,6 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
                                                    one of ['00000', '00001', '00002', '00003', '00004']"/>
-    <arg name="run_semseg" default="true"/>
 
     <!-- RELLIS-3D data -->
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
@@ -18,76 +17,88 @@
     </node>
 
     <!-- Semantic segmantation of images -->
-    <node if="$(arg run_semseg)"
-          name="segmentation_inference"
-          pkg="traversability_estimation"
-          type="segmentation_inference">
-        <rosparam subst_value="true">
-            model_name: smp
-            device: $(arg device)
-            dtype: float
-            num_cameras: 1
-            image_transport: compressed
-            legend: false
-            max_age: 1.0
-            input_scale: 0.25
-            traversability_labels: false
-            label_config: $(dirname)/../config/obstacles.yaml
-        </rosparam>
-        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_obstacles.yaml"/>
+<!--    <node name="segmentation_inference"-->
+<!--          pkg="traversability_estimation"-->
+<!--          type="segmentation_inference">-->
+<!--        <rosparam subst_value="true">-->
+<!--            model_name: smp-->
+<!--            device: $(arg device)-->
+<!--            dtype: float-->
+<!--            num_cameras: 1-->
+<!--            image_transport: compressed-->
+<!--            legend: false-->
+<!--            max_age: 1.0-->
+<!--            input_scale: 0.25-->
+<!--            traversability_labels: false-->
+<!--            label_config: $(dirname)/../config/obstacles.yaml-->
+<!--        </rosparam>-->
+<!--        <rosparam param="label_map" command="load" file="$(dirname)/../config/rellis_to_traversability.yaml"/>-->
 
-        <remap from="input_0/image" to="/robot_data/rgb"/>
-        <remap from="input_0/image/compressed" to="/robot_data/rgb/compressed"/>
-        <remap from="input_0/camera_info" to="/robot_data/camera_info"/>
+<!--        <remap from="input_0/image" to="/robot_data/rgb"/>-->
+<!--        <remap from="input_0/image/compressed" to="/robot_data/rgb/compressed"/>-->
+<!--        <remap from="input_0/camera_info" to="/robot_data/camera_info"/>-->
 
-        <remap from="output_0/semseg" to="/segmentation_inference/semantic_segmentation"/>
-        <remap from="output_0/semseg/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>
-        <remap from="output_0/traversability" to="/segmentation_inference/traversability"/>
-        <remap from="output_0/traversability/compressed" to="/segmentation_inference/traversability/compressed"/>
-        <remap from="output_0/camera_info" to="/segmentation_inference/camera_info"/>
-    </node>
-
-    <!-- Add color to a point cloud from a camera image -->
-    <node name="point_cloud_color" pkg="nodelet" type="nodelet"
-        args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">
-        <rosparam subst_value="true">
-            fixed_frame: odom
-            field_name: obstacle
-            field_type: 2
-            default_color: 1.0
-            num_cameras: 1
-            image_transport: compressed
-            max_image_age: 15.0
-            use_first_valid: true
-            image_queue_size: 2
-            cloud_queue_size: 2
-            wait_for_transform: 1.0
-        </rosparam>
-        <param unless="$(arg run_semseg)" name="field_name" value="rgb"/>
-        <param unless="$(arg run_semseg)" name="field_type" value="7"/>
-
-        <param if="$(arg run_semseg)" name="field_name" value="traversability"/>
-        <param if="$(arg run_semseg)" name="field_type" value="2"/>
-
-        <remap unless="$(arg run_semseg)" from="/camera_0/camera_info" to="/robot_data/camera_info"/>
-        <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>
-        <remap unless="$(arg run_semseg)" from="/camera_0/image/compressed" to="/robot_data/semantic_segmentation/compressed"/>
-
-        <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>
-        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/traversability"/>
-        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/traversability/compressed"/>
-
-        <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
-        <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>
-    </node>
+<!--        <remap from="output_0/semseg" to="/segmentation_inference/semantic_segmentation"/>-->
+<!--        <remap from="output_0/semseg/compressed" to="/segmentation_inference/semantic_segmentation/compressed"/>-->
+<!--        <remap from="output_0/traversability" to="/segmentation_inference/traversability"/>-->
+<!--        <remap from="output_0/traversability/compressed" to="/segmentation_inference/traversability/compressed"/>-->
+<!--        <remap from="output_0/camera_info" to="/segmentation_inference/camera_info"/>-->
+<!--    </node>-->
 
     <!-- Add color to a point cloud from a camera image -->
-    <node name="traversability_fusion" pkg="traversability_estimation" type="traversability_fusion" output="screen">
+<!--    <node name="point_cloud_color" pkg="nodelet" type="nodelet"-->
+<!--        args="standalone point_cloud_color/point_cloud_color" respawn="true" output="screen">-->
+<!--        <rosparam subst_value="true">-->
+<!--            fixed_frame: odom-->
+<!--            field_name: obstacle-->
+<!--            field_type: 2-->
+<!--            default_color: 1.0-->
+<!--            num_cameras: 1-->
+<!--            image_transport: compressed-->
+<!--            max_image_age: 15.0-->
+<!--            use_first_valid: true-->
+<!--            image_queue_size: 2-->
+<!--            cloud_queue_size: 2-->
+<!--            wait_for_transform: 1.0-->
+<!--        </rosparam>-->
+<!--        <param unless="$(arg run_semseg)" name="field_name" value="rgb"/>-->
+<!--        <param unless="$(arg run_semseg)" name="field_type" value="7"/>-->
+
+<!--        <param if="$(arg run_semseg)" name="field_name" value="traversability"/>-->
+<!--        <param if="$(arg run_semseg)" name="field_type" value="2"/>-->
+
+<!--        <remap unless="$(arg run_semseg)" from="/camera_0/camera_info" to="/robot_data/camera_info"/>-->
+<!--        <remap unless="$(arg run_semseg)" from="/camera_0/image" to="/robot_data/semantic_segmentation"/>-->
+<!--        <remap unless="$(arg run_semseg)" from="/camera_0/image/compressed" to="/robot_data/semantic_segmentation/compressed"/>-->
+
+<!--        <remap if="$(arg run_semseg)" from="/camera_0/camera_info" to="/segmentation_inference/camera_info"/>-->
+<!--        <remap if="$(arg run_semseg)" from="/camera_0/image" to="/segmentation_inference/traversability"/>-->
+<!--        <remap if="$(arg run_semseg)" from="/camera_0/image/compressed" to="/segmentation_inference/traversability/compressed"/>-->
+
+<!--        <remap from="cloud_in" to="/robot_data/lidar_cloud"/>-->
+<!--        <remap from="cloud_out" to="/robot_data/lidar_cloud_semseg"/>-->
+<!--    </node>-->
+
+    <include file="$(dirname)/semantic_cloud_segmentation.launch">
+        <arg name="model_output" value="traversability"/>
+        <arg name="range_projection" value="true"/>
+        <arg name="lidar_channels" default="64"/>
+        <arg name="lidar_beams" default="2048"/>
+        <arg name="device" value="$(arg device)"/>
+        <arg name="debug" value="true"/>
+        <arg name="cloud_in" value="robot_data/lidar_cloud"/>
+        <arg name="max_age" value="1.5"/>
+    </include>
+
+    <!-- Add color to a point cloud from a camera image -->
+    <node name="traversability_fusion" pkg="traversability_estimation" type="traversability_fusion">
         <rosparam subst_value="true">
-            map_frmae: odom
+            map_frame: odom
+            max_age: 10.0
+            pts_proximity_th: 0.4
         </rosparam>
-        <remap from="cloud_in" to="/robot_data/lidar_cloud_semseg"/>
-        <remap from="cloud_out" to="/traversability_estimation/traversability_map"/>
+        <remap from="cloud_in" to="cloud_segmentation/points_20cm"/>
+        <remap from="cloud_out" to="traversability_fusion/traversability_map"/>
     </node>
 
     <!-- RVIZ -->

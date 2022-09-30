@@ -191,6 +191,7 @@ class BaseDatasetImages(data.Dataset):
 
 
 class BaseDatasetClouds(data.Dataset):
+    CLASSES = []
     def __init__(self,
                  path=None,
                  fields=None,
