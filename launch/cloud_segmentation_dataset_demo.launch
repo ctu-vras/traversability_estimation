@@ -7,7 +7,6 @@
 
     <include file="$(dirname)/robot_data.launch">
         <arg name="data_sequence" value="$(arg data_sequence)"/>
-        <arg name="map_step" value="1"/>
         <arg name="pose_step" value="10"/>
     </include>
 
@@ -21,7 +20,7 @@
             lidar_fov_down: -22.5
             input_filelds: ['x', 'y', 'z', 'i']
             output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
-            weights: fcn_resnet101_lr_0.0001_bs_16_epoch_5_Rellis3DClouds_intensity_z_depth_iou_0.63.pth
+            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_20_Rellis3DClouds_depth_labels_None_iou_0.137.pth
         </rosparam>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/cloud_segmentation/points"/>

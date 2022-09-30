@@ -710,7 +710,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: obstacle
+          Channel Name: traversability
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity
@@ -740,7 +740,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: obstacle_soft
+          Channel Name: traversability_soft
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity
