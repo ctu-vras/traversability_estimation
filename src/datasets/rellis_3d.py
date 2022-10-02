@@ -7,7 +7,7 @@ from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from traversability_estimation.utils import *
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
-from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS
+from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, FLEXIBILITY_LABELS
 from datasets.laserscan import SemLaserScan
 from copy import copy
@@ -317,7 +317,9 @@ class Rellis3DClouds(BaseDatasetClouds):
             self.class_values = list(range(len(self.color_map)))
             self.learning_map = CFG["learning_map"]
             self.learning_map_inv = CFG["learning_map_inv"]
+            self.ignore_label = 0
         else:
+            self.ignore_label = VOID_VALUE
             if self.output == 'traversability':
                 self.color_map = TRAVERSABILITY_COLOR_MAP
                 self.CLASSES = [v for k, v in TRAVERSABILITY_LABELS.items()]
@@ -329,6 +331,7 @@ class Rellis3DClouds(BaseDatasetClouds):
 
             self.label_map = self.get_label_map(path=os.path.join(data_dir,
                                                                   "../config/rellis_to_%s.yaml" % self.output))
+        self.non_bg_classes = np.asarray(self.CLASSES)[np.asarray(self.class_values) != self.ignore_label]
 
         self.get_scan()
 

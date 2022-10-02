@@ -13,9 +13,9 @@ def main():
     parser = ArgumentParser()
     # parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
-    # parser.add_argument('--dataset', type=str, default='FlexibilityClouds')
-    parser.add_argument('--dataset', type=str, default='SemanticUSL')
-    parser.add_argument('--weights', type=str, default='fcn_resnet101_lr_0.0001_bs_4_epoch_86_SemanticKITTI_SemanticUSL_TraversabilityClouds_depth_labels_traversability_iou_0.599.pth')
+    parser.add_argument('--dataset', type=str, default='FlexibilityClouds')
+    # parser.add_argument('--dataset', type=str, default='SemanticUSL')
+    parser.add_argument('--weights', type=str, default='deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth')
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
     print(args)
@@ -65,7 +65,8 @@ def main():
             pred = model(batch)['out']
         pred = torch.softmax(pred.squeeze(0), dim=0).cpu().numpy()
         pred = np.argmax(pred, axis=0)
-        pred_ign = pred * (label != ignore_label)
+        pred_ign = pred.copy()
+        pred_ign[label == ignore_label] = ignore_label
 
         color_pred = ds.label_to_color(pred)
         color_pred_ign = ds.label_to_color(pred_ign)
@@ -87,7 +88,7 @@ def main():
         pcd.colors = o3d.utility.Vector3dVector(color_pred.reshape((-1, 3)) / color_pred.max())
 
         pcd_gt = o3d.geometry.PointCloud()
-        pcd_gt.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)) + np.asarray([100, 0, 0]))
+        pcd_gt.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)) + np.asarray([150, 0, 0]))
         pcd_gt.colors = o3d.utility.Vector3dVector(color_gt.reshape((-1, 3)) / color_gt.max())
 
         o3d.visualization.draw_geometries([pcd, pcd_gt])
