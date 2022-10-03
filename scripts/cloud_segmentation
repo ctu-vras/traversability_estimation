@@ -11,6 +11,7 @@ from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+from timeit import default_timer as timer
 import torch
 from threading import RLock
 import yaml
@@ -170,7 +171,7 @@ class CloudSegmentor:
 
         return label_threshold, label_soft
 
-    def publish(self, cloud, label_th, label_soft):
+    def publish(self, cloud, label_th, label_soft, frame, stamp):
         xyz = cloud[..., :3]
         xyz = xyz.reshape([-1, 3], order='F')
         n_pts = self.lidar_channels_H * self.lidar_beams_W
@@ -189,9 +190,8 @@ class CloudSegmentor:
         assert xyz_l_lsoft.shape == (n_pts, 5)
         rospy.logdebug('XYZ_L_Lsoft cloud shape: %s', xyz_l_lsoft.shape)
 
-        stamp = rospy.Time.now()
         segm_pc_msg = self.msgify_cloud(xyz_l_lsoft,
-                                        frame=self.lidar_frame, stamp=stamp,
+                                        frame=frame, stamp=stamp,
                                         names=self.output_pc_filelds)
         self.segm_cloud_pub.publish(segm_pc_msg)
 
@@ -200,13 +200,12 @@ class CloudSegmentor:
         self.lidar_frame = pc_msg.header.frame_id
 
         # Discard old messages.
-        msg_stamp = rospy.Time.now()
-        age = (msg_stamp - pc_msg.header.stamp).to_sec()
+        age = (rospy.Time.now() - pc_msg.header.stamp).to_sec()
         if age > self.max_age:
             rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
-        t0 = rospy.Time.now().to_sec()
+        t0 = timer()
 
         # Transform local map to ground truth localization frame
         cloud = numpify(pc_msg)
@@ -215,19 +214,19 @@ class CloudSegmentor:
 
         with self.lock:
             input = self.preprocessing(cloud)
-            t1 = rospy.Time.now().to_sec()
-            rospy.logdebug('Preprocessing took: %.3f [sec]' % (t1 - t0))
+            t1 = timer()
+            rospy.logdebug('Preprocessing took: %.3f [sec]', t1 - t0)
 
             pred = self.model_inference(input)
-            t2 = rospy.Time.now().to_sec()
-            rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
+            t2 = timer()
+            rospy.logdebug('Model inference took: %.3f [sec]', t2 - t1)
 
             label_th, label_soft = self.postprocessing(pred)
-            t3 = rospy.Time.now().to_sec()
-            rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
+            t3 = timer()
+            rospy.logdebug('Postprocessing took: %.3f [sec]', t3 - t2)
 
             # publish segmented point cloud
-            self.publish(cloud, label_th, label_soft)
+            self.publish(cloud, label_th, label_soft, pc_msg.header.frame_id, pc_msg.header.stamp)
 
             if self.debug:
                 # publish depth image
@@ -237,12 +236,13 @@ class CloudSegmentor:
                 depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
                                            (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
                 depth_msg = msgify(Image, depth_img, '32FC1')
+                depth_msg.header = pc_msg.header
                 self.depth_pub.publish(depth_msg)
 
-            t4 = rospy.Time.now().to_sec()
-            rospy.logdebug('Data publishing took: %.3f [sec]' % (t4 - t3))
+            t4 = timer()
+            rospy.logdebug('Data publishing took: %.3f [sec]', t4 - t3)
 
-        rospy.loginfo('Point cloud processing time: %.3f [sec]' % (t4 - t0))
+        rospy.loginfo('Point cloud processing time: %.3f [sec]', t4 - t0)
 
 
 if __name__ == '__main__':
