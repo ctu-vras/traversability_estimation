@@ -11,6 +11,7 @@ from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+from timeit import default_timer as timer
 import torch
 from threading import RLock
 
@@ -206,7 +207,7 @@ class CloudSegmentor:
             rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
-        t0 = rospy.Time.now().to_sec()
+        t0 = timer()
 
         # Transform local map to ground truth localization frame
         cloud = numpify(pc_msg)
@@ -215,16 +216,16 @@ class CloudSegmentor:
 
         with self.lock:
             input = self.preprocessing(cloud)
-            t1 = rospy.Time.now().to_sec()
-            rospy.logdebug('Preprocessing took: %.3f [sec]' % (t1 - t0))
+            t1 = timer()
+            rospy.logdebug('Preprocessing took: %.3f [sec]', t1 - t0)
 
             pred = self.model_inference(input)
-            t2 = rospy.Time.now().to_sec()
-            rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
+            t2 = timer()
+            rospy.logdebug('Model inference took: %.3f [sec]', t2 - t1)
 
             label_th, label_soft = self.postprocessing(pred)
-            t3 = rospy.Time.now().to_sec()
-            rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
+            t3 = timer()
+            rospy.logdebug('Postprocessing took: %.3f [sec]', t3 - t2)
 
             # publish segmented point cloud
             self.publish(cloud, label_th, label_soft)
@@ -239,10 +240,10 @@ class CloudSegmentor:
                 depth_msg = msgify(Image, depth_img, '32FC1')
                 self.depth_pub.publish(depth_msg)
 
-            t4 = rospy.Time.now().to_sec()
-            rospy.logdebug('Data publishing took: %.3f [sec]' % (t4 - t3))
+            t4 = timer()
+            rospy.logdebug('Data publishing took: %.3f [sec]', t4 - t3)
 
-        rospy.loginfo('Point cloud processing time: %.3f [sec]' % (t4 - t0))
+        rospy.loginfo('Point cloud processing time: %.3f [sec]', t4 - t0)
 
 
 if __name__ == '__main__':
