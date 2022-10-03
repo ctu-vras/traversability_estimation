@@ -28,7 +28,9 @@ from traversability_estimation.segmentation import compute_support, fit_planes, 
 from traversability_estimation.utils import show_cloud, slots
 from tqdm import tqdm
 
-LABEL_FIELD_NAME = 'flexible'
+DEPTH_FIELD_NAME = 'depth'
+# LABEL_FIELD_NAME = 'flexible'
+LABEL_FIELD_NAME = 'label'
 LABEL_RIGID = 0
 LABEL_FLEXIBLE = 1
 # LABEL_INVALID = 254
@@ -63,6 +65,9 @@ def arg_parser():
     parser.add_argument('--time-horizon', '-t', type=float, nargs=2, default=[0.0, 10.0])
     parser.add_argument('--time-step', '-s', type=float, default=0.5)
     parser.add_argument('--output-path', '-o', type=str, default='{dir}/{name}/{topic}/{secs}_{nsecs:09d}.npz')
+    parser.add_argument('--cloud-array', type=str, default='cloud')
+    parser.add_argument('--depth-array', type=str, default='depth')
+    parser.add_argument('--label-array', type=str, default='target')
     parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
@@ -158,7 +163,8 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                   exclude_times=None, input_step=1, input_start=0.0, input_end=float('inf'),
                   discard_model=None, flexible_model=None, rigid_model=None, rigid_primitives=False, z_support=None,
                   discard_empty=False, distance_horizon=None, time_horizon=None, time_step=None,
-                  output_path=None, output_bag_path=None, output_topic=None, output_period=None):
+                  output_path=None, cloud_array=None, depth_array=None, label_array=None,
+                  output_bag_path=None, output_topic=None, output_period=None):
     assert bag_paths, bag_paths
     assert not exclude_times or all(len(t) == 2 for t in exclude_times), exclude_times
     assert len(time_horizon) == 2, time_horizon
@@ -178,6 +184,7 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
         if output_bag_path in bag_paths:
             print('Output %s removed from input bag files.' % output_bag_path)
             del bag_paths[bag_paths.index(output_bag_path)]
+        os.makedirs(os.path.dirname(output_bag_path), exist_ok=True)
         output_bag = Bag(output_bag_path, 'w', compression=Compression.LZ4)
     else:
         output_bag = None
@@ -245,19 +252,34 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
 
                 if topic_types[topic] == 'sensor_msgs/PointCloud2':
                     msg = PointCloud2(*slots(msg))
-                    arr = numpify(msg)
+                    input_struct = numpify(msg)
+                    # print('Input struct:', input_struct.shape)
 
-                    labels = segment_cloud(flexible_model, arr, tfs, rigid_model=rigid_model,
-                                           discard_tf=tfs[n[0]], discard_model=discard_model,
-                                           rigid_primitives=rigid_primitives,
-                                           input_to_fixed=input_to_fixed, z_support=z_support)
+                    # H x W unstructured depth image.
+                    depth = np.linalg.norm(position(input_struct), axis=-1)
+                    # H x W structured depth cloud.
+                    depth_struct = depth.reshape((input_struct.size, -1))
+                    depth_struct = unstructured_to_structured(depth_struct, names=[DEPTH_FIELD_NAME])
+                    # depth_struct = depth_struct.reshape(input_struct.shape)
+                    # assert depth_struct.shape == input_struct.shape, (depth_struct.shape, input_struct.shape)
 
-                    labels = labels.reshape((arr.size, -1))
-                    labels = unstructured_to_structured(labels, names=[LABEL_FIELD_NAME])
-                    labels = labels.reshape(arr.shape)
-                    segmented_arr = merge_arrays([arr, labels], flatten=True)
+                    # H x W unstructured label image.
+                    label = segment_cloud(flexible_model, input_struct, tfs, rigid_model=rigid_model,
+                                          discard_tf=tfs[n[0]], discard_model=discard_model,
+                                          rigid_primitives=rigid_primitives,
+                                          input_to_fixed=input_to_fixed, z_support=z_support)
+                    # H x W structured label cloud.
+                    label_struct = label.reshape((input_struct.size, -1))
+                    label_struct = unstructured_to_structured(label_struct, names=[LABEL_FIELD_NAME])
+                    # label_struct = label_struct.reshape(input_struct.shape)
+                    # assert label_struct.shape == input_struct.shape, (label_struct.shape, input_struct.shape)
 
-                    n_valid_labels = (segmented_arr[LABEL_FIELD_NAME] != LABEL_IGNORE).sum()
+                    cloud_struct = merge_arrays([input_struct, depth_struct, label_struct], flatten=True)
+                    cloud_struct = cloud_struct.reshape(input_struct.shape)
+                    # print('Cloud struct:', cloud_struct.shape)
+                    assert cloud_struct.shape == input_struct.shape
+
+                    n_valid_labels = (cloud_struct[LABEL_FIELD_NAME] != LABEL_IGNORE).sum()
                     if discard_empty and n_valid_labels == 0:
                         print('Discarding cloud with no valid labels.')
                         continue
@@ -269,11 +291,19 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                     if output_path is not None:
                         p = output_path.format(**fmt_kwargs)
                         os.makedirs(os.path.dirname(p), exist_ok=True)
-                        np.savez_compressed(p, {'cloud': segmented_arr})
+                        # np.savez_compressed(p, {'cloud': segmented_arr})
+                        arrays = {}
+                        if cloud_array:
+                            arrays[cloud_array] = cloud_struct
+                        if depth_array:
+                            arrays[depth_array] = depth
+                        if label_array:
+                            arrays[label_array] = label
+                        np.savez_compressed(p, **arrays)
 
                     if output_bag is not None:
                         t = output_topic.format(topic=topic)
-                        segmented_msg = msgify(PointCloud2, segmented_arr)
+                        segmented_msg = msgify(PointCloud2, cloud_struct)
                         segmented_msg.header = msg.header
                         output_bag.write(t, segmented_msg, stamp)
     if output_bag:
