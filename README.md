@@ -125,7 +125,7 @@ python eval_depth --dataset TraversabilityClouds --weights /path/to/deeplabv3_re
     roslaunch traversability_estimation image_segmentation_demo.launch model_name:=hrnet
     ```
   
-- Semantic segmentation of point clouds from RELLIS-3D dataset with HRNet:
+- Semantic segmentation of point clouds from RELLIS-3D dataset:
 
     ```bash
     roslaunch traversability_estimation cloud_segmentation_dataset_demo.launch
