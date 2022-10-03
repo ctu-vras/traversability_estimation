@@ -15,7 +15,7 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
     <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_52_Rellis3DClouds_depth_labels_None_iou_0.34.pth"/>-->
-    <arg name="weights" default="fcn_resnet101_lr_0.0001_bs_16_epoch_89_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.282.pth"/>
+    <arg name="weights" default="old/fcn_resnet101_lr_0.0001_bs_16_epoch_89_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.282.pth"/>
 
     <param name="use_sim_time" value="true"/>
 
@@ -37,12 +37,12 @@
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: 1.0
-            lidar_channels: 64
-            lidar_beams: 2048
-            lidar_fov_up: 22.5
-            lidar_fov_down: -22.5
-            input_filelds: ['x', 'y', 'z', 'i']
-            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
+            lidar_channels: 128
+            lidar_beams: 1024
+            lidar_fov_up: 45.0
+            lidar_fov_down: -45.0
+            range_projection: true
+            debug: true
             weights: $(arg weights)
         </rosparam>
         <remap from="cloud_in" to="/os_cloud_node/destaggered_points"/>

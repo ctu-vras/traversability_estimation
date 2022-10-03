@@ -5,7 +5,7 @@ import cv2
 from datasets.rellis_3d import SemLaserScan
 from datasets.base_dataset import FLEXIBILITY_LABELS, TRAVERSABILITY_LABELS
 from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, TRAVERSABILITY_COLOR_MAP
-from traversability_estimation.utils import convert_color
+from traversability_estimation.utils import convert_color, visualize_cloud
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
@@ -13,6 +13,7 @@ import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import torch
 from threading import RLock
+import yaml
 
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
@@ -50,7 +51,7 @@ class CloudSegmentor:
         self.output_pc_filelds = ['x', 'y', 'z', self.model_output, self.model_output + '_soft']
         self.trav_threshold = rospy.get_param('~trav_threshold', None)
 
-        assert self.model_output in ['traversability', 'flexibility']
+        assert self.model_output in [None, 'traversability', 'flexibility']
 
         if self.model_output == 'traversability':
             self.color_map = TRAVERSABILITY_COLOR_MAP
@@ -144,7 +145,6 @@ class CloudSegmentor:
 
         label_pred = label_pred.squeeze(0)
         label_pred = torch.log_softmax(label_pred, dim=0)
-        label_pred = label_pred
 
         assert label_pred.ndim == 3
         n_classes, H, W = label_pred.shape
@@ -172,7 +172,7 @@ class CloudSegmentor:
 
     def publish(self, cloud, label_th, label_soft):
         xyz = cloud[..., :3]
-        xyz = xyz.reshape([-1, 3])
+        xyz = xyz.reshape([-1, 3], order='F')
         n_pts = self.lidar_channels_H * self.lidar_beams_W
         assert xyz.shape == (n_pts, 3)
 
@@ -182,8 +182,8 @@ class CloudSegmentor:
         # cv2.waitKey(1)
         # visualize_cloud(xyz, color.reshape((-1, 3)))
 
-        label_th = label_th.reshape((n_pts, 1)).cpu().numpy()
-        label_soft = label_soft.reshape((n_pts, 1)).cpu().numpy()
+        label_th = label_th.cpu().numpy().reshape((n_pts, 1), order='F')
+        label_soft = label_soft.cpu().numpy().reshape((n_pts, 1), order='F')
 
         xyz_l_lsoft = np.concatenate([xyz, label_th, label_soft], axis=-1)
         assert xyz_l_lsoft.shape == (n_pts, 5)

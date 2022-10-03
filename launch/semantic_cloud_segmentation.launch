@@ -46,8 +46,9 @@
             range_projection: $(arg range_projection)
             lidar_channels: $(arg lidar_channels)
             lidar_beams: $(arg lidar_beams)
-            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_62_FlexibilityClouds_depth_labels_flexibility_iou_0.884.pth
-            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
+            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth
+<!--            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth-->
+            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_4_epoch_0_Rellis3DClouds_depth_labels_traversability_iou_0.821.pth
             model_output: $(arg model_output)
             debug: $(arg debug)
         </rosparam>
