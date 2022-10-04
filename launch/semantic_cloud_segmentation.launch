@@ -28,11 +28,15 @@
     <node name="cloud_projection" pkg="nodelet" type="nodelet"
           args="load cloud_proc/projection $(arg nodelet_manager)"
           respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            keep: 2
-            azimuth_only: true
-            width: $(arg lidar_channels)
-            height: $(arg lidar_beams)
+        <rosparam subst_value="true">
+            height: $(arg lidar_channels)
+            width: $(arg lidar_beams)
+            fov_azimuth: 6.283185307179586  <!-- 360 deg -->
+            fov_elevation: 1.5707963267948966  <!-- 90 deg -->
+            keep: 2  <!-- min depth -->
+            azimuth_only: false
+            frame: odom  <!-- rotate into odom -->
+            timeout: 0.1
         </rosparam>
         <remap from="input" to="points_filtered_5hz"/>
         <remap from="output" to="points_projected"/>
