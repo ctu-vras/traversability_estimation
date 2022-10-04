@@ -13,14 +13,15 @@
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb" output="screen">
         <rosparam subst_value="true">
             device: $(arg device)
-            max_age: 1.0
+            max_age: 0.2
             lidar_channels: 64
             lidar_beams: 2048
             lidar_fov_up: 22.5
             lidar_fov_down: -22.5
-            input_filelds: ['x', 'y', 'z', 'i']
-            output_fields: ['x', 'y', 'z', 'r', 'g', 'b', 'obstacle']
-            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_20_Rellis3DClouds_depth_labels_None_iou_0.137.pth
+            range_projection: true
+            debug: true
+            weights: deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth
+<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_4_epoch_0_Rellis3DClouds_depth_labels_traversability_iou_0.821.pth-->
         </rosparam>
         <remap from="cloud_in" to="/robot_data/lidar_cloud"/>
         <remap from="cloud_out" to="/cloud_segmentation/points"/>

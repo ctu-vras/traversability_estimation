@@ -68,12 +68,16 @@ def main():
         pred_ign = pred.copy()
         pred_ign[label == ignore_label] = ignore_label
 
+        # label_flex = pred == 1
+        # depth_img_with_flex_points = (0.3 * depth_img_vis + 0.7 * label_flex).astype("float")
+
         color_pred = ds.label_to_color(pred)
         color_pred_ign = ds.label_to_color(pred_ign)
         color_gt = ds.label_to_color(label)
 
         visualize_imgs(layout='columns',
                        depth_img=depth_img_vis,
+                       # depth_img_with_flex_points=depth_img_with_flex_points,
                        prediction=color_pred,
                        prediction_without_background=color_pred_ign,
                        ground_truth=color_gt,

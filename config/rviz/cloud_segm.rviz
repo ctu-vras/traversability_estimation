@@ -348,7 +348,7 @@ Visualization Manager:
           use image: true
         - Class: rviz/Image
           Enabled: true
-          Image Topic: /depth
+          Image Topic: /cloud_segmentation/depth
           Max Value: 1
           Median window: 5
           Min Value: 0

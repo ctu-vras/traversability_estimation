@@ -10,9 +10,15 @@ from timeit import default_timer as timer
 import scipy.spatial
 
 
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
+
 def fuse_traversability(trav, eps=1e-6):
     assert isinstance(trav, np.ndarray)
     assert trav.ndim >= 2
+    assert trav.min() >= 0.0 and trav.max() <= 1.0
+
     n_pts = trav.shape[0]  # (n, >=2)
     trav = trav.reshape([n_pts, -1])
     trav = np.clip(trav, eps, 1 - eps)
@@ -20,6 +26,7 @@ def fuse_traversability(trav, eps=1e-6):
     lo = lo.sum(axis=1)
     trav = 1. - np.exp(lo)
     assert trav.shape == (n_pts,)
+
     return trav
 
 
@@ -47,11 +54,11 @@ class TraversabilityMapping:
         self.local_map = None
         self.new_map = None
         self.map_frame = rospy.get_param('~map_frame', 'odom')
-        self.map_step = rospy.get_param('~map_step', 10)
 
         # any point that is farer than this threshold from points in existing pcl is considered as new
         self.dist_th = rospy.get_param('~pts_proximity_th', 0.2)
-        self.max_age = rospy.get_param('~max_age', 10.0)
+        self.max_age = rospy.get_param('~max_age', 1.0)
+        self.input_names = rospy.get_param('~input_names', ['x', 'y', 'z', 'traversability'])
 
         self.rate = rospy.get_param('~rate', 1.0)
         self.trav_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
@@ -69,7 +76,7 @@ class TraversabilityMapping:
         msg_stamp = rospy.Time.now()
         age = (msg_stamp - pc_msg.header.stamp).to_sec()
         if age > self.max_age:
-            rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
+            rospy.logwarn('Traversability Fusion: discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
         try:
@@ -82,9 +89,10 @@ class TraversabilityMapping:
         t0 = timer()
         # Transform local map to ground truth localization frame
         local_map = numpify(pc_msg)
-        local_map = structured_to_unstructured(local_map[['x', 'y', 'z', 'traversability']])
+        local_map = structured_to_unstructured(local_map[self.input_names])
+        local_map[..., 3:4] = sigmoid(local_map[..., 3:4])
         rospy.logdebug('Point cloud of shape %s is received', local_map.shape)
-        local_map = local_map[::self.map_step]
+        local_map = local_map
         assert len(local_map.shape) == 2
         assert local_map.shape[1] == 4
 
@@ -135,9 +143,9 @@ class TraversabilityMapping:
         while not rospy.is_shutdown():
             if self.global_map is None:
                 continue
-            # publish reward clouds
+            # publish traversability clouds
             stamp = rospy.Time.now()
-            global_map_msg = msgify_cloud(self.global_map, frame=self.map_frame, stamp=stamp)
+            global_map_msg = msgify_cloud(self.global_map, frame=self.map_frame, stamp=stamp, names=self.input_names)
             self.trav_cloud_pub.publish(global_map_msg)
             rate.sleep()
 
