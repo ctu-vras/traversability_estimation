@@ -42,6 +42,15 @@
         <remap from="output" to="points_projected"/>
     </node>
 
+    <node name="projected_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            negative: true
+        </rosparam>
+        <remap from="cloud" to="points_projected"/>
+        <remap from="image" to="projected_depth"/>
+    </node>
+
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation" output="screen">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
