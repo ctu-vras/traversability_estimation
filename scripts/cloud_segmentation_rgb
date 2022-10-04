@@ -60,6 +60,7 @@ class CloudSegmentor:
 
         self.input_pc_fields = ['x', 'y', 'z']
         self.output_pc_fields = ['x', 'y', 'z', 'r', 'g', 'b', self.model_output, '%s_soft' % self.model_output]
+        self.soft_label_ind = rospy.get_param('~soft_label_ind', 0)
 
         assert self.model_output in ['labels', 'traversability', 'flexibility']
         if self.model_output == 'labels':
@@ -181,15 +182,20 @@ class CloudSegmentor:
         assert isinstance(label_pred, torch.Tensor)
         assert isinstance(xyz, np.ndarray)
 
-        label_pred = torch.log_softmax(label_pred.squeeze(0), dim=0).cpu().numpy()
+        label_pred = torch.softmax(label_pred.squeeze(0), dim=0).cpu().numpy()
         n_classes, H, W = label_pred.shape
         n_pts = H * W
         assert label_pred.ndim == 3
 
-        label_soft = label_pred[1]
+        label_soft = label_pred[self.soft_label_ind]
 
         colors = self.label_to_color(label_pred)
         colors = colors / colors.max()
+
+        # label_soft_vis = cv2.resize(label_soft.astype('float'), (label_soft.shape[1] // 2, label_soft.shape[0] // 2),
+        #                             interpolation=cv2.INTER_LINEAR) / label_soft.max()
+        # cv2.imshow('Predicted labels', label_soft_vis)
+        # cv2.waitKey(1)
 
         # colors_vis = cv2.resize(colors.astype('float'), (colors.shape[1] // 2, colors.shape[0] // 2),
         #                         interpolation=cv2.INTER_LINEAR) / colors.max()
@@ -221,7 +227,7 @@ class CloudSegmentor:
         msg_stamp = rospy.Time.now()
         age = (msg_stamp - pc_msg.header.stamp).to_sec()
         if age > self.max_age:
-            rospy.logwarn('Discarding points %.1f s > %.1f s old.', age, self.max_age)
+            rospy.logwarn('Cloud segmentation: Discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
         t0 = rospy.Time.now().to_sec()
@@ -273,6 +279,6 @@ class CloudSegmentor:
 
 
 if __name__ == '__main__':
-    rospy.init_node('cloud_segmentation', log_level=rospy.INFO)
+    rospy.init_node('cloud_segmentation', log_level=rospy.DEBUG)
     proc = CloudSegmentor(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
     rospy.spin()

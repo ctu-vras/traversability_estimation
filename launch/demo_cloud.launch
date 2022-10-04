@@ -4,10 +4,11 @@
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
 <!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/dev/kn_square_total_station.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-09-17-50-13.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>
 
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
