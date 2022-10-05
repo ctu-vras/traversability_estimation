@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
+    <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
+    <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
+                                                   one of ['00000', '00001', '00002', '00003', '00004']"/>
+
+    <!-- Bag file data -->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>
+    <param name="use_sim_time" value="true"/>
+    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
+    <rosparam command="load" file="$(arg params)"/>
+    <remap from="/os_cloud_node/points" to="points"/>
+    <node name="rosbag_play" pkg="rosbag" type="play"
+          args="--clock --delay 3.0 --rate 1.0 --start 220 $(arg bag)
+                /trav_obstacles_pcd_map:=/trav_obstacles_pcd_map_dev_null
+                /path:=/path_dev_null"/>
+
+    <node name="play_tf_static" pkg="traversability_estimation" type="play_tf_static" args="$(arg bag)">
+        <remap from="~tf_static" to="/tf_static"/>
+    </node>
+
+<!--    Point cloud segmentation -->
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            max_age: 0.2
+            lidar_channels: 128
+            lidar_beams: 1024
+            lidar_fov_up: 45.0
+            lidar_fov_down: -45.0
+            range_projection: true
+            debug: true
+            soft_label_ind: 1
+            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
+<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth-->
+        </rosparam>
+        <remap from="cloud_in" to="points"/>
+        <remap from="cloud_out" to="cloud_segmentation/points"/>
+    </node>
+
+<!--    Cloud voxel filtering: 10 cm -->
+    <node name="cloud_voxel_filter_10cm" pkg="nodelet" type="nodelet"
+          args="standalone cloud_proc/voxel_filter"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.1
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points"/>
+        <remap from="output" to="cloud_segmentation/points_10cm"/>
+    </node>
+<!--    Cloud voxel filtering: 20 cm -->
+    <node name="cloud_voxel_filter_20cm" pkg="nodelet" type="nodelet"
+          args="standalone cloud_proc/voxel_filter"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.2
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points_10cm"/>
+        <remap from="output" to="cloud_segmentation/points_20cm"/>
+    </node>
+
+    <!-- Cloud distance filtering -->
+    <node pkg="gps_to_path" type="trav_to_obstacles" name="trav_to_obstacles" output="screen">
+        <param name="max_height" type="double" value="1."/>
+        <param name="min_height" type="double" value="0.05"/>
+        <param name="max_dist" type="double" value="7." />
+        <param name="min_dist" type="double" value="0.5"/>
+        <param name="max_age" type="double" value="0.2"/>
+        <param name="robot_base_frame" type="string" value="base_link"/>
+<!--        <param name="cloud_in" type="str" value="cloud_fusion/points_20cm"/>-->
+        <param name="cloud_in" type="str" value="cloud_segmentation/points"/>
+        <param name="trav_obstacle_field" type="string" value="traversability_soft"/>
+<!--        <param name="trav_obstacle_field" type="string" value="traversability"/>-->
+        <param name="trav_frame" type="string" value="os_sensor"/>
+    </node>
+
+    <!-- PATH PLANNER -->
+    <node pkg="gps_to_path" type="path_planner_igraph" name="path_planner" output="screen">
+<!--    	<param name="gpx_assignment" type="string" value="$(find gps_to_path)/data/unhost_base_ex_short_lap.gpx"/>-->
+        <param name="gpx_assignment" type="string" value="$(find gps_to_path)/data/unhost_west_ex_long_field.gpx"/>
+        <param name="goal_reached_distance" type="double" value="1."/>
+        <param name="publish_pcd" type="bool" value="true"/>
+        <param name="trav_max_dist" type="double" value="5."/>
+        <param name="trav_radius" type="double" value="0.5"/>
+        <param name="untrav_point_cost" type="double" value="10."/>
+        <param name="long_term_memory_longevity" type="double" value="0.997" />
+        <param name="short_term_memory_longevity" type="double" value="0.8"/>
+        <param name="trav_inheritance_radius" type="double" value="0.71"/>
+        <param name="robot_base_frame" type="string" value="base_link"/>
+        <param name="max_goal_untrav_cost" type="double" value="200."/>
+        <!--param name="max_path_cost" type="double" value="1000." /-->
+        <param name="max_subgraph_time" type="double" value="120." />
+        <param name="use_osm" type="bool" value="false"/>
+	    <param name="osm_use_solitary_nodes" type="bool" value="false"/>
+        <param name="repeat" type="bool" value="false"/>
+        <param name="next_waypoint_proximity_switch" type="bool" value="true"/>
+        <param name="min_time_near_goal" type="double" value="1."/>
+        <param name="flip" type="bool" value="false"/>
+    </node>
+    <!-- PATH -->
+    <node pkg="gps_to_path" type="waypoints_to_path" name="waypoints_to_path" output="screen"/>
+
+    <!-- RVIZ -->
+    <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find traversability_estimation)/config/rviz/cloud_segm_planner.rviz"/>
+</launch>

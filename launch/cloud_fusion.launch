@@ -35,7 +35,7 @@
             lidar_fov_down: -22.5
             range_projection: true
             debug: true
-            weights: deeplabv3_resnet101_lr_0.0001_bs_4_epoch_0_Rellis3DClouds_depth_labels_traversability_iou_0.821.pth
+            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
 <!--            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth-->
         </rosparam>
         <remap from="cloud_in" to="points"/>
@@ -67,7 +67,7 @@
     </node>
 
     <!-- Add color to a point cloud from a camera image -->
-    <node name="traversability_fusion" pkg="traversability_estimation" type="cloud_fusion" output="screen">
+    <node name="cloud_fusion" pkg="traversability_estimation" type="cloud_fusion" output="screen">
         <rosparam subst_value="true">
             map_frame: odom
             max_age: 1.0
