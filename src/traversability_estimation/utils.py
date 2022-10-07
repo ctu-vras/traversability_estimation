@@ -275,9 +275,9 @@ def map_colors(values, colormap=cm.gist_rainbow, min_value=None, max_value=None)
         values = torch.tensor(values)
     assert callable(colormap) or isinstance(colormap, torch.Tensor)
     if min_value is None:
-        min_value = values.min()
+        min_value = values[torch.isfinite(values)].min()
     if max_value is None:
-        max_value = values.max()
+        max_value = values[torch.isfinite(values)].max()
     scale = max_value - min_value
     a = (values - min_value) / scale if scale > 0.0 else values - min_value
     if callable(colormap):

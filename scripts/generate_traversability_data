@@ -23,7 +23,7 @@ from rosbag import Bag, ROSBagException, Compression
 import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import BufferCore, TransformException
-from traversability_estimation.geometry import affine, Bodies, Body, Box, Sphere  # needed for eval
+from traversability_estimation.geometry import affine, Bodies, Body, Box, inverse, Sphere  # needed for eval
 from traversability_estimation.segmentation import compute_support, fit_planes, position, valid_point_mask
 from traversability_estimation.utils import show_cloud, slots
 from tqdm import tqdm
@@ -31,6 +31,7 @@ from tqdm import tqdm
 DEPTH_FIELD_NAME = 'depth'
 # LABEL_FIELD_NAME = 'flexible'
 LABEL_FIELD_NAME = 'label'
+GROUND_Z_FIELD_NAME = 'ground_z'
 LABEL_RIGID = 0
 LABEL_FLEXIBLE = 1
 # LABEL_INVALID = 254
@@ -56,10 +57,16 @@ def arg_parser():
     parser.add_argument('--input-step', type=int, default=1)
     parser.add_argument('--input-start', type=float, default=-float('inf'), help='Start time in seconds.')
     parser.add_argument('--input-end', type=float, default=float('inf'), help='End time in seconds.')
-    parser.add_argument('--discard-model', type=str, default=None, help='Model at current position discarding points.')
-    parser.add_argument('--flexible-model', type=str, default=None, help='Model to move along robot path marking points flexible.')
-    parser.add_argument('--rigid-model', type=str, default=None, help='Model to move along robot path marking points rigid.')
-    parser.add_argument('--rigid-primitives', type=str2bool, default=False, help='Fit primitives and mark the inliers as rigid.')
+    parser.add_argument('--discard-model', type=str, default=None,
+                        help='Model at current position discarding points.')
+    parser.add_argument('--flexible-model', type=str, default=None,
+                        help='Model to move along robot path marking points flexible.')
+    parser.add_argument('--rigid-model', type=str, default=None,
+                        help='Model to move along robot path marking points rigid.')
+    parser.add_argument('--ground-height', type=float, default=0.0,
+                        help='Height of the ground relative to the robot frame.')
+    parser.add_argument('--rigid-primitives', type=str2bool, default=False,
+                        help='Fit primitives and mark the inliers as rigid.')
     parser.add_argument('--z-support', type=str, default=None, help='Z support configuration or empty.')
     parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
     parser.add_argument('--time-horizon', '-t', type=float, nargs=2, default=[0.0, 10.0])
@@ -68,6 +75,7 @@ def arg_parser():
     parser.add_argument('--cloud-array', type=str, default='cloud')
     parser.add_argument('--depth-array', type=str, default='depth')
     parser.add_argument('--label-array', type=str, default='target')
+    parser.add_argument('--ground-height-array', type=str, default='ground_height')
     parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
@@ -110,7 +118,30 @@ def fit_primitives(x_valid):
     return models
 
 
-def segment_cloud(flexible_model, arr, tfs, rigid_model=None, discard_tf=None, discard_model=None,
+def compute_ground_offset(x, robot_to_fixed, ground_height):
+    """
+    @param x: 3 x N array of points in the robot frame.
+    @param robot_to_fixed: 4 x 4 transformation matrix from robot frame to fixed frame.
+    @param ground_height: Height of the ground relative to the robot frame.
+    """
+    # Construct ground plane equation n * x + b = 0 from robot pose in fixed frame.
+    n = robot_to_fixed[:3, 2:3]
+    o = robot_to_fixed[:3, 3:] + n * ground_height
+    b = -np.matmul(n.T, o)
+    # Compute ground height offset for points in fixed frame.
+    y = affine(robot_to_fixed, x)
+    d = np.matmul(n.T, y).ravel() + b.ravel()  # signed distance to plane
+    z_offset_fixed = -d / n[2, 0]  # ground offset in fixed frame
+    offset_fixed = np.zeros_like(x)
+    offset_fixed[2, :] = z_offset_fixed
+    # Compute ground height offset for points in robot frame.
+    offset = np.matmul(robot_to_fixed[:3, :3].T, offset_fixed)
+    return offset, z_offset_fixed
+
+
+def segment_cloud(flexible_model, arr, input_to_robot_tfs,
+                  discard_tf=None, discard_model=None,
+                  rigid_model=None, ground_height=None,
                   rigid_primitives=True, input_to_fixed=None, z_support=None):
     assert flexible_model is None or isinstance(flexible_model, Body)
     assert isinstance(arr, np.ndarray)
@@ -127,17 +158,37 @@ def segment_cloud(flexible_model, arr, tfs, rigid_model=None, discard_tf=None, d
 
     # Initialize all labels as unknown.
     labels = np.full(arr.shape, LABEL_IGNORE, dtype=np.uint8).ravel()
+    ground_z_offset = np.full(arr.shape, np.nan, dtype=np.float32).ravel()
 
     # Mark valid points which are contained by future model poses as empty.
     flexible = np.zeros((x.shape[1],), dtype=bool)
     rigid = np.zeros((x.shape[1],), dtype=bool)
-    for tf in tfs:
-        assert isinstance(tf, np.ndarray)
-        y = affine(tf, x)
-        if flexible_model:
-            flexible = np.logical_or(flexible, flexible_model.contains(y))
+    for input_to_robot in input_to_robot_tfs:
+        assert isinstance(input_to_robot, np.ndarray)
+        x_robot = affine(input_to_robot, x)
+        if flexible_model or ground_height is not None:
+            tmp_flexible = flexible_model.contains_point(x_robot)
+            flexible = np.logical_or(flexible, tmp_flexible)
         if rigid_model:
-            rigid = np.logical_or(rigid, rigid_model.contains(y))
+            tmp_rigid = rigid_model.contains_point(x_robot)
+            rigid = np.logical_or(rigid, tmp_rigid)
+        if ground_height is not None:
+            robot_to_fixed = np.matmul(inverse(input_to_robot), input_to_fixed)
+            ground_offset_robot, ground_z_offset_fixed = compute_ground_offset(x_robot, robot_to_fixed, ground_height)
+            y_ground = x_robot + ground_offset_robot
+            # Offset is valid only for flexible points with their ground
+            # location within the rigid model.
+            ground_valid = tmp_flexible & rigid_model.contains_point(y_ground)
+            # Take minimum offset from all applicable robot positions.
+            ground_all = valid_ind[ground_valid]
+            ground_z_offset[ground_all] = np.nanmin([ground_z_offset[ground_all],
+                                                     ground_z_offset_fixed[ground_valid]], axis=0)
+
+    print('%.3g = %i / %i flexible points' % (flexible.mean(), flexible.sum(), flexible.size))
+    print('%.3g = %i / %i rigid points identified.' % (rigid.mean(), rigid.sum(), rigid.size))
+    valid_ground = np.logical_not(np.isnan(ground_z_offset))
+    print('%.3g = %i / %i ground points identified (mean offset: %.3g m).'
+          % (valid_ground.mean(), valid_ground.sum(), valid_ground.size, np.nanmean(ground_z_offset)))
 
     # Fit geometric primitives to points and mark their inliers as rigid.
     if rigid_primitives:
@@ -156,14 +207,47 @@ def segment_cloud(flexible_model, arr, tfs, rigid_model=None, discard_tf=None, d
     # show_cloud(x.T, labels[valid_ind], min=0, max=2, colormap=cm.jet)
 
     labels = labels.reshape(arr.shape)
-    return labels
+    ground_z_offset = ground_z_offset.reshape(arr.shape)
+    return labels, ground_z_offset
+
+
+def create_ground_cloud(x, ground_z_offset, input_to_fixed):
+    # Convert ground z offset from fixed to input frame to correct positions.
+    ground_z_offset = ground_z_offset.ravel()
+    valid = ((x != 0) & np.isfinite(x)).all(axis=1)
+    valid = valid & np.isfinite(ground_z_offset)
+    # print('%.3g valid ground points.' % valid)
+    print('%.3g = %i / %i ground points identified (mean offset: %.3g m).'
+          % (valid.mean(), valid.sum(), valid.size, ground_z_offset[valid].mean()))
+    offset_fixed = np.zeros_like(x)
+    offset_fixed[:, 2] = ground_z_offset
+    # Multiply by inverse of input_to_fixed to convert from fixed to input frame,
+    # Inverse/transpose is cancelled by multiplying from right.
+    # offset = np.matmul(input_to_fixed[:3, :3].T, offset_fixed.T)
+    offset = np.matmul(offset_fixed, input_to_fixed[:3, :3])
+    ground = x + offset
+
+    # valid = np.isfinite(x).all(axis=1) & (x != 0).all(axis=1)
+    # valid = np.isfinite(ground_z_offset).all(axis=1)
+    # valid_ground = 1.0 - np.isnan(ground_z_offset).mean()
+    # print('%.3g valid ground points.' % valid_ground)
+    if valid.sum() > 0:
+        # viz_x = np.concatenate((x[valid], ground[valid]), axis=0)
+        # viz_v = np.concatenate((np.zeros(x[valid].shape[:1]), np.ones(ground[valid].shape[:1])))
+        viz_x = np.concatenate((x, ground[valid]), axis=0)
+        viz_v = np.concatenate((np.zeros(x.shape[:1]), np.ones(ground[valid].shape[:1])))
+        # show_cloud(x[valid], ground_z_offset.ravel()[valid], colormap=cm.jet)
+        show_cloud(viz_x, viz_v, colormap=cm.jet)
+
+    return x
 
 
 def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=None,
                   exclude_times=None, input_step=1, input_start=0.0, input_end=float('inf'),
-                  discard_model=None, flexible_model=None, rigid_model=None, rigid_primitives=False, z_support=None,
+                  discard_model=None, flexible_model=None, rigid_model=None, ground_height=None,
+                  rigid_primitives=False, z_support=None,
                   discard_empty=False, distance_horizon=None, time_horizon=None, time_step=None,
-                  output_path=None, cloud_array=None, depth_array=None, label_array=None,
+                  output_path=None, cloud_array=None, depth_array=None, label_array=None, ground_height_array=None,
                   output_bag_path=None, output_topic=None, output_period=None):
     assert bag_paths, bag_paths
     assert not exclude_times or all(len(t) == 2 for t in exclude_times), exclude_times
@@ -221,6 +305,7 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                 if output_period and topic in last_out and start - last_out[topic] < output_period:
                     continue
 
+                # Find transform from input cloud to fixed frame.
                 try:
                     input_to_fixed = buffer.lookup_transform_core(fixed_frame, msg.header.frame_id, msg.header.stamp)
                 except TransformException as ex:
@@ -228,7 +313,8 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                     continue
                 input_to_fixed = numpify(input_to_fixed.transform)
 
-                tfs = []
+                # Find transforms from input cloud to robot positions within the horizon.
+                input_to_robot_tfs = []
                 for t in np.linspace(start - n[0] * time_step, start + n[1] * time_step, sum(n) + 1):
                     try:
                         tf = buffer.lookup_transform_full_core(robot_frame, rospy.Time.from_seconds(t),
@@ -238,16 +324,16 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                         # print('Could not transform from %s to %s at %.3f s.' % (msg.header.frame_id, robot_frame, t))
                         continue
                     tf = numpify(tf.transform)
-                    if tfs:
+                    if input_to_robot_tfs:
                         # Check distance horizon.
-                        diff = np.matmul(tfs[n[0]], np.linalg.inv(tf))
+                        diff = np.matmul(input_to_robot_tfs[n[0]], inverse(tf))
                         distance = np.linalg.norm(diff[:-1, -1])
                         if distance > distance_horizon:
                             print('Distance horizon reached, %.3f m > %.3f m.' % (distance, distance_horizon))
                             break
-                    tfs.append(tf)
+                    input_to_robot_tfs.append(tf)
 
-                if not tfs:
+                if not input_to_robot_tfs:
                     continue
 
                 if topic_types[topic] == 'sensor_msgs/PointCloud2':
@@ -264,27 +350,37 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                     # assert depth_struct.shape == input_struct.shape, (depth_struct.shape, input_struct.shape)
 
                     # H x W unstructured label image.
-                    label = segment_cloud(flexible_model, input_struct, tfs, rigid_model=rigid_model,
-                                          discard_tf=tfs[n[0]], discard_model=discard_model,
-                                          rigid_primitives=rigid_primitives,
-                                          input_to_fixed=input_to_fixed, z_support=z_support)
+                    label, ground_z_offset = segment_cloud(flexible_model, input_struct, input_to_robot_tfs,
+                                                           rigid_model=rigid_model, ground_height=ground_height,
+                                                           discard_tf=input_to_robot_tfs[n[0]], discard_model=discard_model,
+                                                           rigid_primitives=rigid_primitives,
+                                                           input_to_fixed=input_to_fixed, z_support=z_support)
                     # H x W structured label cloud.
                     label_struct = label.reshape((input_struct.size, -1))
                     label_struct = unstructured_to_structured(label_struct, names=[LABEL_FIELD_NAME])
-                    # label_struct = label_struct.reshape(input_struct.shape)
-                    # assert label_struct.shape == input_struct.shape, (label_struct.shape, input_struct.shape)
 
-                    cloud_struct = merge_arrays([input_struct, depth_struct, label_struct], flatten=True)
+                    ground_z_offset_struct = ground_z_offset.reshape((input_struct.size, -1))
+                    ground_z_offset_struct = unstructured_to_structured(ground_z_offset_struct, names=[GROUND_Z_FIELD_NAME])
+
+                    cloud_struct = merge_arrays([input_struct, depth_struct, label_struct, ground_z_offset_struct],
+                                                flatten=True)
                     cloud_struct = cloud_struct.reshape(input_struct.shape)
                     # print('Cloud struct:', cloud_struct.shape)
                     assert cloud_struct.shape == input_struct.shape
 
-                    n_valid_labels = (cloud_struct[LABEL_FIELD_NAME] != LABEL_IGNORE).sum()
+                    # n_valid_labels = (cloud_struct[LABEL_FIELD_NAME] != LABEL_IGNORE).sum()
+                    n_valid_labels = (label != LABEL_IGNORE).sum()
                     if discard_empty and n_valid_labels == 0:
                         print('Discarding cloud with no valid labels.')
                         continue
                     else:
                         print('Storing cloud with %i valid labels.' % n_valid_labels)
+
+                    # Create cloud with ground points for visualization and debugging.
+                    # ground = create_ground_cloud(input_struct, ground_z_offset_struct, input_to_fixed)
+                    ground = create_ground_cloud(position(input_struct.ravel()), ground_z_offset, input_to_fixed)
+                    ground_struct = ground.reshape((input_struct.size, -1))
+                    ground_struct = unstructured_to_structured(ground_struct, names=['x', 'y', 'z'])
 
                     last_out[topic] = start
 
@@ -297,6 +393,8 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                             arrays[cloud_array] = cloud_struct
                         if depth_array:
                             arrays[depth_array] = depth
+                        if ground_height_array:
+                            arrays[ground_height_array] = ground_z_offset
                         if label_array:
                             arrays[label_array] = label
                         np.savez_compressed(p, **arrays)
@@ -306,6 +404,11 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                         segmented_msg = msgify(PointCloud2, cloud_struct)
                         segmented_msg.header = msg.header
                         output_bag.write(t, segmented_msg, stamp)
+
+                        ground_msg = msgify(PointCloud2, ground_struct)
+                        ground_msg.header = msg.header
+                        output_bag.write(t + '_ground', ground_msg, stamp)
+
     if output_bag:
         output_bag.close()
 

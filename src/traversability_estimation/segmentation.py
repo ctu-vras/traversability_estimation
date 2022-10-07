@@ -483,15 +483,18 @@ def filter_grid(cloud, grid, keep='first', log=False, rng=default_rng):
 
 
 def valid_point_mask(arr, discard_tf=None, discard_model=None):
+    assert isinstance(arr, np.ndarray)
+    assert arr.dtype.names
     # Identify valid points, i.e., points with valid depth which are not part
     # of the robot (contained by the discard model).
-    x = position(arr)
-    x = x.reshape((-1, 3)).T
+    # x = position(arr)
+    # x = x.reshape((-1, 3)).T
+    x = position(arr.ravel()).T
     valid = np.isfinite(x).all(axis=0)
     valid = np.logical_and(valid, (x != 0.0).any(axis=0))
     if discard_tf is not None and discard_model is not None:
         y = affine(discard_tf, x)
-        valid = np.logical_and(valid, ~discard_model.contains(y))
+        valid = np.logical_and(valid, ~discard_model.contains_point(y))
     return valid.reshape(arr.shape)
 
 
