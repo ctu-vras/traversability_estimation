@@ -3,47 +3,51 @@
     <arg name="cloud" default="points_filtered_jetson"/>
     <arg name="nodelet_manager" default="geometric_traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+    <arg name="bumper" default="false"/>
 
     <node if="$(eval nodelet_manager == 'geometric_traversability_manager')"
           name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
-          respawn="true" respawn_delay="1.0" output="screen">
+          respawn="true" respawn_delay="1.0" output="log">
         <param name="num_worker_threads" value="16"/>
     </node>
 
     <node name="max_filter_projection" pkg="nodelet" type="nodelet"
           args="$(arg nodelet_action) cloud_proc/projection $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="screen">
+          respawn="true" respawn_delay="1.0" output="log">
         <rosparam>
             height: 64
-            f_elevation: -40.74366543152521  <!-- 90 deg -->
-<!--            azimuth_only: true-->
             width: 256
+            fov_elevation: 1.5707963267948966  <!-- 90 deg -->
             keep: 3  <!-- max depth -->
+            azimuth_only: false
         </rosparam>
         <remap from="input" to="$(arg cloud)"/>
         <remap from="output" to="max_points"/>
     </node>
-    <node name="max_filter_depth" pkg="traversability_estimation" type="cloud_to_depth">
+
+    <node name="max_filter_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
+          respawn="true" respawn_delay="1.0" output="screen">
         <rosparam>
             negative: true
         </rosparam>
         <remap from="cloud" to="max_points"/>
         <remap from="image" to="max_points_depth"/>
     </node>
+
     <node name="cloud_range_filter_max" pkg="nodelet" type="nodelet"
           args="$(arg nodelet_action) cloud_proc/range_filter $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="screen">
+          respawn="true" respawn_delay="1.0" output="log">
         <rosparam>
             field: x
-            min: 0.8
-            max: 8.0
+            max: 5.0
         </rosparam>
         <remap from="input" to="max_points"/>
         <remap from="output" to="max_points_in_range"/>
     </node>
+
     <node name="cloud_voxel_filter_max" pkg="nodelet" type="nodelet"
           args="$(arg nodelet_action) cloud_proc/voxel_filter $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="screen">
+          respawn="true" respawn_delay="1.0" output="log">
         <rosparam>
             field: x
             grid: 0.125
@@ -52,6 +56,7 @@
         <remap from="input" to="max_points_in_range"/>
         <remap from="output" to="max_points_125mm"/>
     </node>
+
     <node name="traversability_estimation_max" pkg="nodelet" type="nodelet"
           args="$(arg nodelet_action) naex/traversability $(arg nodelet_manager)"
           respawn="true" respawn_delay="1.0" output="screen">
@@ -67,7 +72,10 @@
         <remap from="input" to="max_points_125mm"/>
         <remap from="output" to="geometric_traversability_raw"/>
     </node>
-    <node pkg="augmented_robot_trackers" type="virtual_bumper_marv_sys.py" name="virtual_bumper" output="screen">
+
+    <node if="$(arg bumper)"
+          name="virtual_bumper" pkg="augmented_robot_trackers" type="virtual_bumper_marv_sys.py"
+          respawn="true" respawn_delay="1.0" output="log">
         <rosparam command="load" file="$(find augmented_robot_trackers)/src/utilities/configs/virtual_bumper_husky_sys.yaml"/>
         <remap from="cmd_vel_in" to="nav/cmd_vel"/>
         <remap from="cmd_vel_out" to="nav_safety/cmd_vel"/>
