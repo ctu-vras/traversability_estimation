@@ -503,7 +503,7 @@ def valid_point_indices(*args, **kwargs):
 
 
 @timing
-def compute_support(arr, transform=None, range=None, grid=None, scale=1.0, radius=0.1):
+def compute_rigid_support(arr, transform=None, range=None, grid=None, scale=1.0, radius=0.1, min_support=30):
     xyz = position(arr)
     xyz = xyz.reshape((-1, 3))
 
@@ -527,4 +527,6 @@ def compute_support(arr, transform=None, range=None, grid=None, scale=1.0, radiu
     support = np.array([len(i) for i in ind]).astype(np.uint32)
     support = support.reshape(arr.shape)
 
-    return support
+    rigid = support >= min_support
+
+    return support, rigid

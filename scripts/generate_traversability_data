@@ -24,13 +24,14 @@ import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import BufferCore, TransformException
 from traversability_estimation.geometry import affine, Bodies, Body, Box, inverse, Sphere  # needed for eval
-from traversability_estimation.segmentation import compute_support, fit_planes, position, valid_point_mask
+from traversability_estimation.segmentation import compute_rigid_support, fit_planes, position, valid_point_mask
 from traversability_estimation.utils import show_cloud, slots
 from tqdm import tqdm
 
 DEPTH_FIELD_NAME = 'depth'
 # LABEL_FIELD_NAME = 'flexible'
 LABEL_FIELD_NAME = 'label'
+GROUND_FLAG_FIELD_NAME = 'ground'
 GROUND_Z_FIELD_NAME = 'ground_z'
 LABEL_RIGID = 0
 LABEL_FLEXIBLE = 1
@@ -78,7 +79,9 @@ def arg_parser():
     parser.add_argument('--ground-height-array', type=str, default='ground_height')
     parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
+    parser.add_argument('--ground-topic', type=str, default='{topic}_ground')
     parser.add_argument('--output-period', type=float, default=None)
+    parser.add_argument('--visualize', type=str2bool, default=False)
     parser.add_argument('bag_paths', type=str, nargs='+')
     return parser
 
@@ -142,7 +145,8 @@ def compute_ground_offset(x, robot_to_fixed, ground_height):
 def segment_cloud(flexible_model, arr, input_to_robot_tfs,
                   discard_tf=None, discard_model=None,
                   rigid_model=None, ground_height=None,
-                  rigid_primitives=True, input_to_fixed=None, z_support=None):
+                  rigid_primitives=True, input_to_fixed=None, z_support=None,
+                  visualize=False):
     assert flexible_model is None or isinstance(flexible_model, Body)
     assert isinstance(arr, np.ndarray)
     assert rigid_model is None or isinstance(rigid_model, Body)
@@ -197,25 +201,31 @@ def segment_cloud(flexible_model, arr, input_to_robot_tfs,
             rigid[indices] = True
 
     if z_support:
-        support = compute_support(arr_valid, transform=input_to_fixed, **z_support)
-        rigid[support > 30] = True
+        support, tmp_rigid = compute_rigid_support(arr_valid, transform=input_to_fixed, **z_support)
+        # rigid[support > 30] = True
+        rigid[tmp_rigid] = True
 
     labels[valid_ind[rigid]] = LABEL_RIGID
     # Flexible label takes precedence.
     labels[valid_ind[flexible]] = LABEL_FLEXIBLE
+    # Don't correct rigid points.
+    ground_z_offset[valid_ind[rigid]] = 0.0
 
-    # show_cloud(x.T, labels[valid_ind], min=0, max=2, colormap=cm.jet)
+    if visualize:
+        show_cloud(x.T, labels[valid_ind], min=0, max=2, colormap=cm.jet)
 
     labels = labels.reshape(arr.shape)
     ground_z_offset = ground_z_offset.reshape(arr.shape)
     return labels, ground_z_offset
 
 
-def create_ground_cloud(x, ground_z_offset, input_to_fixed):
+def create_ground_cloud(arr, ground_z_offset, input_to_fixed, visualize=False):
+    x = position(arr.ravel())
+
     # Convert ground z offset from fixed to input frame to correct positions.
     ground_z_offset = ground_z_offset.ravel()
     valid = ((x != 0) & np.isfinite(x)).all(axis=1)
-    valid = valid & np.isfinite(ground_z_offset)
+    valid = valid & np.isfinite(ground_z_offset) & (ground_z_offset != 0)
     # print('%.3g valid ground points.' % valid)
     print('%.3g = %i / %i ground points identified (mean offset: %.3g m).'
           % (valid.mean(), valid.sum(), valid.size, ground_z_offset[valid].mean()))
@@ -224,31 +234,38 @@ def create_ground_cloud(x, ground_z_offset, input_to_fixed):
     # Multiply by inverse of input_to_fixed to convert from fixed to input frame,
     # Inverse/transpose is cancelled by multiplying from right.
     # offset = np.matmul(input_to_fixed[:3, :3].T, offset_fixed.T)
-    offset = np.matmul(offset_fixed, input_to_fixed[:3, :3])
-    ground = x + offset
+    offset = np.matmul(offset_fixed, input_to_fixed[:3, :3]).astype(dtype=np.float32)
+    x_ground = x + offset
 
-    # valid = np.isfinite(x).all(axis=1) & (x != 0).all(axis=1)
-    # valid = np.isfinite(ground_z_offset).all(axis=1)
-    # valid_ground = 1.0 - np.isnan(ground_z_offset).mean()
-    # print('%.3g valid ground points.' % valid_ground)
-    if valid.sum() > 0:
+    x_all = np.concatenate((x, x_ground[valid]), axis=0)
+    x_all_struct = unstructured_to_structured(x_all, names=['x', 'y', 'z'])
+
+    flag_all = np.concatenate((np.zeros(x.shape[:1], dtype=np.uint8),
+                               np.ones(x_ground[valid].shape[:1], dtype=np.uint8)), axis=0).reshape((-1, 1))
+    flag_all_struct = unstructured_to_structured(flag_all, names=[GROUND_FLAG_FIELD_NAME])
+
+    cloud = merge_arrays([x_all_struct, flag_all_struct], flatten=True)
+    # cloud = cloud.reshape(arr.shape)
+
+    if visualize and valid.sum() > 0:
         # viz_x = np.concatenate((x[valid], ground[valid]), axis=0)
         # viz_v = np.concatenate((np.zeros(x[valid].shape[:1]), np.ones(ground[valid].shape[:1])))
-        viz_x = np.concatenate((x, ground[valid]), axis=0)
-        viz_v = np.concatenate((np.zeros(x.shape[:1]), np.ones(ground[valid].shape[:1])))
+        # viz_x = np.concatenate((x, x_ground[valid]), axis=0)
+        # viz_v = np.concatenate((np.zeros(x.shape[:1]), np.ones(x_ground[valid].shape[:1])))
         # show_cloud(x[valid], ground_z_offset.ravel()[valid], colormap=cm.jet)
-        show_cloud(viz_x, viz_v, colormap=cm.jet)
+        # show_cloud(viz_x, viz_v, colormap=cm.jet)
+        show_cloud(x_all, flag_all.ravel(), colormap=cm.jet)
 
-    return x
+    return cloud
 
 
 def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=None,
                   exclude_times=None, input_step=1, input_start=0.0, input_end=float('inf'),
                   discard_model=None, flexible_model=None, rigid_model=None, ground_height=None,
                   rigid_primitives=False, z_support=None,
-                  discard_empty=False, distance_horizon=None, time_horizon=None, time_step=None,
+                  discard_empty=True, distance_horizon=None, time_horizon=None, time_step=None,
                   output_path=None, cloud_array=None, depth_array=None, label_array=None, ground_height_array=None,
-                  output_bag_path=None, output_topic=None, output_period=None):
+                  output_bag_path=None, output_topic=None, ground_topic=None, output_period=None, visualize=False):
     assert bag_paths, bag_paths
     assert not exclude_times or all(len(t) == 2 for t in exclude_times), exclude_times
     assert len(time_horizon) == 2, time_horizon
@@ -309,7 +326,7 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                 try:
                     input_to_fixed = buffer.lookup_transform_core(fixed_frame, msg.header.frame_id, msg.header.stamp)
                 except TransformException as ex:
-                    print('Could not transform from %s to %s at %.3f s.' % (msg.header.frame_id, fixed_frame, t))
+                    print('Could not transform from %s to %s at %.3f s.' % (msg.header.frame_id, fixed_frame, msg.header.stamp.to_sec()))
                     continue
                 input_to_fixed = numpify(input_to_fixed.transform)
 
@@ -354,7 +371,8 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                                                            rigid_model=rigid_model, ground_height=ground_height,
                                                            discard_tf=input_to_robot_tfs[n[0]], discard_model=discard_model,
                                                            rigid_primitives=rigid_primitives,
-                                                           input_to_fixed=input_to_fixed, z_support=z_support)
+                                                           input_to_fixed=input_to_fixed, z_support=z_support,
+                                                           visualize=visualize)
                     # H x W structured label cloud.
                     label_struct = label.reshape((input_struct.size, -1))
                     label_struct = unstructured_to_structured(label_struct, names=[LABEL_FIELD_NAME])
@@ -368,9 +386,9 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                     # print('Cloud struct:', cloud_struct.shape)
                     assert cloud_struct.shape == input_struct.shape
 
-                    # n_valid_labels = (cloud_struct[LABEL_FIELD_NAME] != LABEL_IGNORE).sum()
                     n_valid_labels = (label != LABEL_IGNORE).sum()
-                    if discard_empty and n_valid_labels == 0:
+                    n_flexible = (label == LABEL_FLEXIBLE).sum()
+                    if discard_empty and (n_valid_labels < 1000 or n_flexible < 100):
                         print('Discarding cloud with no valid labels.')
                         continue
                     else:
@@ -378,9 +396,10 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
 
                     # Create cloud with ground points for visualization and debugging.
                     # ground = create_ground_cloud(input_struct, ground_z_offset_struct, input_to_fixed)
-                    ground = create_ground_cloud(position(input_struct.ravel()), ground_z_offset, input_to_fixed)
-                    ground_struct = ground.reshape((input_struct.size, -1))
-                    ground_struct = unstructured_to_structured(ground_struct, names=['x', 'y', 'z'])
+                    ground_struct = create_ground_cloud(input_struct, ground_z_offset, input_to_fixed,
+                                                        visualize=visualize)
+                    # ground_struct = ground.reshape((input_struct.size, -1))
+                    # ground_struct = unstructured_to_structured(ground_struct, names=['x', 'y', 'z'])
 
                     last_out[topic] = start
 
@@ -405,9 +424,10 @@ def generate_data(bag_paths=None, topics=None, fixed_frame=None, robot_frame=Non
                         segmented_msg.header = msg.header
                         output_bag.write(t, segmented_msg, stamp)
 
+                        t = ground_topic.format(topic=topic)
                         ground_msg = msgify(PointCloud2, ground_struct)
                         ground_msg.header = msg.header
-                        output_bag.write(t + '_ground', ground_msg, stamp)
+                        output_bag.write(t, ground_msg, stamp)
 
     if output_bag:
         output_bag.close()

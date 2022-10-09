@@ -27,7 +27,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: Rear
+    SyncSource: Ground
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -37,7 +37,7 @@ Visualization Manager:
   Displays:
     - Alpha: 1
       Class: rviz/RobotModel
-      Collision Enabled: false
+      Collision Enabled: true
       Enabled: true
       Links:
         All Links Enabled: true
@@ -243,7 +243,7 @@ Visualization Manager:
       TF Prefix: ""
       Update Interval: 0
       Value: true
-      Visual Enabled: true
+      Visual Enabled: false
     - Alpha: 0.5
       Cell Size: 10
       Class: rviz/Grid
@@ -485,7 +485,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -500,7 +500,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: false
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 0.20000000298023224
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -564,12 +564,102 @@ Visualization Manager:
         Min Value: -1
         Value: false
       Axis: Z
+      Channel Name: label
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 0; 255; 0
+      Max Intensity: 2
+      Min Color: 255; 0; 0
+      Min Intensity: 0
+      Name: Trav. Labels
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_projected_segmented
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: false
+      Value: true
+    - Alpha: 0.25
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: ground_z
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 0; 255; 0
+      Max Intensity: 0
+      Min Color: 255; 0; 0
+      Min Intensity: -1
+      Name: Trav. Ground Z
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_projected_segmented
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: true
+      Value: false
+    - Alpha: 0.25
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: ground
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 0; 255; 0
+      Max Intensity: 1
+      Min Color: 255; 0; 0
+      Min Intensity: 0
+      Name: Ground
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_projected_ground
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
       Channel Name: cost
       Class: rviz/PointCloud2
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 1
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 0; 0
       Max Intensity: 1
@@ -586,7 +676,19 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: false
       Use rainbow: false
-      Value: true
+      Value: false
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /projected_depth
+      Max Value: 65535
+      Median window: 5
+      Min Value: 60535
+      Name: Projected Depth
+      Normalize Range: false
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
     - Class: rviz/Image
       Enabled: true
       Image Topic: /camera_front/image_color
@@ -663,7 +765,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 10
+      Distance: 6.524543285369873
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -679,9 +781,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7853981852531433
+      Pitch: 0.7303981184959412
       Target Frame: base_footprint
-      Yaw: 0.7853981852531433
+      Yaw: 0.8753814697265625
     Saved:
       - Class: rviz/Orbit
         Distance: 10
@@ -761,7 +863,9 @@ Window Geometry:
   Hide Right Dock: false
   Left:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000015600000315fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000013e00000315000000e60100001cfa000000000100000002fb000000100044006900730070006c0061007900730100000000000001560000015600fffffffb0000000a005600690065007700730100000000ffffffff0000010000fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000043dfc0200000002fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000074800000122fc0100000005fb0000000a00460072006f006e00740100000000000001c10000005900fffffffb00000008004c00650066007401000001c7000001e80000005000fffffffb0000000a0052006900670068007401000003b5000001a30000005900fffffffb000000080052006500610072010000055e000001ea0000005400fffffffb0000000a00560069006500770073030000004e00000080000002e10000019700000003000007480000003efc0100000002fb0000000800540069006d00650000000000000007480000041800fffffffb0000000800540069006d00650100000000000004500000000000000000000005ec0000031500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
+  Projected Depth:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000015600000315fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000013e00000315000000e60100001cfa000000000100000002fb000000100044006900730070006c0061007900730100000000000001560000015600fffffffb0000000a005600690065007700730100000000ffffffff0000010000fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000043dfc0200000002fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000074800000122fc0100000005fb0000000a00460072006f006e00740100000000000001cc0000005900fffffffb00000008004c00650066007401000001d2000001d50000005000fffffffb0000000a0052006900670068007401000003ad000001c40000005900fffffffb0000000800520065006100720100000577000001d10000005400fffffffb0000000a00560069006500770073030000004e00000080000002e100000197000000030000074800000100fc0100000003fb0000001e00500072006f006a00650063007400650064002000440065007000740068000000000000000748000000a400fffffffb0000000800540069006d00650000000000000007480000041800fffffffb0000000800540069006d00650100000000000004500000000000000000000005ec0000031500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
   Rear:
     collapsed: false
   Right:

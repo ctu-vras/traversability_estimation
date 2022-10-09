@@ -6,7 +6,7 @@ from ros_numpy import msgify, numpify
 import rospy
 from sensor_msgs.msg import PointCloud2
 from tf2_ros import Buffer, TransformException, TransformListener
-from traversability_estimation.segmentation import filter_grid, filter_range, compute_support
+from traversability_estimation.segmentation import filter_grid, filter_range, compute_rigid_support
 
 
 class GeometricCloudSegmentation(object):
@@ -54,7 +54,7 @@ class GeometricCloudSegmentation(object):
         features = {}
 
         if self.z_support is not None:
-            z_support = compute_support(input, transform=input_to_fixed, **self.z_support)
+            z_support = compute_rigid_support(input, transform=input_to_fixed, **self.z_support)
             features['z_support'] = z_support
 
         arrays = []

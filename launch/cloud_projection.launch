@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="nodelet_manager" default=""/>
+    <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+
+    <node name="cloud_projection" pkg="nodelet" type="nodelet"
+          args="standalone cloud_proc/projection"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam subst_value="true">
+            height: 128
+            width: 1024
+            fov_azimuth: 6.283185307179586  <!-- 360 deg -->
+            fov_elevation: 1.5707963267948966  <!-- 90 deg -->
+            keep: 2  <!-- min depth -->
+            azimuth_only: false
+            frame: odom  <!-- rotate into odom -->
+            timeout: 0.2
+        </rosparam>
+        <remap from="input" to="points_filtered"/>
+        <remap from="output" to="points_projected"/>
+    </node>
+
+    <node name="projected_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            negative: true
+        </rosparam>
+        <remap from="cloud" to="points_projected"/>
+        <remap from="image" to="projected_depth"/>
+    </node>
+</launch>

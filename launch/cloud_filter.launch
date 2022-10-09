@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="robot"/>
+    <arg name="nodelet_manager" default=""/>
+    <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+
+    <node name="laser_filter" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) pcl/CropBox $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam if="$(eval robot == 'husky')">
+            min_x: -0.49
+            max_x: 0.49
+            min_y: -0.3354
+            max_y: 0.3354
+            min_z: -0.13228
+            max_z: 0.62818
+        </rosparam>
+        <rosparam if="$(eval robot == 'marv')">
+            min_x: -0.65
+            max_x: 0.65
+            min_y: -0.30
+            max_y: 0.30
+            min_z: -0.14
+            max_z: 0.8
+        </rosparam>
+        <rosparam>
+            negative: true
+            keep_organized: true
+            input_frame: base_link
+<!--            output_frame: os_sensor-->
+        </rosparam>
+        <remap from="~input" to="points"/>
+        <remap from="~output" to="points_filtered"/>
+    </node>
+</launch>
