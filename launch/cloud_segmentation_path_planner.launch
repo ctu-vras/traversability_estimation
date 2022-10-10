@@ -4,6 +4,12 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
                                                    one of ['00000', '00001', '00002', '00003', '00004']"/>
+    <arg name="use_osm" default="true" doc="Whether to use Open Street Maps for path planning or not"/>
+
+    <node pkg="tf" type="static_transform_publisher" name="map_frame_broadcaster"
+          args="0 0 0   0 0 0 1 map odom 100" />
+    <node pkg="tf" type="static_transform_publisher" name="utm_frame_broadcaster"
+          args="0 0 0   0 0 0 1 map utm 100" />
 
     <!-- Bag file data -->
     <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>
