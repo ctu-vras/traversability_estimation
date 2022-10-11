@@ -59,7 +59,7 @@ class CloudSegmentor:
             self.model_output = 'flexibility'
 
         self.input_pc_fields = ['x', 'y', 'z']
-        self.output_pc_fields = ['x', 'y', 'z', 'r', 'g', 'b', self.model_output, '%s_soft' % self.model_output]
+        self.output_pc_fields = ['x', 'y', 'z', 'r', 'g', 'b', self.model_output, 'cost']
         self.soft_label_ind = rospy.get_param('~soft_label_ind', 1)
 
         assert self.model_output in ['labels', 'traversability', 'flexibility']
