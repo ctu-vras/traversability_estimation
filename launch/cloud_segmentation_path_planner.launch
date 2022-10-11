@@ -6,10 +6,12 @@
                                                    one of ['00000', '00001', '00002', '00003', '00004']"/>
     <arg name="use_osm" default="true" doc="Whether to use Open Street Maps for path planning or not"/>
 
-    <node pkg="tf" type="static_transform_publisher" name="map_frame_broadcaster"
-          args="0 0 0   0 0 0 1 map odom 100" />
-    <node pkg="tf" type="static_transform_publisher" name="utm_frame_broadcaster"
-          args="0 0 0   0 0 0 1 map utm 100" />
+<!--    <node pkg="tf" type="static_transform_publisher" name="map_frame_broadcaster"-->
+<!--          args="0 0 0   0 0 0 1 map odom 100" />-->
+<!--    <node pkg="tf" type="static_transform_publisher" name="utm_frame_broadcaster"-->
+<!--          args="0 0 0   0 0 0 1 map utm 100" />-->
+<!--    <node pkg="tf" type="static_transform_publisher" name="utm_frame_broadcaster"-->
+<!--          args="-437998.7931613073 -5549045.722476885 0 0 0 0 1 map utm 100" />-->
 
     <!-- Bag file data -->
     <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>
@@ -84,15 +86,15 @@
         <param name="robot_base_frame" type="string" value="base_link"/>
 <!--        <param name="trav_topic" type="str" value="cloud_fusion/points_20cm"/>-->
         <param name="trav_topic" type="str" value="cloud_segmentation/points"/>
-        <param name="trav_obstacle_field" type="string" value="traversability_soft"/>
-<!--        <param name="trav_obstacle_field" type="string" value="traversability"/>-->
+<!--        <param name="trav_obstacle_field" type="string" value="traversability_soft"/>-->
+        <param name="trav_obstacle_field" type="string" value="cost"/>
     </node>
 
     <!-- PATH PLANNER -->
-<!--    <node pkg="gps_to_path" type="path_planner_igraph" name="path_planner" output="screen">-->
-     <node pkg="gps_to_path" type="path_planner_igraph_working_1007" name="path_planner" output="screen">
-    	<param name="gpx_assignment" type="string" value="$(find gps_to_path)/data/unhost_base_ex_short_lap.gpx"/>
-<!--        <param name="gpx_assignment" type="string" value="$(find gps_to_path)/data/unhost_west_ex_long_field.gpx"/>-->
+    <node pkg="gps_to_path" type="path_planner_igraph" name="path_planner" output="screen">
+<!--     <node pkg="gps_to_path" type="path_planner_igraph_working_1007" name="path_planner" output="screen">-->
+<!--    	<param name="gpx_assignment" type="string" value="$(find gps_to_path)/data/unhost_base_ex_short_lap.gpx"/>-->
+        <param name="gpx_assignment" type="string" value="$(find gps_to_path)/data/unhost_west_ex_long_field.gpx"/>
         <param name="goal_reached_distance" type="double" value="1."/>
         <param name="publish_pcd" type="bool" value="true"/>
         <param name="trav_max_dist" type="double" value="7."/>

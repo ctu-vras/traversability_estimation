@@ -151,7 +151,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: traversability_soft
+          Channel Name: cost
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity
@@ -162,12 +162,12 @@ Visualization Manager:
           Max Intensity: 1
           Min Color: 138; 226; 52
           Min Intensity: 0
-          Name: Segmented Points Soft Label
+          Name: "Segmented Points: Cost"
           Position Transformer: XYZ
           Queue Size: 1
           Selectable: false
           Size (Pixels): 3
-          Size (m): 0.029999999329447746
+          Size (m): 0.05000000074505806
           Style: Spheres
           Topic: /cloud_segmentation/points
           Unreliable: false
@@ -287,7 +287,7 @@ Visualization Manager:
           Queue Size: 1
           Selectable: false
           Size (Pixels): 3
-          Size (m): 0.20000000298023224
+          Size (m): 0.30000001192092896
           Style: Spheres
           Topic: /trav_obstacles_pcd
           Unreliable: false
@@ -317,7 +317,7 @@ Visualization Manager:
           Queue Size: 1
           Selectable: false
           Size (Pixels): 3
-          Size (m): 0.20000000298023224
+          Size (m): 0.30000001192092896
           Style: Spheres
           Topic: /trav_obstacles_pcd_map
           Unreliable: false
@@ -357,7 +357,7 @@ Visualization Manager:
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.30000001192092896
+          Size (m): 0.10000000149011612
           Style: Spheres
           Topic: /graph_pcd
           Unreliable: false
@@ -592,7 +592,7 @@ Visualization Manager:
       Head Length: 0.20000000298023224
       Length: 0.6000000238418579
       Line Style: Billboards
-      Line Width: 0.30000001192092896
+      Line Width: 0.20000000298023224
       Name: Planned Path
       Offset:
         X: 0
