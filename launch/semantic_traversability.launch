@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
+    <arg name="cloud" default="points" doc="Input point cloud for segmentation"/>
+
+<!--    Point cloud segmentation -->
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            max_age: 0.2
+            lidar_channels: 128
+            lidar_beams: 1024
+            lidar_fov_up: 45.0
+            lidar_fov_down: -45.0
+            range_projection: true
+            debug: true
+            soft_label_ind: 1
+            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
+<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth-->
+        </rosparam>
+        <remap from="cloud_in" to="$(arg cloud)"/>
+        <remap from="cloud_out" to="cloud_segmentation/points"/>
+    </node>
+
+<!--    Cloud voxel filtering: 10 cm -->
+    <node name="cloud_voxel_filter_10cm" pkg="nodelet" type="nodelet"
+          args="standalone cloud_proc/voxel_filter"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.1
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points"/>
+        <remap from="output" to="cloud_segmentation/points_10cm"/>
+    </node>
+<!--    Cloud voxel filtering: 20 cm -->
+    <node name="cloud_voxel_filter_20cm" pkg="nodelet" type="nodelet"
+          args="standalone cloud_proc/voxel_filter"
+            respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            grid: 0.2
+            zero_valid: false
+        </rosparam>
+        <remap from="input" to="cloud_segmentation/points_10cm"/>
+        <remap from="output" to="cloud_segmentation/points_20cm"/>
+    </node>
+
+</launch>

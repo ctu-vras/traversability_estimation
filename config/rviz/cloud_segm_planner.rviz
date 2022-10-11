@@ -294,6 +294,36 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: false
           Value: true
+        - Alpha: 0.5
+          Autocompute Intensity Bounds: false
+          Autocompute Value Bounds:
+            Max Value: 8
+            Min Value: -1.5
+            Value: false
+          Axis: Z
+          Channel Name: traversability
+          Class: rviz/PointCloud2
+          Color: 252; 233; 79
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 138; 226; 52
+          Max Intensity: 1
+          Min Color: 239; 41; 41
+          Min Intensity: 0
+          Name: Obstacle Points Map
+          Position Transformer: XYZ
+          Queue Size: 1
+          Selectable: false
+          Size (Pixels): 3
+          Size (m): 0.20000000298023224
+          Style: Spheres
+          Topic: /trav_obstacles_pcd_map
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: false
+          Value: true
         - Class: rviz/Image
           Enabled: true
           Image Topic: /cloud_segmentation/depth
