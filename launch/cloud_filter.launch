@@ -3,6 +3,7 @@
     <arg name="robot"/>
     <arg name="nodelet_manager" default=""/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+    <arg name="cloud" default="points"/>
 
     <node name="laser_filter" pkg="nodelet" type="nodelet"
           args="$(arg nodelet_action) pcl/CropBox $(arg nodelet_manager)"
@@ -29,7 +30,7 @@
             input_frame: base_link
 <!--            output_frame: os_sensor-->
         </rosparam>
-        <remap from="~input" to="points"/>
+        <remap from="~input" to="$(arg cloud)"/>
         <remap from="~output" to="points_filtered"/>
     </node>
 </launch>
