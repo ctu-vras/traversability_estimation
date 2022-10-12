@@ -3,7 +3,6 @@
 from __future__ import absolute_import, division, print_function
 import rospy
 from sensor_msgs.msg import PointCloud2
-from stamped_msgs.msg import Float64
 import tf2_ros
 import torch
 import numpy as np
@@ -12,10 +11,10 @@ from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_s
 from scipy.spatial import KDTree
 
 
-def to_cloud_msg(cloud, time_stamp, frame):
+def to_cloud_msg(cloud, time_stamp, frame, fields=['x', 'y', 'z']):
     # publish point cloud
     if cloud.dtype.names is None:
-        cloud = unstructured_to_structured(cloud[:, :3], names=['x', 'y', 'z'])
+        cloud = unstructured_to_structured(cloud, names=fields)
     pc_msg = msgify(PointCloud2, cloud)
     pc_msg.header.stamp = time_stamp
     pc_msg.header.frame_id = frame
@@ -42,11 +41,8 @@ class TravEval:
         self.tl = tf2_ros.TransformListener(self.tf)
 
         self.trav_field = rospy.get_param('~trav_field', 'untrav_cost')
-        self.traversed_points_history = None
-        self.cost = 0.0
 
         self.traversed_grid_pcd_pub = rospy.Publisher('~traversed_points', PointCloud2, queue_size=1)
-        self.cost_pub = rospy.Publisher('~untrav_cost', Float64, queue_size=1)
 
     def pc_callback(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
@@ -59,13 +55,13 @@ class TravEval:
         self.pc_frame = pc_msg.header.frame_id
         if self.pc_frame != self.robot_frame:
             try:
-                trans = self.tf.lookup_transform(self.robot_frame, self.pc_frame, rospy.Time())
+                trans_robot_pc = self.tf.lookup_transform(self.robot_frame, self.pc_frame, rospy.Time())
             except Exception as e:
                 rospy.logwarn('No transformation between %s and %s: %s', self.pc_frame, self.robot_frame, e)
                 return
             # transform point cloud to robot frame
-            pose = numpify(trans.transform)
-            points_robot_frame = np.matmul(points, pose[:3, :3].T) + pose[:3, 3:].T
+            T_robot_pc = numpify(trans_robot_pc.transform)
+            points_robot_frame = np.matmul(points, T_robot_pc[:3, :3].T) + T_robot_pc[:3, 3:].T
         else:
             points_robot_frame = points
 
@@ -73,18 +69,13 @@ class TravEval:
         graph_tree = KDTree(points_robot_frame)
         nearest_graph_points_ind = graph_tree.query_ball_point(robot_point, r=self.robot_radius)
         nearest_graph_points = points_robot_frame[nearest_graph_points_ind]
-
-        self.cost += traversability[nearest_graph_points_ind].sum()
-        rospy.loginfo('Traversability cost for robot poses in planning graph: %s', self.cost)
+        nearest_graph_trav = traversability[nearest_graph_points_ind]
 
         t_now = rospy.Time.now()
-        nearest_graph_points_msg = to_cloud_msg(nearest_graph_points,
-                                                frame=self.robot_frame, time_stamp=t_now)
+        nearest_graph_points_msg = to_cloud_msg(np.concatenate([nearest_graph_points, nearest_graph_trav], axis=1),
+                                                frame=self.robot_frame, time_stamp=t_now,
+                                                fields=['x', 'y', 'z', self.trav_field])
         self.traversed_grid_pcd_pub.publish(nearest_graph_points_msg)
-        cost_msg = Float64()
-        cost_msg.header.stamp = t_now
-        cost_msg.data = self.cost
-        self.cost_pub.publish(cost_msg)
 
 
 if __name__ == '__main__':

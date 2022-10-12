@@ -349,7 +349,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: false
           Value: true
-        - Alpha: 1
+        - Alpha: 0.6000000238418579
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 10
@@ -378,29 +378,31 @@ Visualization Manager:
           Use rainbow: true
           Value: true
         - Alpha: 1
-          Autocompute Intensity Bounds: true
+          Autocompute Intensity Bounds: false
           Autocompute Value Bounds:
             Max Value: 10
             Min Value: -10
             Value: true
           Axis: Z
-          Channel Name: intensity
+          Channel Name: untrav_cost
           Class: rviz/PointCloud2
           Color: 255; 255; 255
-          Color Transformer: FlatColor
+          Color Transformer: Intensity
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
-          Max Color: 255; 255; 255
-          Min Color: 0; 0; 0
+          Max Color: 239; 41; 41
+          Max Intensity: 1
+          Min Color: 138; 226; 52
+          Min Intensity: 0
           Name: Traversed Graph Points
           Position Transformer: XYZ
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.30000001192092896
+          Size (m): 0.4000000059604645
           Style: Flat Squares
-          Topic: /traversability_evaluation/traversed_points
+          Topic: /cloud_fusion/points
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true

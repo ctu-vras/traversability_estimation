@@ -112,7 +112,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: traversability_soft
+          Channel Name: cost
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity
@@ -142,7 +142,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: traversability_soft
+          Channel Name: cost
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity
@@ -172,7 +172,7 @@ Visualization Manager:
             Min Value: -1.5
             Value: false
           Axis: Z
-          Channel Name: traversability_soft
+          Channel Name: cost
           Class: rviz/PointCloud2
           Color: 255; 255; 255
           Color Transformer: Intensity

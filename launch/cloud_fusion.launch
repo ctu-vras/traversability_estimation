@@ -66,14 +66,12 @@
         <remap from="output" to="cloud_segmentation/points_20cm"/>
     </node>
 
-    <!-- Add color to a point cloud from a camera image -->
     <node name="cloud_fusion" pkg="traversability_estimation" type="cloud_fusion" output="screen">
         <rosparam subst_value="true">
             map_frame: odom
             max_age: 1.0
             pts_proximity_th: 0.2
-            label_to_fuse: 'traversability_soft'
-<!--            label_to_fuse: 'flexibility_soft'-->
+            label_to_fuse: 'cost'
 <!--            max_n_pts: 50000-->
         </rosparam>
 <!--        <remap from="cloud_in" to="cloud_segmentation/points_20cm"/>-->

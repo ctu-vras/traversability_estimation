@@ -36,13 +36,25 @@
         </include>
     </group>
 
-    <node pkg="traversability_estimation" type="traversability_evaluation" name="traversability_evaluation" output="screen">
+    <node pkg="traversability_estimation" type="traversability_evaluation" name="traversability_evaluation">
         <rosparam subst_value="true">
             robot_frame: base_link
             odom_frame: odom
             cloud: graph_pcd
             robot_radius: 1.0
         </rosparam>
+    </node>
+
+    <node name="cloud_fusion" pkg="traversability_estimation" type="cloud_fusion" output="screen">
+        <rosparam subst_value="true">
+            map_frame: gps_odom
+            max_age: 0.2
+            pts_proximity_th: 1.0
+            label_to_fuse: 'untrav_cost'
+<!--            max_n_pts: 50000-->
+        </rosparam>
+        <remap from="cloud_in" to="traversability_evaluation/traversed_points"/>
+        <remap from="cloud_out" to="cloud_fusion/points"/>
     </node>
 
     <!-- RVIZ -->
