@@ -2,28 +2,18 @@
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
-    <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
-                                                   one of ['00000', '00001', '00002', '00003', '00004']"/>
-    <arg name="use_osm" default="true" doc="Whether to use Open Street Maps for path planning or not"/>
     <arg name="traversability" default="semantic" doc="Traversability estimation type: 'semantic or geometric'"/>
     <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_easy.gpx"/>
-
-<!--    <node pkg="tf" type="static_transform_publisher" name="map_frame_broadcaster"-->
-<!--          args="0 0 0   0 0 0 1 map odom 100" />-->
-<!--    <node pkg="tf" type="static_transform_publisher" name="utm_frame_broadcaster"-->
-<!--          args="0 0 0   0 0 0 1 map utm 100" />-->
-<!--    <node pkg="tf" type="static_transform_publisher" name="utm_frame_broadcaster"-->
-<!--          args="-437998.7931613073 -5549045.722476885 0 0 0 0 1 map utm 100" />-->
+    <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-39-57.bag"/>
+    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
 
     <!-- Bag file data -->
-<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>-->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-39-57.bag"/>
     <param name="use_sim_time" value="true"/>
-    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <rosparam command="load" file="$(arg params)"/>
     <node name="rosbag_play" pkg="rosbag" type="play"
-          args="--clock --delay 3.0 --rate 1.0 --start 1200 $(arg bag)
-                /trav_obstacles_pcd_map:=/trav_obstacles_pcd_map_dev_null
+          args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)
+                /trav_obstacles_pcd_map:=/trav_obstacles_pcd_map_recorded
                 /path:=/path_recorded
                 /bumper_activations:=/bumper_activations_recorded
                 /bumper_bbx:=/bumper_bbx_recorded
@@ -31,16 +21,12 @@
                 /graph_pcd:=/graph_pcd_recorded
                 /os_cloud_node/points:=/points"/>
 
-    <node name="play_tf_static" pkg="traversability_estimation" type="play_tf_static" args="$(arg bag)">
-        <remap from="~tf_static" to="/tf_static"/>
-    </node>
-
     <!-- Traversability estimation -->
     <include file="$(dirname)/$(arg traversability)_traversability.launch">
         <arg name="cloud" value="points"/>
     </include>
 
-    <!-- Cloud distance filtering -->
+    <!-- GPS Navigation -->
     <node pkg="topic_tools" type="relay" name="semantic_trav_relay" args="cloud_segmentation/points traversability/points" />
     <node pkg="topic_tools" type="relay" name="geometric_trav_relay" args="geometric_traversability_raw traversability/points" />
     <include file="$(dirname)/path_planner.launch">

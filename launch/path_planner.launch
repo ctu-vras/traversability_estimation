@@ -2,18 +2,19 @@
 <launch>
     <arg name="use_osm" default="false"/>
     <arg name="cloud" default="cloud_segmentation/points"/>
+    <arg name="obstacle_field" default="cost"/>
     <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_easy.gpx"/>
 
     <!-- Cloud distance filtering -->
     <node pkg="gps_to_path" type="trav_to_obstacles" name="trav_to_obstacles" output="screen">
         <param name="max_height" type="double" value="1."/>
-        <param name="min_height" type="double" value="-0.05"/>
+        <param name="min_height" type="double" value="0.05"/>
         <param name="max_dist" type="double" value="10." />
         <param name="min_dist" type="double" value="0.5"/>
         <param name="max_age" type="double" value="0.2"/>
         <param name="robot_base_frame" type="string" value="base_link"/>
         <param name="trav_topic" type="str" value="$(arg cloud)"/>
-        <param name="trav_obstacle_field" type="string" value="cost"/>
+        <param name="trav_obstacle_field" type="string" value="$(arg obstacle_field)"/>
     </node>
 
     <!-- PATH PLANNER -->
