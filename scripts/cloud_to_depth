@@ -21,6 +21,7 @@ class CloudToDepth:
         cloud = numpify(cloud_msg)
         cloud = structured_to_unstructured(cloud[['x', 'y', 'z']])
         depth = 1000.0 * np.linalg.norm(cloud, 2, axis=-1)
+        depth = depth.clip(np.iinfo(np.uint16).min, np.iinfo(np.uint16).max)
         depth = depth.astype(np.uint16)
         if self.negative:
             depth[depth > 0] = 2**16 - depth[depth > 0]
@@ -37,7 +38,7 @@ class CloudToDepth:
 
 
 def main():
-    rospy.init_node('depth_to_cloud', log_level=rospy.INFO)
+    rospy.init_node('cloud_to_depth', log_level=rospy.INFO)
     node = CloudToDepth()
     rospy.spin()
 
