@@ -17,22 +17,6 @@ def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 
-def fuse_traversability(trav, eps=1e-6):
-    assert isinstance(trav, np.ndarray)
-    assert trav.ndim >= 2
-    assert trav.min() >= 0.0 - eps and trav.max() <= 1.0 + eps
-
-    n_pts = trav.shape[0]  # (n, >=2)
-    trav = trav.reshape([n_pts, -1])
-    trav = np.clip(trav, eps, 1 - eps)
-    lo = np.log(1. - trav)
-    lo = lo.sum(axis=1)
-    trav = 1. - np.exp(lo)
-    assert trav.shape == (n_pts,)
-
-    return trav
-
-
 def msgify_cloud(cloud, frame, stamp, names=None):
     if not names:
         # names = cloud.dtype.names
@@ -44,9 +28,9 @@ def msgify_cloud(cloud, frame, stamp, names=None):
     return msg
 
 
-class TraversabilityMapping:
+class CloudFusion:
     """
-    This ROS node subscribes to local map traversability cloud with PointCloud2 msgs
+    This ROS node subscribes to cost clouds topic with PointCloud2 msgs
     and concatenates them in one global PointCloud2 map.
     Merging the points is done by determining firstly the new points by
     proximity threshold to the points in existing map.
@@ -57,24 +41,55 @@ class TraversabilityMapping:
         self.local_map = None
         self.new_map = None
         self.map_frame = rospy.get_param('~map_frame', 'odom')
-        # any point that is farer than this threshold from points in existing pcl is considered as new
+        # any point that is farer than this threshold from points in existing cloud is considered as new
         self.dist_th = rospy.get_param('~pts_proximity_th', 0.2)
         self.max_age = rospy.get_param('~max_age', 1.0)
         self.input_names = ['x', 'y', 'z', rospy.get_param('~label_to_fuse', 'cost')]
         self.max_n_pts = rospy.get_param('~max_n_pts', None)
+        self.fusion_mode = rospy.get_param('~fusion_mode', 'min')
+        assert self.fusion_mode in ['merge', 'min', 'max', 'mean']
 
         self.rate = rospy.get_param('~rate', 1.0)
-        self.trav_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
+        self.fused_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', 'cloud_out'), PointCloud2, queue_size=1)
+        self.new_cloud_pub = rospy.Publisher('~new_points', PointCloud2, queue_size=1)
+        self.common_cloud_pub = rospy.Publisher('~common_points', PointCloud2, queue_size=1)
 
         self.tf = tf2_ros.Buffer(cache_time=rospy.Duration(100))
         self.tl = tf2_ros.TransformListener(self.tf)
         self.lock = RLock()
 
-        self.cost = 0.0
-        self.cost_pub = rospy.Publisher('~cost', Float64, queue_size=1)
+        self.total_cost = 0.0
+        self.cost_pub = rospy.Publisher('~total_cost', Float64, queue_size=1)
+        self.eps = 1e-6
 
         self.local_map_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.accumulate_clouds_cb)
         rospy.loginfo('Traversability fusion node is ready.')
+
+    def fuse_traversability(self, cost_prev, cost):
+        assert isinstance(cost_prev, np.ndarray)
+        assert isinstance(cost, np.ndarray)
+        cost = np.concatenate([cost_prev, cost], axis=1)
+        assert cost.ndim >= 2
+
+        n_pts = cost.shape[0]  # (n, >=2)
+        cost = cost.reshape([n_pts, -1])
+
+        if self.fusion_mode == 'merge':
+            if cost.min() <= -self.eps or cost.max() >= 1.0 + self.eps:
+                cost = sigmoid(cost)
+            assert cost.min() >= 0.0 - self.eps and cost.max() <= 1.0 + self.eps
+            cost = np.clip(cost, self.eps, 1 - self.eps)
+            lo = np.log(1. - cost).sum(axis=1)
+            cost = 1. - np.exp(lo)
+        elif self.fusion_mode == 'min':
+            cost = np.min(cost, axis=1)
+        elif self.fusion_mode == 'max':
+            cost = np.max(cost, axis=1)
+        elif self.fusion_mode == 'mean':
+            cost = np.mean(cost, axis=1)
+        assert cost.shape == (n_pts,)
+
+        return cost
 
     def accumulate_clouds_cb(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
@@ -83,14 +98,14 @@ class TraversabilityMapping:
         msg_stamp = rospy.Time.now()
         age = (msg_stamp - pc_msg.header.stamp).to_sec()
         if age > self.max_age:
-            rospy.logwarn('Traversability Fusion: discarding points %.1f s > %.1f s old.', age, self.max_age)
+            rospy.logwarn('CLoud Fusion: discarding points %.1f s > %.1f s old.', age, self.max_age)
             return
 
         try:
             transform = self.tf.lookup_transform(self.map_frame, pc_msg.header.frame_id,
                                                  pc_msg.header.stamp, rospy.Duration(1))
-        except (tf2_ros.LookupException, tf2_ros.ExtrapolationException):
-            rospy.logwarn('Map accumulator: No transform between %s and %s', pc_msg.header.frame_id, self.map_frame)
+        except (tf2_ros.LookupException, tf2_ros.ExtrapolationException) as e:
+            rospy.logwarn('No transform between %s and %s: %s', pc_msg.header.frame_id, self.map_frame, e)
             return
 
         with self.lock:
@@ -104,12 +119,15 @@ class TraversabilityMapping:
         # Transform local map to ground truth localization frame
         local_map = np.array(numpify(pc_msg))
         local_map = structured_to_unstructured(local_map[self.input_names])
-        if local_map[..., 3:4].min() <= 0-1e-6 or local_map[..., 3:4].max() >= 1.0+1e-6:
-            local_map[..., 3:4] = sigmoid(local_map[..., 3:4])
         rospy.logdebug('Point cloud of shape %s is received', local_map.shape)
         local_map = local_map
         assert len(local_map.shape) == 2
         assert local_map.shape[1] == 4
+
+        if local_map.shape[0] == 0:
+            rospy.logwarn('Received empty cloud for processing')
+            rospy.loginfo('Traversability cost: %s', self.total_cost)
+            return
 
         pose = np.array(numpify(transform.transform))
 
@@ -136,7 +154,7 @@ class TraversabilityMapping:
         self.local_map = local_map
 
         rospy.logdebug('Adding %i new points', self.new_map.shape[0])
-        assert len(self.new_map.shape) == 2
+        assert self.new_map.ndim == 2
         assert self.new_map.shape[1] == 4  # (n, 4)
 
         # and accumulate new points to global map
@@ -145,35 +163,42 @@ class TraversabilityMapping:
         assert self.global_map.shape[1] == 4  # (N, 4)
 
         # fuse traversability values
-        trav_prev = self.global_map[idxs, 3:4]
-        trav = self.local_map[..., 3:4]
-        trav = np.concatenate([trav_prev, trav], axis=1)
-        assert trav.shape[1] == 2
-        assert trav.shape[0] == n_pts  # (n x 2)
-        self.global_map[idxs, 3] = fuse_traversability(trav)
+        cost_prev = self.global_map[idxs, 3:4]
+        cost = self.local_map[..., 3:4]
+        cost = self.fuse_traversability(cost_prev, cost)
+        assert cost.shape == (n_pts,)
+        self.global_map[idxs, 3] = cost
 
         # forget old points
         if self.max_n_pts:
             if len(self.global_map) > self.max_n_pts:
                 self.global_map = self.global_map[-self.max_n_pts:]
 
-        self.cost = self.global_map[..., 3].sum()
-        rospy.loginfo('Traversability cost: %s', self.cost)
+        self.total_cost = self.global_map[..., 3].sum()
+        rospy.loginfo('Traversability cost: %s', self.total_cost)
 
         rospy.loginfo('Point cloud accumulation took: %.3f s', timer() - t0)
 
     def spin(self):
         rate = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
+
             if self.global_map is None:
                 continue
-            # publish traversability clouds
+
+            # publish clouds and total cost
             t_now = rospy.Time.now()
             global_map_msg = msgify_cloud(self.global_map, frame=self.map_frame, stamp=t_now, names=self.input_names)
-            self.trav_cloud_pub.publish(global_map_msg)
+            self.fused_cloud_pub.publish(global_map_msg)
+
+            if self.new_map is None:
+                continue
+
+            new_map_msg = msgify_cloud(self.new_map, frame=self.map_frame, stamp=t_now, names=self.input_names)
+            self.new_cloud_pub.publish(new_map_msg)
 
             cost_msg = Float64()
-            cost_msg.data = self.cost
+            cost_msg.data = self.total_cost
             self.cost_pub.publish(cost_msg)
 
             rate.sleep()
@@ -181,5 +206,5 @@ class TraversabilityMapping:
 
 if __name__ == '__main__':
     rospy.init_node('traversability_mapping', log_level=rospy.INFO)
-    proc = TraversabilityMapping(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
+    proc = CloudFusion(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
     proc.spin()

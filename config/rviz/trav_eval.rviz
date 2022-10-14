@@ -30,7 +30,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Obstacle Points Map
+    SyncSource: Graph Points
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -187,7 +187,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: RGBF32
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 138; 226; 52
           Max Intensity: 1
@@ -204,7 +204,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: false
-          Value: true
+          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: false
           Autocompute Value Bounds:
@@ -247,7 +247,7 @@ Visualization Manager:
           Color: 252; 233; 79
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 138; 226; 52
           Max Intensity: 1
@@ -264,7 +264,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: false
-          Value: true
+          Value: false
         - Alpha: 0.5
           Autocompute Intensity Bounds: false
           Autocompute Value Bounds:
@@ -277,7 +277,7 @@ Visualization Manager:
           Color: 252; 233; 79
           Color Transformer: FlatColor
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 138; 226; 52
           Max Intensity: 1
@@ -294,7 +294,7 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: false
-          Value: true
+          Value: false
         - Class: rviz/Image
           Enabled: false
           Image Topic: /cloud_segmentation/depth
@@ -331,7 +331,7 @@ Visualization Manager:
           Color: 255; 255; 255
           Color Transformer: Intensity
           Decay Time: 0
-          Enabled: true
+          Enabled: false
           Invert Rainbow: false
           Max Color: 239; 41; 41
           Max Intensity: 0.5
@@ -348,8 +348,8 @@ Visualization Manager:
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: false
-          Value: true
-        - Alpha: 0.6000000238418579
+          Value: false
+        - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 10
@@ -363,22 +363,22 @@ Visualization Manager:
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
-          Max Color: 255; 255; 255
-          Min Color: 0; 0; 0
+          Max Color: 239; 41; 41
+          Min Color: 138; 226; 52
           Name: Graph Points
           Position Transformer: XYZ
           Queue Size: 10
           Selectable: true
           Size (Pixels): 3
-          Size (m): 0.20000000298023224
+          Size (m): 0.4000000059604645
           Style: Spheres
           Topic: /graph_pcd
           Unreliable: false
           Use Fixed Frame: true
-          Use rainbow: true
+          Use rainbow: false
           Value: true
         - Alpha: 1
-          Autocompute Intensity Bounds: false
+          Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 10
             Min Value: -10
@@ -392,9 +392,7 @@ Visualization Manager:
           Enabled: true
           Invert Rainbow: false
           Max Color: 239; 41; 41
-          Max Intensity: 1
           Min Color: 138; 226; 52
-          Min Intensity: 0
           Name: Traversed Graph Points
           Position Transformer: XYZ
           Queue Size: 10
@@ -405,7 +403,65 @@ Visualization Manager:
           Topic: /cloud_fusion/points
           Unreliable: false
           Use Fixed Frame: true
-          Use rainbow: true
+          Use rainbow: false
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: untrav_cost
+          Class: rviz/PointCloud2
+          Color: 114; 159; 207
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 239; 41; 41
+          Min Color: 138; 226; 52
+          Name: Recently Traversed Graph Points
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.4000000059604645
+          Style: Spheres
+          Topic: /cloud_fusion/new_points
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: false
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: false
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: untrav_cost
+          Class: rviz/PointCloud2
+          Color: 255; 255; 255
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 239; 41; 41
+          Max Intensity: 1
+          Min Color: 138; 226; 52
+          Min Intensity: 0
+          Name: Nearest Graph Points
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 1
+          Style: Spheres
+          Topic: /traversed_points/points
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: false
           Value: true
       Enabled: true
       Name: Point Clouds
@@ -429,7 +485,7 @@ Visualization Manager:
       Buffer Length: 1
       Class: rviz/Path
       Color: 115; 210; 22
-      Enabled: true
+      Enabled: false
       Head Diameter: 0.30000001192092896
       Head Length: 0.20000000298023224
       Length: 0.6000000238418579
@@ -448,13 +504,13 @@ Visualization Manager:
       Shaft Length: 0.10000000149011612
       Topic: /path
       Unreliable: false
-      Value: true
+      Value: false
     - Class: jsk_rviz_plugin/TFTrajectory
       Enabled: true
       Name: TFTrajectory
       Value: true
       color: 25; 255; 240
-      duration: 60
+      duration: 600
       frame: base_link
       line_width: 0.10000000149011612
     - Class: rviz/Group
@@ -501,7 +557,7 @@ Visualization Manager:
   Global Options:
     Background Color: 46; 52; 54
     Default Light: true
-    Fixed Frame: gps_odom
+    Fixed Frame: odom
     Frame Rate: 30
   Name: root
   Tools:

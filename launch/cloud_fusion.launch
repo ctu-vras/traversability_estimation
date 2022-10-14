@@ -4,6 +4,7 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="data_sequence" default="00000" doc="Sequence name from Rellis-3D dataset,
                                                    one of ['00000', '00001', '00002', '00003', '00004']"/>
+    <arg name="fusion_mode" default="min" doc="Cost fusion mode, on of ['merge', 'min', 'max', 'mean']"/>
 
     <!-- RELLIS-3D data -->
     <node name="robot_data" pkg="traversability_estimation" type="robot_data" output="screen">
@@ -71,12 +72,11 @@
             map_frame: odom
             max_age: 1.0
             pts_proximity_th: 0.2
-            label_to_fuse: 'cost'
+            label_to_fuse: cost
+            fusion_mode: $(arg fusion_mode)
 <!--            max_n_pts: 50000-->
         </rosparam>
-<!--        <remap from="cloud_in" to="cloud_segmentation/points_20cm"/>-->
         <remap from="cloud_in" to="cloud_segmentation/points_10cm"/>
-<!--        <remap from="cloud_in" to="cloud_segmentation/points"/>-->
         <remap from="cloud_out" to="cloud_fusion/points"/>
     </node>
 
