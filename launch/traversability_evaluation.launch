@@ -3,7 +3,7 @@
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
     <arg name="use_osm" default="true" doc="Whether to use Open Street Maps for path planning or not"/>
 <!--    <arg name="gpx_assignment" default="$(find gps_to_path)/data/CH-forest-north_short_circle_debug.gpx"/>-->
-    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_west_ex_long_field.gpx"/>
+    <arg name="gpx_assignment" default="$(find gps_to_path)/data/old/unhost_west_ex_long_field.gpx"/>
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
     <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
@@ -45,7 +45,7 @@
             robot_frame: base_link
             fixed_frame: odom
             robot_radius: 0.5
-            horizon_time: 5.0
+            horizon_time: 3.0
             horizon_step: 1.0
             cloud_in: graph_pcd
             cloud_out: traversed_points/points
