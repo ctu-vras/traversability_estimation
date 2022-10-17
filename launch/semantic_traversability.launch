@@ -2,7 +2,7 @@
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="cloud" default="points" doc="Input point cloud for segmentation"/>
-    <arg name="max_age" default="0.2"/>
+    <arg name="max_age" default="0.5"/>
 
 <!--    Point cloud segmentation -->
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb">
@@ -14,7 +14,7 @@
             lidar_fov_up: 45.0
             lidar_fov_down: -45.0
             range_projection: true
-            debug: true
+            debug: false
             soft_label_ind: 1
             weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
 <!--            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth-->
