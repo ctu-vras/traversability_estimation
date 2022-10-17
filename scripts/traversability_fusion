@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+
+from __future__ import absolute_import, division, print_function
+import rospy
+from sensor_msgs.msg import PointCloud2
+import torch
+import numpy as np
+from ros_numpy import msgify, numpify
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+from message_filters import ApproximateTimeSynchronizer, Subscriber
+
+
+def to_cloud_msg(cloud, time_stamp, frame, names=None):
+    if not names:
+        names = ['x', 'y', 'z']
+    if cloud.dtype.names is None:
+        cloud = unstructured_to_structured(cloud[:, :3], names=names)
+    pc_msg = msgify(PointCloud2, cloud)
+    pc_msg.header.stamp = time_stamp
+    pc_msg.header.frame_id = frame
+    return pc_msg
+
+
+class PointsProcessor:
+    def __init__(self):
+        if torch.cuda.is_available():
+            self.device = torch.device("cuda:0")
+            torch.cuda.set_device(self.device)
+        else:
+            self.device = torch.device("cpu")
+
+        self.geometric_topic = rospy.get_param('~geometric_trav', 'geometric_traversability_raw')
+        self.semantic_topic = rospy.get_param('~semantic_trav', 'cloud_segmentation/points')
+        rospy.loginfo("Subscribing to %s and %s", self.geometric_topic, self.semantic_topic)
+
+        self.data_fields = ['x', 'y', 'z', 'cost']
+
+        geometric_sub = Subscriber(self.geometric_topic, PointCloud2)
+        semantic_sub = Subscriber(self.semantic_topic, PointCloud2)
+        self.time_synch = ApproximateTimeSynchronizer([geometric_sub, semantic_sub], queue_size=1, slop=0.2)
+        self.time_synch.registerCallback(self.pc_callback)
+
+        self.map_pc_pub = rospy.Publisher('~points', PointCloud2, queue_size=1)
+
+    def pc_callback(self, geom_msg, sem_msg):
+        assert isinstance(geom_msg, PointCloud2)
+        assert isinstance(sem_msg, PointCloud2)
+        assert geom_msg.header.frame_id == sem_msg.header.frame_id
+        frame = sem_msg.header.frame_id
+        now = rospy.Time.now()
+
+        geom_cloud = numpify(geom_msg, PointCloud2)
+        sem_cloud = numpify(sem_msg, PointCloud2)
+
+        print(geom_cloud.shape, sem_cloud.shape)
+
+        geom_cloud = geom_cloud[self.data_fields]
+        sem_cloud = sem_cloud[self.data_fields]
+        assert sem_cloud.dtype.names == geom_cloud.dtype.names
+
+        geom_cloud = structured_to_unstructured(geom_cloud)
+        sem_cloud = structured_to_unstructured(sem_cloud)
+
+        assert geom_cloud.shape == sem_cloud.shape
+
+        # map_msg = to_cloud_msg(global_cloud, time_stamp=now, frame=frame)
+        # self.map_pc_pub.publish(map_msg)
+
+
+if __name__ == '__main__':
+    rospy.init_node('traversability_fusion', log_level=rospy.DEBUG)
+    proc = PointsProcessor()
+    rospy.spin()
