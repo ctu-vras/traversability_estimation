@@ -183,8 +183,6 @@ class CloudSegmentor:
         assert isinstance(xyz, np.ndarray)
 
         label_pred = torch.softmax(label_pred.squeeze(0), dim=0).cpu().numpy()
-        n_classes, H, W = label_pred.shape
-        n_pts = H * W
         assert label_pred.ndim == 3
 
         label_soft = label_pred[self.soft_label_ind]
@@ -202,6 +200,12 @@ class CloudSegmentor:
         # cv2.imshow('Predicted labels', colors_vis[..., (2, 1, 0)])
         # cv2.waitKey(1)
 
+        mask = self.scan.proj_idx > 0
+        colors = colors[mask]
+        xyz = xyz[mask]
+        label_soft = label_soft[mask]
+        n_pts = label_soft.shape[0]
+
         colors = colors.reshape((n_pts, 3), order='F')
         xyz = xyz.reshape((n_pts, 3), order='F')
         assert xyz.shape == colors.shape
@@ -211,8 +215,10 @@ class CloudSegmentor:
 
         label_th = np.argmax(label_pred, axis=0)
         assert label_th.ndim == 2
+        label_th = label_th[mask]
         label_th = label_th.reshape((n_pts, 1), order='F')
         label_soft = label_soft.reshape((n_pts, 1), order='F')
+
         xyz_rgb_l_lsoft = np.concatenate([xyzrgb, label_th, label_soft], axis=1)
         assert xyz_rgb_l_lsoft.shape == (n_pts, 8)
 
@@ -250,7 +256,7 @@ class CloudSegmentor:
             rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
 
             if self.range_projection:
-                xyz = self.scan.proj_xyz.reshape((-1, 3), order='F')
+                xyz = self.scan.proj_xyz  # .reshape((-1, 3), order='F')
             else:
                 xyz = cloud[..., :3]
             xyz_rgb_l_lsoft = self.postprocessing(pred, xyz=xyz)
@@ -279,6 +285,6 @@ class CloudSegmentor:
 
 
 if __name__ == '__main__':
-    rospy.init_node('cloud_segmentation', log_level=rospy.DEBUG)
+    rospy.init_node('cloud_segmentation', log_level=rospy.INFO)
     proc = CloudSegmentor(cloud_topic=rospy.get_param('~cloud_in', 'cloud_in'))
     rospy.spin()

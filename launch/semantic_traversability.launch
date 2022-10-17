@@ -17,7 +17,6 @@
             debug: false
             soft_label_ind: 1
             weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
-<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth-->
         </rosparam>
         <remap from="cloud_in" to="$(arg cloud)"/>
         <remap from="cloud_out" to="cloud_segmentation/points"/>
