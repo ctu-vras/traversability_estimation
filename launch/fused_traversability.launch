@@ -3,6 +3,8 @@
     <arg name="cloud" default="points_filtered_jetson"/>
     <arg name="nodelet_manager" default="geometric_traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+    <arg name="geometric_weight" default="0.5"/>
+    <arg name="semantic_weight" default="0.5"/>
 
     <node if="$(eval nodelet_manager == 'geometric_traversability_manager')"
           name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
@@ -69,7 +71,7 @@
             lidar_fov_up: 45.0
             lidar_fov_down: -45.0
             range_projection: true
-            debug: true
+            debug: false
             soft_label_ind: 1
             weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
         </rosparam>
@@ -81,6 +83,9 @@
         <rosparam subst_value="true">
             geometric_trav: geometric_traversability_raw
             semantic_trav: cloud_segmentation/points
+            geometric_weight: $(arg geometric_weight)
+            semantic_weight: $(arg semantic_weight)
+            slop: 0.1
         </rosparam>
     </node>
 

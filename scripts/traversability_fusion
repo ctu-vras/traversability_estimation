@@ -4,7 +4,6 @@ from __future__ import absolute_import, division, print_function
 import rospy
 from sensor_msgs.msg import PointCloud2
 import torch
-import numpy as np
 from ros_numpy import msgify, numpify
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 from message_filters import ApproximateTimeSynchronizer, Subscriber
@@ -13,8 +12,9 @@ from message_filters import ApproximateTimeSynchronizer, Subscriber
 def to_cloud_msg(cloud, time_stamp, frame, names=None):
     if not names:
         names = ['x', 'y', 'z']
+        cloud = cloud[:, :3]
     if cloud.dtype.names is None:
-        cloud = unstructured_to_structured(cloud[:, :3], names=names)
+        cloud = unstructured_to_structured(cloud, names=names)
     pc_msg = msgify(PointCloud2, cloud)
     pc_msg.header.stamp = time_stamp
     pc_msg.header.frame_id = frame
@@ -32,15 +32,19 @@ class PointsProcessor:
         self.geometric_topic = rospy.get_param('~geometric_trav', 'geometric_traversability_raw')
         self.semantic_topic = rospy.get_param('~semantic_trav', 'cloud_segmentation/points')
         rospy.loginfo("Subscribing to %s and %s", self.geometric_topic, self.semantic_topic)
+        self.max_pts_difference = rospy.get_param('~max_pts_diff', 10)
+        self.geometric_weight = rospy.get_param('~geometric_weight', 0.5)
+        self.semantic_weight = rospy.get_param('~semantic_weight', 0.5)
+        self.slop = rospy.get_param('~slop', 0.1)
 
         self.data_fields = ['x', 'y', 'z', 'cost']
 
         geometric_sub = Subscriber(self.geometric_topic, PointCloud2)
         semantic_sub = Subscriber(self.semantic_topic, PointCloud2)
-        self.time_synch = ApproximateTimeSynchronizer([geometric_sub, semantic_sub], queue_size=1, slop=0.2)
+        self.time_synch = ApproximateTimeSynchronizer([geometric_sub, semantic_sub], queue_size=1, slop=self.slop)
         self.time_synch.registerCallback(self.pc_callback)
 
-        self.map_pc_pub = rospy.Publisher('~points', PointCloud2, queue_size=1)
+        self.fused_pc_pub = rospy.Publisher('~points', PointCloud2, queue_size=1)
 
     def pc_callback(self, geom_msg, sem_msg):
         assert isinstance(geom_msg, PointCloud2)
@@ -52,8 +56,6 @@ class PointsProcessor:
         geom_cloud = numpify(geom_msg, PointCloud2)
         sem_cloud = numpify(sem_msg, PointCloud2)
 
-        print(geom_cloud.shape, sem_cloud.shape)
-
         geom_cloud = geom_cloud[self.data_fields]
         sem_cloud = sem_cloud[self.data_fields]
         assert sem_cloud.dtype.names == geom_cloud.dtype.names
@@ -61,13 +63,27 @@ class PointsProcessor:
         geom_cloud = structured_to_unstructured(geom_cloud)
         sem_cloud = structured_to_unstructured(sem_cloud)
 
-        assert geom_cloud.shape == sem_cloud.shape
+        assert geom_cloud.ndim == sem_cloud.ndim == 2
+        assert geom_cloud.shape[1] == sem_cloud.shape[1] == 4
 
-        # map_msg = to_cloud_msg(global_cloud, time_stamp=now, frame=frame)
-        # self.map_pc_pub.publish(map_msg)
+        if abs(geom_cloud.shape[0] - sem_cloud.shape[0]) > 10:
+            rospy.logwarn('Geometric and semantic clouds have different number of points: %s, %s.'
+                          'Using geometric segmentation as fusion result',
+                          geom_cloud.shape[0], sem_cloud.shape[0])
+            fused_cloud = geom_cloud
+        else:
+            n_pts = min(geom_cloud.shape[0], sem_cloud.shape[0])
+            geom_cloud = geom_cloud[:n_pts]
+            sem_cloud = sem_cloud[:n_pts]
+            assert geom_cloud.shape[0] == sem_cloud.shape[0]
+            fused_cloud = sem_cloud
+            fused_cloud[:, 3] = self.geometric_weight * geom_cloud[:, 3] + self.semantic_weight * sem_cloud[:, 3]
+
+        map_msg = to_cloud_msg(fused_cloud, time_stamp=now, frame=frame, names=self.data_fields)
+        self.fused_pc_pub.publish(map_msg)
 
 
 if __name__ == '__main__':
-    rospy.init_node('traversability_fusion', log_level=rospy.DEBUG)
+    rospy.init_node('traversability_fusion', log_level=rospy.INFO)
     proc = PointsProcessor()
     rospy.spin()
