@@ -6,7 +6,7 @@ from sensor_msgs.msg import PointCloud2
 import torch
 from ros_numpy import msgify, numpify
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
-from message_filters import ApproximateTimeSynchronizer, Subscriber
+# from message_filters import ApproximateTimeSynchronizer, Subscriber
 
 
 def to_cloud_msg(cloud, time_stamp, frame, names=None):
@@ -32,55 +32,88 @@ class PointsProcessor:
         self.geometric_topic = rospy.get_param('~geometric_trav', 'geometric_traversability_raw')
         self.semantic_topic = rospy.get_param('~semantic_trav', 'cloud_segmentation/points')
         rospy.loginfo("Subscribing to %s and %s", self.geometric_topic, self.semantic_topic)
-        self.max_pts_difference = rospy.get_param('~max_pts_diff', 10)
+        self.max_pts_difference = rospy.get_param('~max_pts_diff', 100)
+        self.max_time_diff = rospy.get_param('~max_time_diff', 0.2)
         self.geometric_weight = rospy.get_param('~geometric_weight', 0.5)
         self.semantic_weight = rospy.get_param('~semantic_weight', 0.5)
-        self.slop = rospy.get_param('~slop', 0.1)
 
+        self.geom_msg = None
+        self.sem_msg = None
         self.data_fields = ['x', 'y', 'z', 'cost']
-
-        geometric_sub = Subscriber(self.geometric_topic, PointCloud2)
-        semantic_sub = Subscriber(self.semantic_topic, PointCloud2)
-        self.time_synch = ApproximateTimeSynchronizer([geometric_sub, semantic_sub], queue_size=1, slop=self.slop)
-        self.time_synch.registerCallback(self.pc_callback)
 
         self.fused_pc_pub = rospy.Publisher('~points', PointCloud2, queue_size=1)
 
-    def pc_callback(self, geom_msg, sem_msg):
-        assert isinstance(geom_msg, PointCloud2)
-        assert isinstance(sem_msg, PointCloud2)
-        assert geom_msg.header.frame_id == sem_msg.header.frame_id
-        frame = sem_msg.header.frame_id
-        now = rospy.Time.now()
+        geom_sub = rospy.Subscriber(self.geometric_topic, PointCloud2, queue_size=1, callback=self.update_geom_trav)
+        seman_sub = rospy.Subscriber(self.semantic_topic, PointCloud2, queue_size=1, callback=self.update_seman_trav)
+        self.rate = rospy.Rate(rospy.get_param('~rate', 10))
+        self.spin()
 
-        geom_cloud = numpify(geom_msg, PointCloud2)
-        sem_cloud = numpify(sem_msg, PointCloud2)
+    def update_geom_trav(self, msg):
+        self.geom_msg = msg
 
-        geom_cloud = geom_cloud[self.data_fields]
-        sem_cloud = sem_cloud[self.data_fields]
-        assert sem_cloud.dtype.names == geom_cloud.dtype.names
+    def update_seman_trav(self, msg):
+        self.sem_msg = msg
 
-        geom_cloud = structured_to_unstructured(geom_cloud)
-        sem_cloud = structured_to_unstructured(sem_cloud)
+    def msg_to_cloud(self, msg):
+        cloud = numpify(msg, PointCloud2)
+        cloud = cloud[self.data_fields]
+        cloud = structured_to_unstructured(cloud)
+        return cloud
 
-        assert geom_cloud.ndim == sem_cloud.ndim == 2
-        assert geom_cloud.shape[1] == sem_cloud.shape[1] == 4
+    def spin(self):
+        while not rospy.is_shutdown():
+            if not self.geom_msg:
+                rospy.logwarn('Geometric traversability is not received')
+                if self.sem_msg:
+                    fused_cloud = self.msg_to_cloud(self.sem_msg)
+                else:
+                    continue
+            elif not self.sem_msg:
+                rospy.logwarn('Semantic traversability is not received')
+                if self.geom_msg:
+                    fused_cloud = self.msg_to_cloud(self.geom_msg)
+                else:
+                    continue
+            else:
+                assert isinstance(self.geom_msg, PointCloud2)
+                assert isinstance(self.sem_msg, PointCloud2)
+                assert self.geom_msg.header.frame_id == self.sem_msg.header.frame_id
 
-        if abs(geom_cloud.shape[0] - sem_cloud.shape[0]) > 10:
-            rospy.logwarn('Geometric and semantic clouds have different number of points: %s, %s.'
-                          'Using geometric segmentation as fusion result',
-                          geom_cloud.shape[0], sem_cloud.shape[0])
-            fused_cloud = geom_cloud
-        else:
-            n_pts = min(geom_cloud.shape[0], sem_cloud.shape[0])
-            geom_cloud = geom_cloud[:n_pts]
-            sem_cloud = sem_cloud[:n_pts]
-            assert geom_cloud.shape[0] == sem_cloud.shape[0]
-            fused_cloud = sem_cloud
-            fused_cloud[:, 3] = self.geometric_weight * geom_cloud[:, 3] + self.semantic_weight * sem_cloud[:, 3]
+                geom_cloud = self.msg_to_cloud(self.geom_msg)
+                sem_cloud = self.msg_to_cloud(self.sem_msg)
 
-        map_msg = to_cloud_msg(fused_cloud, time_stamp=now, frame=frame, names=self.data_fields)
-        self.fused_pc_pub.publish(map_msg)
+                assert geom_cloud.ndim == sem_cloud.ndim == 2
+                assert geom_cloud.shape[1] == sem_cloud.shape[1] == 4
+
+                pts_diff = abs(geom_cloud.shape[0] - sem_cloud.shape[0])
+                time_diff = abs(self.sem_msg.header.stamp.to_sec() - self.geom_msg.header.stamp.to_sec())
+
+                if pts_diff > self.max_pts_difference:
+                    rospy.logwarn('Geometric and semantic clouds have different number of points: %s, %s.\n'
+                                  'Using geometric segmentation as fusion result',
+                                  geom_cloud.shape[0], sem_cloud.shape[0])
+                    fused_cloud = geom_cloud
+
+                elif time_diff > self.max_time_diff:
+                    rospy.logwarn('Geometric and semantic clouds have big time stamp difference: %s.\n'
+                                  'Using geometric segmentation as fusion result',
+                                  time_diff)
+                    fused_cloud = geom_cloud
+
+                else:
+                    n_pts = min(geom_cloud.shape[0], sem_cloud.shape[0])
+                    geom_cloud = geom_cloud[:n_pts]
+                    sem_cloud = sem_cloud[:n_pts]
+                    assert geom_cloud.shape[0] == sem_cloud.shape[0]
+                    fused_cloud = sem_cloud
+                    fused_cloud[:, 3] = self.geometric_weight * geom_cloud[:, 3] + self.semantic_weight * sem_cloud[:, 3]
+
+            frame = self.sem_msg.header.frame_id if self.sem_msg else self.geom_msg.header.frame_id
+            now = rospy.Time.now()
+            fused_trav_msg = to_cloud_msg(fused_cloud, time_stamp=now, frame=frame, names=self.data_fields)
+            self.fused_pc_pub.publish(fused_trav_msg)
+
+            self.rate.sleep()
 
 
 if __name__ == '__main__':
