@@ -3,21 +3,27 @@
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
     <arg name="cloud" default="points" doc="Input point cloud for segmentation"/>
     <arg name="max_age" default="0.5"/>
+    <arg name="debug" default="false"/>
+    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>
+    <arg name="height" default="128"/>
+    <arg name="width" default="1024"/>
+    <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
 
 <!--    Point cloud segmentation -->
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb">
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: $(arg max_age)
-            lidar_channels: 128
-            lidar_beams: 1024
-            lidar_fov_up: 45.0
-            lidar_fov_down: -45.0
+            lidar_channels: $(arg height)
+            lidar_beams: $(arg width)
             range_projection: true
-            debug: false
+            debug: $(arg debug)
             soft_label_ind: 1
-            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
+            weights: $(arg weights)
         </rosparam>
+        <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
+        <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
+
         <remap from="cloud_in" to="$(arg cloud)"/>
         <remap from="cloud_out" to="cloud_segmentation/points"/>
     </node>

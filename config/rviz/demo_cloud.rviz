@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Robot Model1/Links1
         - /Points1
       Splitter Ratio: 0.48691099882125854
     Tree Height: 365
@@ -27,7 +28,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Soft predictions
+    SyncSource: Camera Left
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -76,13 +77,17 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        antenna:
+        base_footprint:
           Value: true
         base_link:
           Value: true
-        battery:
+        bullet:
           Value: true
-        battery_cover:
+        bullet_antenna:
+          Value: true
+        cam1_base:
+          Value: true
+        cam2_base:
           Value: true
         camera_0:
           Value: true
@@ -92,41 +97,31 @@ Visualization Manager:
           Value: true
         camera_3:
           Value: true
-        camera_4:
+        crystal:
           Value: true
-        camera_5:
+        front_bumper_link:
           Value: true
-        front_left_flipper:
+        front_left_wheel_link:
           Value: true
-        front_left_flipper_end_point:
-          Value: true
-        front_right_flipper:
-          Value: true
-        front_right_flipper_end_point:
+        front_right_wheel_link:
           Value: true
         gps:
           Value: true
-        gps_antenna:
-          Value: true
         imu:
           Value: false
-        imu_aligned:
+        imu_link:
           Value: true
-        left_track:
+        inertial_link:
+          Value: true
+        jetson:
+          Value: true
+        lidar:
           Value: true
         map:
           Value: true
-        markers:
+        mount_base:
           Value: true
         odom:
-          Value: true
-        omnicam:
-          Value: true
-        omnicam_bottom:
-          Value: true
-        omnicam_forward:
-          Value: true
-        omnicam_top:
           Value: true
         os_imu:
           Value: false
@@ -134,25 +129,47 @@ Visualization Manager:
           Value: false
         os_sensor:
           Value: false
-        ouster_base:
+        ouster_mount:
           Value: true
-        ouster_holder:
+        ouster_mount_top:
           Value: true
-        pano:
+        payload_frame:
           Value: true
-        rear_left_flipper:
+        rear_bumper_link:
           Value: true
-        rear_left_flipper_end_point:
+        rear_left_wheel_link:
           Value: true
-        rear_right_box:
+        rear_right_corner:
           Value: true
-        rear_right_flipper:
+        rear_right_wheel_link:
           Value: true
-        rear_right_flipper_end_point:
+        robot_view:
           Value: true
-        right_track:
+        rs_lidar:
           Value: true
-        top_box:
+        rslidar:
+          Value: true
+        top_chassis_link:
+          Value: true
+        top_plate_front_link:
+          Value: true
+        top_plate_link:
+          Value: true
+        top_plate_rear_link:
+          Value: true
+        tower:
+          Value: true
+        tower_camera_floor:
+          Value: true
+        tower_cap:
+          Value: true
+        tower_cap_top:
+          Value: true
+        tower_lower_floor:
+          Value: true
+        tower_rear_right_corner:
+          Value: true
+        user_rail_link:
           Value: true
       Marker Alpha: 1
       Marker Scale: 1
@@ -164,63 +181,79 @@ Visualization Manager:
         map:
           odom:
             base_link:
-              battery:
+              base_footprint:
                 {}
-              imu:
-                gps:
+              bullet:
+                bullet_antenna:
                   {}
-              imu_aligned:
+              front_bumper_link:
                 {}
-              left_track:
-                front_left_flipper:
-                  front_left_flipper_end_point:
+              front_left_wheel_link:
+                {}
+              front_right_wheel_link:
+                {}
+              imu_link:
+                {}
+              inertial_link:
+                {}
+              mount_base:
+                cam1_base:
+                  {}
+                cam2_base:
+                  {}
+                rs_lidar:
+                  lidar:
                     {}
-                rear_left_flipper:
-                  rear_left_flipper_end_point:
+                  rslidar:
                     {}
-              markers:
+              payload_frame:
                 {}
-              rear_right_box:
-                antenna:
-                  {}
-                battery_cover:
-                  {}
-                gps_antenna:
-                  {}
-                top_box:
-                  omnicam:
-                    camera_0:
-                      {}
-                    camera_1:
-                      {}
-                    camera_2:
-                      {}
-                    camera_3:
-                      {}
-                    camera_4:
-                      {}
-                    camera_5:
-                      {}
-                    omnicam_forward:
-                      omnicam_bottom:
+              rear_bumper_link:
+                {}
+              rear_left_wheel_link:
+                {}
+              rear_right_corner:
+                tower_rear_right_corner:
+                  tower:
+                    tower_camera_floor:
+                      camera_0:
                         {}
-                      omnicam_top:
-                        ouster_holder:
-                          ouster_base:
+                      camera_1:
+                        {}
+                      camera_2:
+                        {}
+                      camera_3:
+                        {}
+                    tower_cap:
+                      tower_cap_top:
+                        ouster_mount:
+                          ouster_mount_top:
                             os_sensor:
+                              crystal:
+                                {}
                               os_imu:
                                 {}
                               os_lidar:
                                 {}
-                    pano:
-                      {}
-              right_track:
-                front_right_flipper:
-                  front_right_flipper_end_point:
-                    {}
-                rear_right_flipper:
-                  rear_right_flipper_end_point:
-                    {}
+                    tower_lower_floor:
+                      imu:
+                        gps:
+                          {}
+                      jetson:
+                        {}
+              rear_right_wheel_link:
+                {}
+              top_chassis_link:
+                {}
+              top_plate_link:
+                top_plate_front_link:
+                  {}
+                top_plate_rear_link:
+                  {}
+              user_rail_link:
+                {}
+          robot_view:
+            {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -249,7 +282,7 @@ Visualization Manager:
       Value: true
     - Alpha: 1
       Class: rviz/RobotModel
-      Collision Enabled: true
+      Collision Enabled: false
       Enabled: true
       Links:
         All Links Enabled: true
@@ -257,12 +290,205 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
-      Name: Marv Robot Model
-      Robot Description: /marv/robot_description
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bullet:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bullet_antenna:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cam1_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        cam2_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_0:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        crystal:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gps:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        imu:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        imu_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        inertial_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        jetson:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        mount_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        os_sensor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_mount:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_mount_top:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        payload_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rs_lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rslidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_chassis_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_plate_front_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_plate_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_plate_rear_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        tower:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_camera_floor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_cap:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_cap_top:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        tower_lower_floor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_rear_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        user_rail_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Name: Robot Model
+      Robot Description: /robot_description
       TF Prefix: ""
       Update Interval: 0
       Value: true
-      Visual Enabled: false
+      Visual Enabled: true
     - Alpha: 1
       Class: rviz/RobotModel
       Collision Enabled: true
@@ -284,7 +510,7 @@ Visualization Manager:
       Marker Topic: /bumper_bbx
       Name: Virtual Bumper
       Namespaces:
-        "": true
+        {}
       Queue Size: 100
       Value: true
     - Class: rviz/Group

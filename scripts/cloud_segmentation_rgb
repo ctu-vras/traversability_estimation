@@ -31,11 +31,11 @@ def msgify_cloud(cloud, frame, stamp, names):
 class CloudSegmentor:
     def __init__(self, cloud_topic='cloud'):
         self.lidar_frame = None
-        self.lidar_channels_H = rospy.get_param('~lidar_channels', 128)
-        self.lidar_beams_W = rospy.get_param('~lidar_beams', 1024)
-        self.lidar_fov_up = rospy.get_param('~lidar_fov_up', 45.0)
-        self.lidar_fov_down = rospy.get_param('~lidar_fov_down', -45.0)
-        self.range_projection = rospy.get_param('~range_projection', False)
+        self.lidar_channels_H = int(rospy.get_param('~lidar_channels', 128))
+        self.lidar_beams_W = int(rospy.get_param('~lidar_beams', 1024))
+        self.lidar_fov_up = float(rospy.get_param('~lidar_fov_up', 45.0))
+        self.lidar_fov_down = float(rospy.get_param('~lidar_fov_down', -45.0))
+        self.range_projection = bool(rospy.get_param('~range_projection', False))
 
         self.lock = RLock()
         self.device = rospy.get_param('~device', 'cpu')
@@ -200,11 +200,7 @@ class CloudSegmentor:
         # cv2.imshow('Predicted labels', colors_vis[..., (2, 1, 0)])
         # cv2.waitKey(1)
 
-        mask = self.scan.proj_idx > 0
-        colors = colors[mask]
-        xyz = xyz[mask]
-        label_soft = label_soft[mask]
-        n_pts = label_soft.shape[0]
+        n_pts = label_soft.shape[0] * label_soft.shape[1]
 
         colors = colors.reshape((n_pts, 3), order='F')
         xyz = xyz.reshape((n_pts, 3), order='F')
@@ -215,12 +211,14 @@ class CloudSegmentor:
 
         label_th = np.argmax(label_pred, axis=0)
         assert label_th.ndim == 2
-        label_th = label_th[mask]
         label_th = label_th.reshape((n_pts, 1), order='F')
         label_soft = label_soft.reshape((n_pts, 1), order='F')
 
         xyz_rgb_l_lsoft = np.concatenate([xyzrgb, label_th, label_soft], axis=1)
         assert xyz_rgb_l_lsoft.shape == (n_pts, 8)
+
+        mask = self.scan.proj_idx > 0
+        xyz_rgb_l_lsoft = xyz_rgb_l_lsoft[mask.reshape((n_pts,), order='F')]
 
         rospy.logdebug('XYZ_RGB_L_L_soft cloud shape: %s', xyz_rgb_l_lsoft.shape)
         return np.asarray(xyz_rgb_l_lsoft, dtype=np.float32)
