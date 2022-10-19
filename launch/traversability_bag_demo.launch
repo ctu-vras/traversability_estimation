@@ -14,8 +14,10 @@
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
     <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
-    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth"/>
+    <arg name="traversability" default="geometric" doc="One of ['geometric', 'semantic', 'fused']"/>
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth"/>-->
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_74_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.199.pth"/>-->
+    <arg name="weights" default=" deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>
 
     <param name="use_sim_time" value="true"/>
     <rosparam command="load" file="$(arg params)"/>
@@ -34,13 +36,23 @@
     </group>
 
     <!-- Traversability estimation -->
-    <include file="$(dirname)/semantic_traversability.launch">
+    <include file="$(dirname)/$(arg traversability)_traversability.launch">
         <arg name="cloud" value="points"/>
-        <arg name="weights" value="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth"/>
+        <arg if="$(eval traversability == 'semantic')" name="weights" value="$(arg weights)"/>
     </include>
+
+<!--    <include file="$(dirname)/semantic_traversability.launch">-->
+<!--        <arg name="cloud" value="/points"/>-->
+<!--        <arg name="weights" value="$(arg weights)"/>-->
+<!--        <arg name="preprocessing" value="false"/>-->
+<!--        <arg name="max_age" value="0.5"/>-->
+<!--    </include>-->
+<!--    <include file="$(dirname)/geometric_traversability.launch">-->
+<!--        <arg name="cloud" value="points"/>-->
+<!--    </include>-->
 
     <!-- RVIZ -->
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find traversability_estimation)/config/rviz/demo_cloud.rviz"/>
+          args="-d $(find traversability_estimation)/config/rviz/navigation.rviz"/>
 
 </launch>

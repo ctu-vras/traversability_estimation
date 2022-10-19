@@ -128,7 +128,7 @@ python eval_depth --dataset TraversabilityClouds --weights /path/to/deeplabv3_re
 - Semantic segmentation of point clouds from RELLIS-3D dataset:
 
     ```bash
-    roslaunch traversability_estimation cloud_segmentation_dataset_demo.launch
+    roslaunch traversability_estimation traversability_dataset_demo.launch
     ```
 
 - Coloring lidar cloud using calibrated cameras and semantic classes:
