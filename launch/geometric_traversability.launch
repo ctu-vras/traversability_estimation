@@ -65,11 +65,22 @@
           args="$(arg nodelet_action) naex/traversability $(arg nodelet_manager)"
           respawn="true" respawn_delay="1.0" output="screen">
         <rosparam>
-            radius: 0.4
-            max_dist: 0.4
+            min_z: -1.5
+            max_z: 0.5
+            support_radius: 0.25
             min_support: 3
-            inclination_weight: 1.0
-            normal_std_weight: 0.5
+            inclination_radius: 0.4
+<!--            inclination_weight: 1.910  &lt;!&ndash; 30 deg = unit cost &ndash;&gt;-->
+            inclination_weight: 1.637  <!-- 35 deg = unit cost -->
+<!--            normal_std_weight: 20.0  &lt;!&ndash; 0.05 m = unit cost &ndash;&gt;-->
+            normal_std_weight: 10.0  <!-- 0.10 m = unit cost -->
+<!--            normal_std_weight: 6.66  &lt;!&ndash; 0.15 m = unit cost &ndash;&gt;-->
+            clearance_radius: 0.4
+            clearance_low: 0.1
+            clearance_high: 0.6
+            obstacle_weight: 0.2  <!-- 5 obstacle points = unit cost -->
+<!--            obstacle_weight: 0.1  &lt;!&ndash; 10 obstacle points = unit cost &ndash;&gt;-->
+            remove_low_support: true
             fixed_frame: odom
             timeout: 1.0
         </rosparam>
