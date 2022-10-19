@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="robot" default="husky"/>
+    <arg name="z" default="$(eval {'marv': -0.123}.get(robot, 0.0))"/>
+    <arg name="parent_frame" default="base_link"/>
+    <arg name="child_frame" default="base_footprint"/>
+
+    <node if="$(eval 'husky' not in robot)"
+          name="base_footprint_publisher" pkg="tf2_ros" type="static_transform_publisher"
+          args="0.0 0.0 $(arg z) 0.0 0.0 0.0 1.0 $(arg parent_frame) $(arg child_frame)"
+          respawn="true" respawn_delay="1.0" output="log"/>
+</launch>
