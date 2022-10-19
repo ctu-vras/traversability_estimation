@@ -108,6 +108,8 @@
             geometric_weight: $(arg geometric_weight)
             semantic_weight: $(arg semantic_weight)
             max_time_diff: 0.6
+            flat_cost_th: 0.6
+            obstacle_cost_th: 1.2
         </rosparam>
     </node>
 
