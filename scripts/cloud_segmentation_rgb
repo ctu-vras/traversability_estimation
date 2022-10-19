@@ -254,12 +254,18 @@ class CloudSegmentor:
             rospy.logdebug('Model inference took: %.3f [sec]' % (t2 - t1))
 
             if self.range_projection:
-                xyz = self.scan.proj_xyz  # .reshape((-1, 3), order='F')
+                xyz = self.scan.proj_xyz
             else:
                 xyz = cloud[..., :3]
             xyz_rgb_l_lsoft = self.postprocessing(pred, xyz=xyz)
             t3 = rospy.Time.now().to_sec()
             rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
+
+            # grass_mask = xyz_rgb_l_lsoft[:, 6] == 1
+            # bushes_mask = xyz_rgb_l_lsoft[:, 6] == 9
+            # mean_height = min(np.mean(xyz_rgb_l_lsoft[grass_mask, 2]), np.mean(xyz_rgb_l_lsoft[bushes_mask, 2]))
+            # xyz_rgb_l_lsoft[grass_mask, 2] = mean_height
+            # xyz_rgb_l_lsoft[bushes_mask, 2] = mean_height
 
             # publish segmented point cloud
             stamp = rospy.Time.now()

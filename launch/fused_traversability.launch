@@ -76,12 +76,11 @@
             debug: false
             soft_label_ind: 1
             weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
+            cloud_in: max_points_in_range
+            cloud_out: cloud_segmentation/points
         </rosparam>
         <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
         <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
-
-        <remap from="cloud_in" to="max_points_in_range"/>
-        <remap from="cloud_out" to="cloud_segmentation/points"/>
     </node>
 
     <node pkg="traversability_estimation" type="traversability_fusion" name="traversability_fusion" output="screen">

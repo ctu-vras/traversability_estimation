@@ -5,9 +5,52 @@
     <arg name="max_age" default="0.5"/>
     <arg name="debug" default="false"/>
     <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>
-    <arg name="height" default="128"/>
-    <arg name="width" default="1024"/>
+    <arg name="height" default="64"/>
+    <arg name="width" default="256"/>
     <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
+    <arg name="nodelet_manager" default="semantic_traversability_manager"/>
+    <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
+
+    <node if="$(eval nodelet_manager == 'semantic_traversability_manager')"
+          name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
+          respawn="true" respawn_delay="1.0" output="log">
+        <param name="num_worker_threads" value="16"/>
+    </node>
+
+    <node name="max_filter_projection" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) cloud_proc/projection $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam subst_value="true">
+            height: $(arg height)
+            width: $(arg width)
+            keep: 3  <!-- max depth -->
+            azimuth_only: false
+        </rosparam>
+        <param name="fov_elevation" value="$(eval arg('fov_elevation') / 180. * 3.1415)"/>
+
+        <remap from="input" to="$(arg cloud)"/>
+        <remap from="output" to="max_points"/>
+    </node>
+
+    <node name="max_filter_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <rosparam>
+            negative: true
+        </rosparam>
+        <remap from="cloud" to="max_points"/>
+        <remap from="image" to="max_points_depth"/>
+    </node>
+
+    <node name="cloud_range_filter_max" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) cloud_proc/range_filter $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            field: x
+            max: 5.0
+        </rosparam>
+        <remap from="input" to="max_points"/>
+        <remap from="output" to="max_points_in_range"/>
+    </node>
 
 <!--    Point cloud segmentation -->
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_rgb">
@@ -20,37 +63,11 @@
             debug: $(arg debug)
             soft_label_ind: 1
             weights: $(arg weights)
+            cloud_in: max_points_in_range
+            cloud_out: cloud_segmentation/points
         </rosparam>
         <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
         <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
-
-        <remap from="cloud_in" to="$(arg cloud)"/>
-        <remap from="cloud_out" to="cloud_segmentation/points"/>
-    </node>
-
-<!--    Cloud voxel filtering: 10 cm -->
-    <node name="cloud_voxel_filter_10cm" pkg="nodelet" type="nodelet"
-          args="standalone cloud_proc/voxel_filter"
-            respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            field: x
-            grid: 0.1
-            zero_valid: false
-        </rosparam>
-        <remap from="input" to="cloud_segmentation/points"/>
-        <remap from="output" to="cloud_segmentation/points_10cm"/>
-    </node>
-<!--    Cloud voxel filtering: 20 cm -->
-    <node name="cloud_voxel_filter_20cm" pkg="nodelet" type="nodelet"
-          args="standalone cloud_proc/voxel_filter"
-            respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            field: x
-            grid: 0.2
-            zero_valid: false
-        </rosparam>
-        <remap from="input" to="cloud_segmentation/points_10cm"/>
-        <remap from="output" to="cloud_segmentation/points_20cm"/>
     </node>
 
 </launch>
