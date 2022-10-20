@@ -93,8 +93,13 @@ class TravFusion:
         geom_cost = geom_cloud[:, 3]
         sem_cost = sem_cloud[:, 3]
 
+        # fused_cost = geom_cost.copy()
+        # fused_cost[geom_cost < self.flat_cost_th] = 0.0
+        # fused_cost[geom_cost > self.obstacle_cost_th] = geom_cost[geom_cost > self.obstacle_cost_th] + \
+        #                                                 sem_cost[geom_cost > self.obstacle_cost_th]
+
         fused_cost = geom_cost.copy()
-        fused_cost[geom_cost < self.flat_cost_th] = 0.0
+        fused_cost[geom_cost > self.flat_cost_th] = self.flat_cost_th + sem_cost[geom_cost > self.flat_cost_th]
         fused_cost[geom_cost > self.obstacle_cost_th] = geom_cost[geom_cost > self.obstacle_cost_th] + \
                                                         sem_cost[geom_cost > self.obstacle_cost_th]
 
