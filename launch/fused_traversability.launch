@@ -6,6 +6,7 @@
     <arg name="height" default="64"/>
     <arg name="width" default="256"/>
     <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
+    <arg name="device" default="cuda"/>
 
     <node if="$(eval nodelet_manager == 'traversability_manager')"
           name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
@@ -83,7 +84,7 @@
     <!-- Semantic segmentation -->
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation">
         <rosparam subst_value="true">
-            device: cuda
+            device: $(arg device)
             max_age: 0.5
             lidar_channels: $(arg height)
             lidar_beams: $(arg width)
@@ -104,8 +105,8 @@
             geometric_trav: geometric_traversability_raw
             semantic_trav: cloud_segmentation/points
             max_time_diff: 0.6
-            flat_cost_th: 0.6
-            obstacle_cost_th: 1.2
+            flat_cost_th: 0.5
+            obstacle_cost_th: 0.9
         </rosparam>
     </node>
 
