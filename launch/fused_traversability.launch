@@ -3,8 +3,6 @@
     <arg name="cloud" default="points_filtered_jetson"/>
     <arg name="nodelet_manager" default="traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
-    <arg name="geometric_weight" default="0.5"/>
-    <arg name="semantic_weight" default="0.5"/>
     <arg name="height" default="64"/>
     <arg name="width" default="256"/>
     <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
@@ -105,8 +103,6 @@
         <rosparam subst_value="true">
             geometric_trav: geometric_traversability_raw
             semantic_trav: cloud_segmentation/points
-            geometric_weight: $(arg geometric_weight)
-            semantic_weight: $(arg semantic_weight)
             max_time_diff: 0.6
             flat_cost_th: 0.6
             obstacle_cost_th: 1.2

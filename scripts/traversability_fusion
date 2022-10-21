@@ -37,8 +37,6 @@ class TravFusion:
         rospy.loginfo("Subscribing to %s and %s", self.geometric_topic, self.semantic_topic)
         self.dist_th = rospy.get_param('~dist_th', 0.25)
         self.max_time_diff = rospy.get_param('~max_time_diff', 0.2)
-        self.geometric_weight = rospy.get_param('~geometric_weight', 0.5)
-        self.semantic_weight = rospy.get_param('~semantic_weight', 0.5)
         self.flat_cost_th = rospy.get_param('~flat_cost_th', 0.5)
         self.obstacle_cost_th = rospy.get_param('~obstacle_cost_th', 1.0)
 
@@ -93,15 +91,9 @@ class TravFusion:
         geom_cost = geom_cloud[:, 3]
         sem_cost = sem_cloud[:, 3]
 
-        # fused_cost = geom_cost.copy()
-        # fused_cost[geom_cost < self.flat_cost_th] = 0.0
-        # fused_cost[geom_cost > self.obstacle_cost_th] = geom_cost[geom_cost > self.obstacle_cost_th] + \
-        #                                                 sem_cost[geom_cost > self.obstacle_cost_th]
-
         fused_cost = geom_cost.copy()
         fused_cost[geom_cost > self.flat_cost_th] = self.flat_cost_th + sem_cost[geom_cost > self.flat_cost_th]
-        fused_cost[geom_cost > self.obstacle_cost_th] = geom_cost[geom_cost > self.obstacle_cost_th] + \
-                                                        sem_cost[geom_cost > self.obstacle_cost_th]
+        fused_cost[geom_cost > self.obstacle_cost_th] = geom_cost[geom_cost > self.obstacle_cost_th]
 
         # plt.cla()
         # plt.plot(geom_cost[::10], label='Geom cost')
