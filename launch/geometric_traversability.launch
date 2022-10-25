@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
+    <arg name="robot"/>
     <arg name="input" default="points_filtered_jetson"/>
     <arg name="output" default="traversability"/>
     <arg name="nodelet_manager" default="geometric_traversability_manager"/>
