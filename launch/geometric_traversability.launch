@@ -85,6 +85,10 @@
             fixed_frame: odom
             timeout: 1.0
         </rosparam>
+        <rosparam if="$(eval robot == 'spot')">
+            clearance_radius: 0.55
+            clearance_high: 1.0
+        </rosparam>
         <remap from="input" to="max_points_125mm"/>
         <remap from="output" to="geometric_traversability_raw"/>
     </node>
