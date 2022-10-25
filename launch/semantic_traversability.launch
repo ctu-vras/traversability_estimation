@@ -5,7 +5,6 @@
     <arg name="output" default="traversability" doc="Output traversability point cloud topic."/>
     <arg name="max_age" default="0.5"/>
     <arg name="debug" default="false"/>
-<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>-->
     <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_80_epoch_54_TraversabilityClouds_depth_64x256_labels_traversability_iou_0.919.pth"/>
     <arg name="height" default="64"/>
     <arg name="width" default="256"/>
@@ -21,19 +20,20 @@
             <param name="num_worker_threads" value="16"/>
         </node>
 
-        <node name="max_filter_projection" pkg="nodelet" type="nodelet"
+        <node name="projection_first" pkg="nodelet" type="nodelet"
               args="$(arg nodelet_action) cloud_proc/projection $(arg nodelet_manager)"
               respawn="true" respawn_delay="1.0" output="log">
             <rosparam subst_value="true">
                 height: $(arg height)
                 width: $(arg width)
-                keep: 3  <!-- max depth -->
+                keep: 0  <!-- keep first -->
                 azimuth_only: false
+                frame: odom
             </rosparam>
             <param name="fov_elevation" value="$(eval arg('fov_elevation') / 180. * 3.1415)"/>
 
             <remap from="input" to="$(arg input)"/>
-            <remap from="output" to="max_points"/>
+            <remap from="output" to="points_first"/>
         </node>
 
         <node name="max_filter_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
@@ -41,19 +41,40 @@
             <rosparam>
                 negative: true
             </rosparam>
-            <remap from="cloud" to="max_points"/>
-            <remap from="image" to="max_points_depth"/>
+            <remap from="cloud" to="points_first"/>
+            <remap from="image" to="points_first_depth"/>
         </node>
+    </group>
 
+<!--    Point cloud segmentation -->
+    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation"
+          output="screen">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            max_age: $(arg max_age)
+            lidar_channels: $(arg height)
+            lidar_beams: $(arg width)
+            range_projection: false
+            debug: $(arg debug)
+            soft_label_ind: 1
+            weights: $(arg weights)
+            cloud_in: points_first
+            cloud_out: semantic_traversability
+        </rosparam>
+        <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
+        <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
+    </node>
+
+    <group>
         <node name="cloud_range_filter_max" pkg="nodelet" type="nodelet"
               args="$(arg nodelet_action) cloud_proc/range_filter $(arg nodelet_manager)"
               respawn="true" respawn_delay="1.0" output="log">
             <rosparam>
                 field: x
-                max: 5.0
+                max: 4.0
             </rosparam>
-            <remap from="input" to="max_points"/>
-            <remap from="output" to="max_points_in_range"/>
+            <remap from="input" to="semantic_traversability"/>
+            <remap from="output" to="semantic_traversability_range"/>
         </node>
 
         <node name="cloud_voxel_filter_max" pkg="nodelet" type="nodelet"
@@ -64,30 +85,12 @@
                 grid: 0.125
                 zero_valid: false
             </rosparam>
-            <remap from="input" to="max_points_in_range"/>
-            <remap from="output" to="max_points_125mm"/>
+            <remap from="input" to="semantic_traversability_range"/>
+            <remap from="output" to="semantic_traversability_range_125mm"/>
         </node>
     </group>
 
-    <!-- Point cloud segmentation -->
-    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation">
-        <rosparam subst_value="true">
-            device: $(arg device)
-            max_age: $(arg max_age)
-            lidar_channels: $(arg height)
-            lidar_beams: $(arg width)
-            range_projection: true
-            debug: $(arg debug)
-            soft_label_ind: 1
-            weights: $(arg weights)
-            cloud_in: max_points_125mm
-            cloud_out: cloud_segmentation/points
-        </rosparam>
-        <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
-        <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
-    </node>
-
     <!-- Relay to planner input topic. -->
     <node name="relay_traversability" pkg="topic_tools" type="relay"
-          args="cloud_segmentation/points $(arg output)"/>
+          args="semantic_traversability_range_125mm $(arg output)"/>
 </launch>
