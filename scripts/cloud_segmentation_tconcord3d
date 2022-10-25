@@ -137,25 +137,22 @@ class CloudSegmentor:
                 rospy.loginfo('Inference took: %.3f [sec]', rospy.Time.now().to_sec() - t0)
                 rospy.logdebug('Output shape: %s', predict_labels_raw.shape)
 
-                predict_labels = torch.argmax(predict_labels_raw, dim=1)
+                # predict_labels = torch.argmax(predict_labels_raw, dim=1)
 
                 # print(torch.unique(predict_labels, return_counts=True))
                 predict_probability = torch.softmax(predict_labels_raw, dim=1)
-                predict_prob_max, predict_prob_ind = predict_probability.max(dim=1)
 
-                predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
-                predict_probabilities = predict_prob_max.cpu().detach().numpy().squeeze(0)
+                # predict_labels = predict_labels.cpu().numpy().squeeze(0)
+                predict_probability = predict_probability.cpu().numpy().squeeze(0)
 
-            predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
-            predict_prob = predict_probabilities[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            # predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            predict_prob = predict_probability[:, grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
 
-            predict_labels_serialized = np.array(predict_label, dtype=np.float32)
-            predict_prob_serialized = np.array(predict_prob, dtype=np.float32)
+            # predict_labels = np.array(predict_label, dtype=np.float32)
+            predict_prob = np.array(predict_prob, dtype=np.float32)
 
-            # xyz_cost = np.concatenate([xyz, predict_labels_serialized.reshape((-1, 1))], axis=1)
-            # xyz_cost = np.concatenate([xyz, predict_prob_serialized.reshape((-1, 1))], axis=1)
-            cost = torch.softmax(predict_labels_raw.squeeze(0), dim=0).cpu().numpy()[1][grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
-            xyz_cost = np.concatenate([xyz, cost.reshape((-1, 1))], axis=1)
+            cost = predict_prob[1].reshape((-1, 1))  # traversability index
+            xyz_cost = np.concatenate([xyz, cost], axis=1)
             segm_pc_msg = msgify_cloud(xyz_cost, frame=self.lidar_frame, stamp=rospy.Time.now(),
                                        names=self.output_pc_fields)
             self.segm_cloud_pub.publish(segm_pc_msg)
