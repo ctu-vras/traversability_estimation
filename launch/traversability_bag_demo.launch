@@ -42,7 +42,7 @@
 
     <!-- Traversability estimation -->
     <include file="$(dirname)/$(arg traversability)_traversability.launch">
-        <arg name="cloud" value="points"/>
+        <arg name="input" value="points"/>
         <arg if="$(eval traversability == 'semantic')" name="weights" value="$(arg weights)"/>
     </include>
 

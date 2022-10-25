@@ -12,6 +12,7 @@
     <arg name="nodelet_manager" default="semantic_traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
     <arg name="preprocessing" default="true"/>
+    <arg name="tconcord3d" default="false"/>
 
     <group if="$(eval preprocessing)">
         <node if="$(eval nodelet_manager == 'semantic_traversability_manager')"
@@ -47,7 +48,7 @@
     </group>
 
 <!--    Point cloud segmentation -->
-    <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation"
+    <node unless="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation"
           output="screen">
         <rosparam subst_value="true">
             device: $(arg device)
@@ -64,6 +65,16 @@
         <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
         <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
     </node>
+    <node if="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_tconcord3d" output="screen">
+        <rosparam subst_value="true">
+            device: $(arg device)
+            max_age: $(arg max_age)
+            weights: student_kitti_traversablity_f0_0_time_ema.pt
+            cloud_in: points_first
+            cloud_out: semantic_traversability
+        </rosparam>>
+    </node>
+
 
     <group>
         <node name="cloud_range_filter_max" pkg="nodelet" type="nodelet"
