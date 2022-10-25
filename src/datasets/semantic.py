@@ -21,14 +21,15 @@ class SemanticKITTI(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  num_samples=None,
-                 lidar_beams_step=2,
+                 lidar_H_step=1,
+                 lidar_W_step=8,
                  labels_mode='labels',
                  output=None,
                  ):
         super(SemanticKITTI, self).__init__(path=path, fields=fields,
                                             depth_img_H=64, depth_img_W=2048,
                                             lidar_fov_up=16.6, lidar_fov_down=-16.6,
-                                            lidar_beams_step=lidar_beams_step,
+                                            lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
                                             )
         if path is None:
             path = os.path.join(data_dir, 'SemanticKITTI', 'sequences')
@@ -123,13 +124,15 @@ class SemanticUSL(SemanticKITTI):
                  split=None,
                  fields=None,
                  num_samples=None,
-                 lidar_beams_step=2,
+                 lidar_H_step=1,
+                 lidar_W_step=8,
                  labels_mode='labels',
                  output=None
                  ):
         super(SemanticUSL, self).__init__(path=path, fields=fields,
                                           split=split, num_samples=num_samples,
-                                          lidar_beams_step=lidar_beams_step, labels_mode=labels_mode,
+                                          lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
+                                          labels_mode=labels_mode,
                                           output=output
                                           )
         if path is None:

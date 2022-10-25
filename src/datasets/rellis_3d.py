@@ -290,13 +290,14 @@ class Rellis3DClouds(BaseDatasetClouds):
                  fields=None,
                  num_samples=None,
                  output=None,
-                 lidar_beams_step=2,
+                 lidar_H_step=1,
+                 lidar_W_step=8,
                  labels_mode='labels'
                  ):
         super(Rellis3DClouds, self).__init__(path=path, fields=fields,
                                              depth_img_H=64, depth_img_W=2048,
                                              lidar_fov_up=22.5, lidar_fov_down=-22.5,
-                                             lidar_beams_step=lidar_beams_step,
+                                             lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
                                              output=output)
         if path is None:
             path = join(data_dir, 'Rellis_3D')
@@ -372,9 +373,9 @@ def semantic_laser_scan_demo(n_runs=1):
     # split = np.random.choice(['test', 'train', 'val'])
     split = 'test'
 
-    ds = Rellis3DClouds(split=split, lidar_beams_step=2)
-    ds_trav = Rellis3DClouds(split=split, lidar_beams_step=2, output='traversability')
-    ds_flex = Rellis3DClouds(split=split, lidar_beams_step=2, output='flexibility')
+    ds = Rellis3DClouds(split=split, lidar_W_step=2)
+    ds_trav = Rellis3DClouds(split=split, lidar_W_step=2, output='traversability')
+    ds_flex = Rellis3DClouds(split=split, lidar_W_step=2, output='flexibility')
 
     # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
@@ -457,7 +458,7 @@ def semseg_test(n_runs=1):
 def colored_cloud_demo(n_runs=1):
     import open3d as o3d
 
-    ds = Rellis3DClouds(split='test', lidar_beams_step=1)
+    ds = Rellis3DClouds(split='test', lidar_W_step=1)
 
     # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
