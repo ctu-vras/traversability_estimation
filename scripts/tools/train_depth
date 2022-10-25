@@ -99,6 +99,7 @@ class CommonBatchSampler(BatchSampler):
                     assert len(batch) > 0
                 else:
                     if self.drop_last:
+                        # TODO: in case drop_last = True goes out of the cycle in the middle of dataloader
                         break
                     else:
                         batch = ids[data_id].copy()
@@ -148,15 +149,24 @@ def create_dataloaders(args):
 
         train_dataset_combined = torch.utils.data.ConcatDataset([train_dataset, ft_dataset_train])
 
-        # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
-        batch_sampler = CommonBatchSampler(SequentialSampler(train_dataset_combined),
-                                           batch_size=args.batch_size,
-                                           drop_last=True,
-                                           shuffle=True)
-        train_loader = DataLoader(dataset=train_dataset_combined,
-                                  num_workers=args.n_workers,
-                                  batch_sampler=batch_sampler,
-                                  pin_memory=True)
+        if train_dataset[0][0].shape == ft_dataset_train[0][0].shape:
+            train_loader = DataLoader(train_dataset_combined,
+                                      batch_size=args.batch_size,
+                                      shuffle=True,
+                                      num_workers=args.n_workers,
+                                      drop_last=True,
+                                      pin_memory=True)
+        else:
+            print('Source and target datasets have different data shapes. Using BatchSampler.')
+            # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
+            batch_sampler = CommonBatchSampler(SequentialSampler(train_dataset_combined),
+                                               batch_size=args.batch_size,
+                                               drop_last=True,
+                                               shuffle=True)
+            train_loader = DataLoader(dataset=train_dataset_combined,
+                                      num_workers=args.n_workers,
+                                      batch_sampler=batch_sampler,
+                                      pin_memory=True)
 
         ft_dataset_val = DatasetFT(split='val',
                                    output=args.output,
@@ -166,15 +176,22 @@ def create_dataloaders(args):
 
         valid_dataset_combined = torch.utils.data.ConcatDataset([valid_dataset, ft_dataset_val])
 
-        # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
-        batch_sampler_val = CommonBatchSampler(SequentialSampler(valid_dataset_combined),
-                                               batch_size=args.batch_size,
-                                               drop_last=False,
-                                               shuffle=False)
-        valid_loader = DataLoader(dataset=valid_dataset_combined,
-                                  num_workers=args.n_workers,
-                                  batch_sampler=batch_sampler_val,
-                                  pin_memory=True)
+        if valid_dataset[0][0].shape == ft_dataset_val[0][0].shape:
+            valid_loader = DataLoader(valid_dataset_combined,
+                                      batch_size=1,
+                                      shuffle=False,
+                                      num_workers=args.n_workers,
+                                      pin_memory=True)
+        else:
+            # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
+            batch_sampler_val = CommonBatchSampler(SequentialSampler(valid_dataset_combined),
+                                                   batch_size=args.batch_size,
+                                                   drop_last=False,
+                                                   shuffle=False)
+            valid_loader = DataLoader(dataset=valid_dataset_combined,
+                                      num_workers=args.n_workers,
+                                      batch_sampler=batch_sampler_val,
+                                      pin_memory=True)
 
         train_datasets.append(ft_dataset_train)
         valid_datasets.append(ft_dataset_val)
@@ -402,10 +419,12 @@ class Trainer(object):
                     max_metric = metric_val
 
                 if max_metric <= metric_val or epoch_n % 10 == 0:
-                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_labels_%s_iou_%.3f.pth' % \
+                    h, w = self.train_datasets[0][0][1].shape[-2:]
+                    name = '%s_lr_%g_bs_%d_epoch_%d_%s_%s_%sx%s_labels_%s_iou_%.3f.pth' % \
                            (self.cfg.architecture,
                             self.cfg.lr, self.cfg.batch_size, epoch_n,
                             '_'.join(self.cfg.datasets), '_'.join(self.train_datasets[0].fields),
+                            h, w,
                             self.train_datasets[0].output, float(metric_val))
 
                     print("Saving Model:", name)
