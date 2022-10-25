@@ -62,6 +62,9 @@ class CloudSegmentor:
 
         # point cloud which time stamp is older is not being processed
         self.max_age = rospy.get_param('~max_age', 0.5)
+        self.fixed_volume_space = rospy.get_param('~fixed_volume_space', True)
+        self.max_volume_space = rospy.get_param('~max_volume_space', [50, np.pi, 2])
+        self.min_volume_space = rospy.get_param('~min_volume_space', [0, -np.pi, -4])
 
         self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', '~points'), PointCloud2, queue_size=1)
         self.depth_pub = rospy.Publisher('~depth', Image, queue_size=1)
@@ -90,7 +93,7 @@ class CloudSegmentor:
 
         with self.lock:
             cloud = numpify(pc_msg)
-            xyz = structured_to_unstructured(cloud[self.input_pc_fields])
+            xyz = np.array(structured_to_unstructured(cloud[self.input_pc_fields]))
             rospy.logdebug('Point cloud of shape %s is received', xyz.shape)
 
             xyz = xyz.reshape((-1, 3))
@@ -103,6 +106,9 @@ class CloudSegmentor:
             min_bound = np.min(xyz_pol[:, 1:], axis=0)
             max_bound = np.concatenate(([max_bound_r], max_bound))
             min_bound = np.concatenate(([min_bound_r], min_bound))
+            if self.fixed_volume_space:
+                max_bound = np.asarray(self.max_volume_space)
+                min_bound = np.asarray(self.min_volume_space)
 
             # get grid index
             crop_range = max_bound - min_bound
@@ -113,46 +119,43 @@ class CloudSegmentor:
                 print("Zero interval!")
             grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(int)
 
-            # voxel_position = np.zeros(self.grid_size, dtype=np.float32)
-            # dim_array = np.ones(len(self.grid_size) + 1, int)
-            # dim_array[0] = -1
-            # voxel_position = np.indices(self.grid_size) * intervals.reshape(dim_array) + min_bound.reshape(dim_array)
-            # voxel_position = polar2cat(voxel_position)
-
             # center data on each voxel for PTnet
             voxel_centers = (grid_ind.astype(np.float32) + 0.5) * intervals + min_bound
-            return_xyz = xyz_pol - voxel_centers
-            return_xyz = np.concatenate((return_xyz, xyz_pol, xyz[:, :2]), axis=1)
+            cylindr_xyz = xyz_pol - voxel_centers
+            cylindr_xyz = np.concatenate((cylindr_xyz, xyz_pol, xyz[:, :2]), axis=1)
 
-            sig = np.zeros((len(return_xyz), 1))
-            return_fea = np.concatenate((return_xyz, sig), axis=1)
+            sig = np.zeros((len(cylindr_xyz), 1))
+            cylindr_features = np.concatenate((cylindr_xyz, sig), axis=1)
 
-            return_fea = torch.as_tensor(return_fea, dtype=torch.float32).to(self.device)
-            xyz_tensor = torch.as_tensor(xyz, dtype=torch.float32).to(self.device)
+            cylindr_features = torch.as_tensor(cylindr_features, dtype=torch.float32).to(self.device)
+            grid_ind_tensor = torch.as_tensor(grid_ind, dtype=torch.float32).to(self.device)
             with torch.no_grad():
-                rospy.logdebug('Input shapes: %s, %s', return_fea.shape, xyz.shape)
+                rospy.logdebug('Input shapes: %s, %s', cylindr_features.shape, xyz.shape)
 
                 t0 = rospy.Time.now().to_sec()
-                predict_labels_raw = self.model([return_fea], [xyz_tensor], batch_size=1)
+                predict_labels_raw = self.model([cylindr_features], [grid_ind_tensor], batch_size=1)
                 rospy.loginfo('Inference took: %.3f [sec]', rospy.Time.now().to_sec() - t0)
                 rospy.logdebug('Output shape: %s', predict_labels_raw.shape)
 
                 predict_labels = torch.argmax(predict_labels_raw, dim=1)
 
                 # print(torch.unique(predict_labels, return_counts=True))
-                predict_probablity = torch.nn.functional.softmax(predict_labels_raw, dim=1)
-                predict_prob_max, predict_prob_ind = predict_probablity.max(dim=1)
+                predict_probability = torch.softmax(predict_labels_raw, dim=1)
+                predict_prob_max, predict_prob_ind = predict_probability.max(dim=1)
 
-                # predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
-                predict_probabilitys = predict_prob_max.cpu().detach().numpy().squeeze(0)
+                predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
+                predict_probabilities = predict_prob_max.cpu().detach().numpy().squeeze(0)
 
-            # predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
-            predict_prob = predict_probabilitys[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            predict_prob = predict_probabilities[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
 
-            # predict_labels_serialized = np.array(predict_label, dtype=np.int32)
+            predict_labels_serialized = np.array(predict_label, dtype=np.float32)
             predict_prob_serialized = np.array(predict_prob, dtype=np.float32)
 
-            xyz_cost = np.concatenate([xyz, predict_prob_serialized.reshape((-1, 1))], axis=1)
+            # xyz_cost = np.concatenate([xyz, predict_labels_serialized.reshape((-1, 1))], axis=1)
+            # xyz_cost = np.concatenate([xyz, predict_prob_serialized.reshape((-1, 1))], axis=1)
+            cost = torch.softmax(predict_labels_raw.squeeze(0), dim=0).cpu().numpy()[1][grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            xyz_cost = np.concatenate([xyz, cost.reshape((-1, 1))], axis=1)
             segm_pc_msg = msgify_cloud(xyz_cost, frame=self.lidar_frame, stamp=rospy.Time.now(),
                                        names=self.output_pc_fields)
             self.segm_cloud_pub.publish(segm_pc_msg)
