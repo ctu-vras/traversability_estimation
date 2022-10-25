@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from __future__ import absolute_import, division, print_function
+from rosbag import Bag
 import rospy
 from cras_ouster_msgs.msg import SensorInfo
 
@@ -7,12 +8,22 @@ from cras_ouster_msgs.msg import SensorInfo
 class LatchSensorInfo(object):
 
     def __init__(self):
+        self.bag = rospy.get_param('~bag', None)
         self.pub = rospy.Publisher('/os_node/sensor_info', SensorInfo, queue_size=1, latch=True)
         self.sub = rospy.Subscriber('/os_node/sensor_info', SensorInfo, self.callback)
         self.published = False
+        if self.bag:
+            self.publish_from_bag()
+
+    def publish_from_bag(self):
+        with Bag(self.bag, 'r') as bag:
+            for _, msg, t in bag.read_messages(topics=['/os_node/sensor_info']):
+                if rospy.is_shutdown():
+                    break
+                self.callback(msg)
 
     def callback(self, msg):
-        assert isinstance(msg, SensorInfo)
+        # assert isinstance(msg, SensorInfo)
         if self.published:
             return
         self.published = True
