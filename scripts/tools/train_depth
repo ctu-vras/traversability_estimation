@@ -151,7 +151,7 @@ def create_dataloaders(args):
         # https://stackoverflow.com/questions/51837110/pytorch-data-loading-from-multiple-different-sized-datasets
         batch_sampler = CommonBatchSampler(SequentialSampler(train_dataset_combined),
                                            batch_size=args.batch_size,
-                                           drop_last=False,
+                                           drop_last=True,
                                            shuffle=True)
         train_loader = DataLoader(dataset=train_dataset_combined,
                                   num_workers=args.n_workers,

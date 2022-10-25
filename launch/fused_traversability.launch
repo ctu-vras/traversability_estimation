@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
-    <arg name="cloud" default="points_filtered_jetson"/>
+    <arg name="input" default="points_filtered_jetson"/>
+    <arg name="output" default="traversability"/>
     <arg name="nodelet_manager" default="traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
     <arg name="height" default="64"/>
@@ -27,7 +28,7 @@
             </rosparam>
             <param name="fov_elevation" value="$(eval arg('fov_elevation') / 180. * 3.1415)"/>
 
-            <remap from="input" to="$(arg cloud)"/>
+            <remap from="input" to="$(arg input)"/>
             <remap from="output" to="max_points"/>
         </node>
 
@@ -108,6 +109,10 @@
             flat_cost_th: 0.5
             obstacle_cost_th: 0.9
         </rosparam>
+        <remap from="~/points" to="fused_traversability"/>
     </node>
 
+    <!-- Relay to planner input topic. -->
+    <node name="relay_traversability" pkg="topic_tools" type="relay"
+          args="fused_traversability $(arg output)"/>
 </launch>
