@@ -92,7 +92,8 @@
             range_projection: true
             debug: false
             soft_label_ind: 1
-            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth
+<!--            weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth-->
+            weights: deeplabv3_resnet101_lr_0.0001_bs_80_epoch_54_TraversabilityClouds_depth_64x256_labels_traversability_iou_0.919.pth
             cloud_in: max_points_125mm
             cloud_out: cloud_segmentation/points
         </rosparam>

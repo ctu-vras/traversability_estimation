@@ -5,6 +5,7 @@
     <arg name="output" default="traversability" doc="Output traversability point cloud topic."/>
     <arg name="max_age" default="0.5"/>
     <arg name="debug" default="false"/>
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>-->
     <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_80_epoch_54_TraversabilityClouds_depth_64x256_labels_traversability_iou_0.919.pth"/>
     <arg name="height" default="64"/>
     <arg name="width" default="256"/>
@@ -68,7 +69,7 @@
         </node>
     </group>
 
-<!--    Point cloud segmentation -->
+    <!-- Point cloud segmentation -->
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation">
         <rosparam subst_value="true">
             device: $(arg device)
