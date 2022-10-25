@@ -59,7 +59,7 @@ class CloudSegmentor:
             self.model_output = 'flexibility'
 
         self.input_pc_fields = ['x', 'y', 'z']
-        self.output_pc_fields = ['x', 'y', 'z', 'r', 'g', 'b', self.model_output, 'cost']
+        self.output_pc_fields = ['x', 'y', 'z', self.model_output, 'cost']
         self.soft_label_ind = rospy.get_param('~soft_label_ind', 1)
 
         assert self.model_output in ['labels', 'traversability', 'flexibility']
@@ -138,7 +138,7 @@ class CloudSegmentor:
     def preprocessing(self, cloud):
         if cloud.ndim == 3:
             H, W, C = cloud.shape
-            if self.lidar_channels_H != cloud.shape[0] or self.lidar_beams_W != cloud.shape[1]:
+            if self.lidar_channels_H != H or self.lidar_beams_W != W:
                 self.lidar_channels_H = H
                 self.lidar_beams_W = W
                 self.scan = SemLaserScan(nclasses=self.n_classes,
@@ -156,7 +156,7 @@ class CloudSegmentor:
         else:
             depth = np.linalg.norm(cloud[..., :3], ord=2, axis=-1)
 
-        depth = depth.reshape((self.lidar_channels_H, self.lidar_beams_W), order='F')
+        depth = depth.reshape((self.lidar_channels_H, self.lidar_beams_W))
 
         # depth_vis = cv2.resize(depth.astype('float'),
         #                        (depth.shape[1] // 2, depth.shape[0] // 2),
@@ -187,41 +187,25 @@ class CloudSegmentor:
 
         label_soft = label_pred[self.soft_label_ind]
 
-        colors = self.label_to_color(label_pred)
-        colors = colors / colors.max()
-
         # label_soft_vis = cv2.resize(label_soft.astype('float'), (label_soft.shape[1] // 2, label_soft.shape[0] // 2),
         #                             interpolation=cv2.INTER_LINEAR) / label_soft.max()
         # cv2.imshow('Predicted labels', label_soft_vis)
         # cv2.waitKey(1)
 
-        # colors_vis = cv2.resize(colors.astype('float'), (colors.shape[1] // 2, colors.shape[0] // 2),
-        #                         interpolation=cv2.INTER_LINEAR) / colors.max()
-        # cv2.imshow('Predicted labels', colors_vis[..., (2, 1, 0)])
-        # cv2.waitKey(1)
-
         n_pts = label_soft.shape[0] * label_soft.shape[1]
 
-        colors = colors.reshape((n_pts, 3), order='F')
-        xyz = xyz.reshape((n_pts, 3), order='F')
-        assert xyz.shape == colors.shape
-        xyzrgb = np.concatenate([xyz, colors], axis=1)
-        assert xyzrgb.shape == (n_pts, 6)
-        # visualize_cloud(xyz, rgb)
+        xyz = xyz.reshape((n_pts, 3))
 
         label_th = np.argmax(label_pred, axis=0)
         assert label_th.ndim == 2
-        label_th = label_th.reshape((n_pts, 1), order='F')
-        label_soft = label_soft.reshape((n_pts, 1), order='F')
+        label_th = label_th.reshape((n_pts, 1))
+        label_soft = label_soft.reshape((n_pts, 1))
 
-        xyz_rgb_l_lsoft = np.concatenate([xyzrgb, label_th, label_soft], axis=1)
-        assert xyz_rgb_l_lsoft.shape == (n_pts, 8)
+        xyz_l_lsoft = np.concatenate([xyz, label_th, label_soft], axis=1)
+        assert xyz_l_lsoft.shape == (n_pts, 5)
 
-        mask = self.scan.proj_idx > 0
-        xyz_rgb_l_lsoft = xyz_rgb_l_lsoft[mask.reshape((n_pts,), order='F')]
-
-        rospy.logdebug('XYZ_RGB_L_L_soft cloud shape: %s', xyz_rgb_l_lsoft.shape)
-        return np.asarray(xyz_rgb_l_lsoft, dtype=np.float32)
+        rospy.logdebug('XYZ_L_L_soft cloud shape: %s', xyz_l_lsoft.shape)
+        return np.asarray(xyz_l_lsoft, dtype=np.float32)
 
     def segment_cloud_cb(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
@@ -257,19 +241,19 @@ class CloudSegmentor:
                 xyz = self.scan.proj_xyz
             else:
                 xyz = cloud[..., :3]
-            xyz_rgb_l_lsoft = self.postprocessing(pred, xyz=xyz)
+            xyz_l_lsoft = self.postprocessing(pred, xyz=xyz)
             t3 = rospy.Time.now().to_sec()
             rospy.logdebug('Postprocessing took: %.3f [sec]' % (t3 - t2))
 
-            # grass_mask = xyz_rgb_l_lsoft[:, 6] == 1
-            # bushes_mask = xyz_rgb_l_lsoft[:, 6] == 9
-            # mean_height = min(np.mean(xyz_rgb_l_lsoft[grass_mask, 2]), np.mean(xyz_rgb_l_lsoft[bushes_mask, 2]))
-            # xyz_rgb_l_lsoft[grass_mask, 2] = mean_height
-            # xyz_rgb_l_lsoft[bushes_mask, 2] = mean_height
+            # grass_mask = xyz_l_lsoft[:, 6] == 1
+            # bushes_mask = xyz_l_lsoft[:, 6] == 9
+            # mean_height = min(np.mean(xyz_l_lsoft[grass_mask, 2]), np.mean(xyz_l_lsoft[bushes_mask, 2]))
+            # xyz_l_lsoft[grass_mask, 2] = mean_height
+            # xyz_l_lsoft[bushes_mask, 2] = mean_height
 
             # publish segmented point cloud
             stamp = rospy.Time.now()
-            segm_pc_msg = msgify_cloud(xyz_rgb_l_lsoft, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_fields)
+            segm_pc_msg = msgify_cloud(xyz_l_lsoft, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_fields)
             self.segm_cloud_pub.publish(segm_pc_msg)
 
             if self.debug:
