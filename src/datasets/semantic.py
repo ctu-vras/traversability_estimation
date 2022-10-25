@@ -105,7 +105,7 @@ class SemanticKITTI(BaseDatasetClouds):
 
     def __getitem__(self, index):
         item = self.files[index]
-        self.scan.open_scan(item["depth"])
+        self.scan.open_scan(item["depth"], augmentations=True)
         self.scan.open_label(item["label"])
 
         data, label = self.create_sample()

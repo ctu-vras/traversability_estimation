@@ -358,7 +358,7 @@ class Rellis3DClouds(BaseDatasetClouds):
 
     def __getitem__(self, index):
         item = self.files[index]
-        self.scan.open_scan(item["depth"])
+        self.scan.open_scan(item["depth"], augmentations=True)
         self.scan.open_label(item["label"])
 
         data, label = self.create_sample()
@@ -377,8 +377,7 @@ def semantic_laser_scan_demo(n_runs=1):
     ds_trav = Rellis3DClouds(split=split, lidar_W_step=2, output='traversability')
     ds_flex = Rellis3DClouds(split=split, lidar_W_step=2, output='flexibility')
 
-    # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
-    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
+    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth'
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
                        map_location='cpu').eval()
     for _ in range(n_runs):
@@ -401,7 +400,7 @@ def semantic_laser_scan_demo(n_runs=1):
         color_flex_gt = ds_flex.label_to_color(label_flex)
 
         # Apply inference preprocessing transforms
-        batch = torch.from_numpy(xyzid[-2:]).unsqueeze(0)  # model takes as input only intensity and depth image
+        batch = torch.from_numpy(xyzid[-1:]).unsqueeze(0)  # model takes as input only depth image
         with torch.no_grad():
             pred = model(batch)['out']
         pred = pred.squeeze(0).cpu().numpy()
@@ -460,8 +459,7 @@ def colored_cloud_demo(n_runs=1):
 
     ds = Rellis3DClouds(split='test', lidar_W_step=1)
 
-    # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
-    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
+    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth'
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
                        map_location='cpu')
     model.eval()
@@ -479,7 +477,7 @@ def colored_cloud_demo(n_runs=1):
         assert xyz.shape == color_gt.shape
 
         # Apply inference preprocessing transforms
-        batch = torch.from_numpy(xyzid[-2:]).unsqueeze(0)  # model takes as input only i and d
+        batch = torch.from_numpy(xyzid[-1:]).unsqueeze(0)  # model takes as input only and d
 
         # Use the model and visualize the prediction
         with torch.no_grad():

@@ -1,4 +1,5 @@
 import numpy as np
+from .augmentations import RandomAxisRotation
 
 
 class LaserScan(object):
@@ -56,7 +57,7 @@ class LaserScan(object):
     def __len__(self):
         return self.size()
 
-    def open_scan(self, filename):
+    def open_scan(self, filename, augmentations=False):
         """ Open raw scan and fill in attributes
         """
         # reset just in case there was an open structure
@@ -77,6 +78,12 @@ class LaserScan(object):
 
         # put in attribute
         points = scan[:, 0:3]  # get xyz
+
+        if augmentations:
+            angle = np.random.random() * np.deg2rad(20)
+            print('rotating points by %f [deg]' % np.rad2deg(angle))
+            points = RandomAxisRotation(points, angle)
+
         remissions = scan[:, 3]  # get remission
         self.set_points(points, remissions)
 
