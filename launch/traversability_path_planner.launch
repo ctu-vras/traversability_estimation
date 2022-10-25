@@ -30,7 +30,7 @@
 
     <!-- Traversability Estimation -->
     <include file="$(dirname)/$(arg traversability)_traversability.launch">
-        <arg name="cloud" value="points"/>
+        <arg name="input" value="points"/>
     </include>
 
     <!-- Path Planner -->

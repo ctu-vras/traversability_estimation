@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="cloud" default="points" doc="Input point cloud for segmentation"/>
+    <arg name="input" default="points" doc="Input point cloud for segmentation"/>
     <arg name="max_age" default="0.5"/>
     <arg name="debug" default="false"/>
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>-->
     <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_80_epoch_54_TraversabilityClouds_depth_64x256_labels_traversability_iou_0.919.pth"/>
     <arg name="height" default="64"/>
     <arg name="width" default="256"/>
@@ -30,7 +31,7 @@
             </rosparam>
             <param name="fov_elevation" value="$(eval arg('fov_elevation') / 180. * 3.1415)"/>
 
-            <remap from="input" to="$(arg cloud)"/>
+            <remap from="input" to="$(arg input)"/>
             <remap from="output" to="max_points"/>
         </node>
 
@@ -67,7 +68,7 @@
         </node>
     </group>
 
-<!--    Point cloud segmentation -->
+    <!-- Point cloud segmentation -->
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation">
         <rosparam subst_value="true">
             device: $(arg device)
