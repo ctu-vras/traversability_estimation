@@ -24,6 +24,14 @@
             min_z: -0.14
             max_z: 0.8
         </rosparam>
+        <rosparam if="$(eval robot == 'spot')">
+            min_x: -0.56
+            max_x: 0.56
+            min_y: -0.26
+            max_y: 0.26
+            min_z: -0.6
+            max_z: 0.5
+        </rosparam>
         <rosparam>
             negative: true
             keep_organized: true
