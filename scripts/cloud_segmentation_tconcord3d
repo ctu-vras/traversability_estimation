@@ -143,16 +143,14 @@ class CloudSegmentor:
                 predict_probablity = torch.nn.functional.softmax(predict_labels_raw, dim=1)
                 predict_prob_max, predict_prob_ind = predict_probablity.max(dim=1)
 
-                predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
+                # predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
                 predict_probabilitys = predict_prob_max.cpu().detach().numpy().squeeze(0)
 
-            predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            # predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
             predict_prob = predict_probabilitys[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
 
-            predict_labels_serialized = np.array(predict_label, dtype=np.int32)
+            # predict_labels_serialized = np.array(predict_label, dtype=np.int32)
             predict_prob_serialized = np.array(predict_prob, dtype=np.float32)
-
-            print(predict_labels_serialized.shape, predict_prob_serialized.shape)
 
             xyz_cost = np.concatenate([xyz, predict_prob_serialized.reshape((-1, 1))], axis=1)
             segm_pc_msg = msgify_cloud(xyz_cost, frame=self.lidar_frame, stamp=rospy.Time.now(),

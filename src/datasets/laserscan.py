@@ -81,7 +81,6 @@ class LaserScan(object):
 
         if augmentations:
             angle = np.random.random() * np.deg2rad(20)
-            print('rotating points by %f [deg]' % np.rad2deg(angle))
             points = RandomAxisRotation(points, angle)
 
         remissions = scan[:, 3]  # get remission
