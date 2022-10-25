@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
+    <arg name="robot"/>
     <arg name="input" default="points_filtered_jetson"/>
     <arg name="output" default="traversability"/>
     <arg name="nodelet_manager" default="geometric_traversability_manager"/>
@@ -7,6 +8,7 @@
     <arg name="bumper" default="false"/>
     <arg name="height" default="64"/>
     <arg name="width" default="256"/>
+    <arg name="azimuth_only" default="$(eval height == 128)"/>
     <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
 
     <node if="$(eval nodelet_manager == 'geometric_traversability_manager')"
@@ -22,9 +24,9 @@
             height: $(arg height)
             width: $(arg width)
             keep: 3  <!-- max depth -->
-            azimuth_only: false
+            azimuth_only: $(arg azimuth_only)
         </rosparam>
-        <param name="fov_elevation" value="$(eval arg('fov_elevation') / 180. * 3.1415)"/>
+        <param unless="$(arg azimuth_only)" name="fov_elevation" value="$(eval arg('fov_elevation') / 180. * 3.1415)"/>
 
         <remap from="input" to="$(arg input)"/>
         <remap from="output" to="max_points"/>
@@ -84,6 +86,10 @@
             remove_low_support: true
             fixed_frame: odom
             timeout: 1.0
+        </rosparam>
+        <rosparam if="$(eval robot == 'spot')">
+            clearance_radius: 0.55
+            clearance_high: 1.0
         </rosparam>
         <remap from="input" to="max_points_125mm"/>
         <remap from="output" to="geometric_traversability_raw"/>
