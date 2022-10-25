@@ -7,7 +7,7 @@ from numpy.lib.recfunctions import structured_to_unstructured
 from os.path import dirname, join, realpath
 from traversability_estimation.utils import *
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
-from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS
+from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, FLEXIBILITY_LABELS
 from datasets.laserscan import SemLaserScan
 from copy import copy
@@ -281,7 +281,7 @@ class Rellis3DImages(BaseDatasetImages):
 
 
 class Rellis3DClouds(BaseDatasetClouds):
-    CLASSES = ['dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
+    CLASSES = ['void', 'dirt', 'grass', 'tree', 'pole', 'water', 'sky', 'vehicle', 'object', 'asphalt', 'building',
                'log', 'person', 'fence', 'bush', 'concrete', 'barrier', 'puddle', 'mud', 'rubble']
 
     def __init__(self,
@@ -290,13 +290,14 @@ class Rellis3DClouds(BaseDatasetClouds):
                  fields=None,
                  num_samples=None,
                  output=None,
-                 lidar_beams_step=2,
+                 lidar_H_step=1,
+                 lidar_W_step=8,
                  labels_mode='labels'
                  ):
         super(Rellis3DClouds, self).__init__(path=path, fields=fields,
                                              depth_img_H=64, depth_img_W=2048,
                                              lidar_fov_up=22.5, lidar_fov_down=-22.5,
-                                             lidar_beams_step=lidar_beams_step,
+                                             lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
                                              output=output)
         if path is None:
             path = join(data_dir, 'Rellis_3D')
@@ -317,7 +318,9 @@ class Rellis3DClouds(BaseDatasetClouds):
             self.class_values = list(range(len(self.color_map)))
             self.learning_map = CFG["learning_map"]
             self.learning_map_inv = CFG["learning_map_inv"]
+            self.ignore_label = 0
         else:
+            self.ignore_label = VOID_VALUE
             if self.output == 'traversability':
                 self.color_map = TRAVERSABILITY_COLOR_MAP
                 self.CLASSES = [v for k, v in TRAVERSABILITY_LABELS.items()]
@@ -329,6 +332,7 @@ class Rellis3DClouds(BaseDatasetClouds):
 
             self.label_map = self.get_label_map(path=os.path.join(data_dir,
                                                                   "../config/rellis_to_%s.yaml" % self.output))
+        self.non_bg_classes = np.asarray(self.CLASSES)[np.asarray(self.class_values) != self.ignore_label]
 
         self.get_scan()
 
@@ -369,9 +373,9 @@ def semantic_laser_scan_demo(n_runs=1):
     # split = np.random.choice(['test', 'train', 'val'])
     split = 'test'
 
-    ds = Rellis3DClouds(split=split, lidar_beams_step=2)
-    ds_trav = Rellis3DClouds(split=split, lidar_beams_step=2, output='traversability')
-    ds_flex = Rellis3DClouds(split=split, lidar_beams_step=2, output='flexibility')
+    ds = Rellis3DClouds(split=split, lidar_W_step=2)
+    ds_trav = Rellis3DClouds(split=split, lidar_W_step=2, output='traversability')
+    ds_flex = Rellis3DClouds(split=split, lidar_W_step=2, output='flexibility')
 
     # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'
@@ -454,7 +458,7 @@ def semseg_test(n_runs=1):
 def colored_cloud_demo(n_runs=1):
     import open3d as o3d
 
-    ds = Rellis3DClouds(split='test', lidar_beams_step=1)
+    ds = Rellis3DClouds(split='test', lidar_W_step=1)
 
     # model_name = 'fcn_resnet50_lr_0.0001_bs_4_epoch_14_Rellis3DClouds_intensity_depth_iou_0.56.pth'
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_64_Rellis3DClouds_z_depth_iou_0.68.pth'

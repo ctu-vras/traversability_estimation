@@ -4,7 +4,8 @@
     <arg name="odom_frame" default="odom"/>
     <arg name="map_frame" default="map"/>
 
-    <node name="mapper_node" type="mapper_node" pkg="norlab_icp_mapper_ros" output="log">
+    <node name="mapper_node" type="mapper_node" pkg="norlab_icp_mapper_ros"
+          respawn="true" respawn_delay="1.0" output="log">
         <rosparam subst_value="true">
             odom_frame: $(arg odom_frame)
             map_frame: $(arg map_frame)

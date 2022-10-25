@@ -1,7 +1,7 @@
 import os
 from datasets.base_dataset import BaseDatasetClouds, data_dir
 from datasets.laserscan import SemLaserScan
-from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP
+from datasets.base_dataset import TRAVERSABILITY_LABELS, TRAVERSABILITY_COLOR_MAP, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_LABELS, FLEXIBILITY_COLOR_MAP
 from traversability_estimation.utils import convert_label
 import yaml
@@ -21,14 +21,15 @@ class SemanticKITTI(BaseDatasetClouds):
                  split=None,
                  fields=None,
                  num_samples=None,
-                 lidar_beams_step=2,
+                 lidar_H_step=1,
+                 lidar_W_step=8,
                  labels_mode='labels',
                  output=None,
                  ):
         super(SemanticKITTI, self).__init__(path=path, fields=fields,
                                             depth_img_H=64, depth_img_W=2048,
                                             lidar_fov_up=16.6, lidar_fov_down=-16.6,
-                                            lidar_beams_step=lidar_beams_step,
+                                            lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
                                             )
         if path is None:
             path = os.path.join(data_dir, 'SemanticKITTI', 'sequences')
@@ -56,7 +57,9 @@ class SemanticKITTI(BaseDatasetClouds):
             self.CLASSES = list(cfg['labels'].values())
             self.color_map = cfg['color_map']
             self.label_map = None
+            self.ignore_label = 0
         else:
+            self.ignore_label = VOID_VALUE
             if self.output == 'traversability':
                 self.color_map = TRAVERSABILITY_COLOR_MAP
                 self.CLASSES = [v for k, v in TRAVERSABILITY_LABELS.items()]
@@ -69,6 +72,7 @@ class SemanticKITTI(BaseDatasetClouds):
             self.label_map = self.get_label_map(path=os.path.join(data_dir,
                                                                   "../config/semantickitti19_to_%s.yaml" %
                                                                   self.output))
+        self.non_bg_classes = np.asarray(self.CLASSES)[np.asarray(self.class_values) != self.ignore_label]
 
         self.scan = SemLaserScan(nclasses=len(self.CLASSES), sem_color_dict=self.color_map,
                                  project=True, H=self.depth_img_H, W=self.depth_img_W,
@@ -120,13 +124,15 @@ class SemanticUSL(SemanticKITTI):
                  split=None,
                  fields=None,
                  num_samples=None,
-                 lidar_beams_step=2,
+                 lidar_H_step=1,
+                 lidar_W_step=8,
                  labels_mode='labels',
                  output=None
                  ):
         super(SemanticUSL, self).__init__(path=path, fields=fields,
                                           split=split, num_samples=num_samples,
-                                          lidar_beams_step=lidar_beams_step, labels_mode=labels_mode,
+                                          lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
+                                          labels_mode=labels_mode,
                                           output=output
                                           )
         if path is None:

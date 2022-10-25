@@ -124,7 +124,6 @@ def create_dataloaders(args):
     print('Using datasets for training: %s' % ' '.join(args.datasets))
 
     Dataset = eval('datasets.%s' % args.datasets[0])
-    # lidar_beams_step = 2 in order to have horizontal resolution = 1024 (instead of 2048 as in Rellis data)
     train_dataset = Dataset(split='train',
                             output=args.output,
                             fields=args.data_fields, num_samples=args.n_samples,

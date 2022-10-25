@@ -18,7 +18,7 @@ from hrnet import models
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
-RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_traversability.yaml")
+RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_to_traversability.yaml")
 
 
 class ImageProcessor(object):
@@ -147,7 +147,7 @@ class ImageProcessor(object):
 
     def load_smp_model(self):
         model_weights = rospy.get_param('~smp_weights', "PSPNet_resnext50_32x4d_1184x1920_lr0.0001_bs1_epoch6_Rellis3DImages_iou_0.68.pth")
-        PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "smp/%s" % model_weights)
+        PRETRAINED_MODEL = os.path.join(pkg_path, "config/weights/", "image/%s" % model_weights)
         model = torch.load(PRETRAINED_MODEL)
         model = model.eval()
         model = model.to(device=self.device, dtype=self.dtype)

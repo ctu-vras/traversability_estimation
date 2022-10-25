@@ -1,0 +1,170 @@
+#!/usr/bin/env python
+
+import os
+import rospy
+from sensor_msgs.msg import Image, PointCloud2
+from ros_numpy import msgify, numpify
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+import torch
+from threading import RLock
+from tconcord3d.builder import model_builder
+from tconcord3d.config.config import load_config_data
+from tconcord3d.utils.load_save_util import load_checkpoint
+
+pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+def msgify_cloud(cloud, frame, stamp, names):
+    assert cloud.ndim == 2
+    cloud = unstructured_to_structured(cloud, names=names)
+    msg = msgify(PointCloud2, cloud)
+    msg.header.frame_id = frame
+    msg.header.stamp = stamp
+    return msg
+
+
+# transformation between Cartesian coordinates and polar coordinates
+def cart2polar(input_xyz):
+    rho = np.sqrt(input_xyz[:, 0] ** 2 + input_xyz[:, 1] ** 2)
+    phi = np.arctan2(input_xyz[:, 1], input_xyz[:, 0])
+    return np.stack((rho, phi, input_xyz[:, 2]), axis=1)
+
+
+def polar2cat(input_xyz_polar):
+    # print(input_xyz_polar.shape)
+    x = input_xyz_polar[0] * np.cos(input_xyz_polar[1])
+    y = input_xyz_polar[0] * np.sin(input_xyz_polar[1])
+    return np.stack((x, y, input_xyz_polar[2]), axis=0)
+
+
+class CloudSegmentor:
+    def __init__(self, cloud_topic='cloud'):
+        self.lidar_frame = None
+
+        self.lock = RLock()
+        self.device = rospy.get_param('~device', 'cuda')
+
+        self.model_weights = rospy.get_param('~weights', "student_kitti_traversablity_f0_0_time_ema.pt")
+        self.model_path = os.path.join(pkg_path, "config/weights/", "t-concord3d/%s" % self.model_weights)
+        assert os.path.exists(self.model_path)
+        model_config_path = os.path.join(pkg_path, 'src/tconcord3d/config/semantickitti/'
+                                         'semantickitti_S0_0_T11_33_ssl_s20_p80.yaml')
+        self.model_config = load_config_data(model_config_path)['model_params']
+        self.grid_size = np.asarray(self.model_config['output_shape'])
+        self.model = self.load_model()
+        rospy.loginfo('Loaded cloud segmentation model: %s', self.model_weights)
+
+        self.input_pc_fields = ['x', 'y', 'z']
+        self.output_pc_fields = ['x', 'y', 'z', 'cost']
+
+        self.debug = rospy.get_param('~debug', False)
+
+        # point cloud which time stamp is older is not being processed
+        self.max_age = rospy.get_param('~max_age', 0.5)
+
+        self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', '~points'), PointCloud2, queue_size=1)
+        self.depth_pub = rospy.Publisher('~depth', Image, queue_size=1)
+
+        self.cloud_sub = rospy.Subscriber(cloud_topic, PointCloud2, self.segment_cloud_cb)
+        rospy.loginfo('Point cloud segmentation node is ready.')
+
+    def load_model(self):
+        model = model_builder.build(self.model_config).to(self.device)
+        model = load_checkpoint(self.model_path, model)
+        model = model.eval()
+        return model
+
+    def segment_cloud_cb(self, pc_msg):
+        assert isinstance(pc_msg, PointCloud2)
+        self.lidar_frame = pc_msg.header.frame_id
+
+        # Discard old messages.
+        msg_stamp = rospy.Time.now()
+        age = (msg_stamp - pc_msg.header.stamp).to_sec()
+        if age > self.max_age:
+            rospy.logwarn('Cloud segmentation: Discarding points %.1f s > %.1f s old.', age, self.max_age)
+            return
+
+        t0 = rospy.Time.now().to_sec()
+
+        with self.lock:
+            cloud = numpify(pc_msg)
+            xyz = structured_to_unstructured(cloud[self.input_pc_fields])
+            rospy.logdebug('Point cloud of shape %s is received', xyz.shape)
+
+            xyz = xyz.reshape((-1, 3))
+            # xyz[:, 2] += 0.46
+            xyz_pol = cart2polar(xyz)
+
+            max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
+            min_bound_r = np.percentile(xyz_pol[:, 0], 0, axis=0)
+            max_bound = np.max(xyz_pol[:, 1:], axis=0)
+            min_bound = np.min(xyz_pol[:, 1:], axis=0)
+            max_bound = np.concatenate(([max_bound_r], max_bound))
+            min_bound = np.concatenate(([min_bound_r], min_bound))
+
+            # get grid index
+            crop_range = max_bound - min_bound
+            cur_grid_size = self.grid_size
+            intervals = crop_range / (cur_grid_size - 1)
+
+            if (intervals == 0).any():
+                print("Zero interval!")
+            grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(int)
+
+            # voxel_position = np.zeros(self.grid_size, dtype=np.float32)
+            # dim_array = np.ones(len(self.grid_size) + 1, int)
+            # dim_array[0] = -1
+            # voxel_position = np.indices(self.grid_size) * intervals.reshape(dim_array) + min_bound.reshape(dim_array)
+            # voxel_position = polar2cat(voxel_position)
+
+            # center data on each voxel for PTnet
+            voxel_centers = (grid_ind.astype(np.float32) + 0.5) * intervals + min_bound
+            return_xyz = xyz_pol - voxel_centers
+            return_xyz = np.concatenate((return_xyz, xyz_pol, xyz[:, :2]), axis=1)
+
+            sig = np.zeros((len(return_xyz), 1))
+            return_fea = np.concatenate((return_xyz, sig), axis=1)
+
+            return_fea = torch.as_tensor(return_fea, dtype=torch.float32).to(self.device)
+            xyz_tensor = torch.as_tensor(xyz, dtype=torch.float32).to(self.device)
+            with torch.no_grad():
+                rospy.logdebug('Input shapes: %s, %s', return_fea.shape, xyz.shape)
+
+                t0 = rospy.Time.now().to_sec()
+                predict_labels_raw = self.model([return_fea], [xyz_tensor], batch_size=1)
+                rospy.loginfo('Inference took: %.3f [sec]', rospy.Time.now().to_sec() - t0)
+                rospy.logdebug('Output shape: %s', predict_labels_raw.shape)
+
+                predict_labels = torch.argmax(predict_labels_raw, dim=1)
+
+                # print(torch.unique(predict_labels, return_counts=True))
+                predict_probablity = torch.nn.functional.softmax(predict_labels_raw, dim=1)
+                predict_prob_max, predict_prob_ind = predict_probablity.max(dim=1)
+
+                predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
+                predict_probabilitys = predict_prob_max.cpu().detach().numpy().squeeze(0)
+
+            predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            predict_prob = predict_probabilitys[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+
+            predict_labels_serialized = np.array(predict_label, dtype=np.int32)
+            predict_prob_serialized = np.array(predict_prob, dtype=np.float32)
+
+            print(predict_labels_serialized.shape, predict_prob_serialized.shape)
+
+            xyz_cost = np.concatenate([xyz, predict_prob_serialized.reshape((-1, 1))], axis=1)
+            segm_pc_msg = msgify_cloud(xyz_cost, frame=self.lidar_frame, stamp=rospy.Time.now(),
+                                       names=self.output_pc_fields)
+            self.segm_cloud_pub.publish(segm_pc_msg)
+
+
+def main():
+    rospy.init_node('cloud_segmentation_tconcord3d', log_level=rospy.DEBUG)
+    proc = CloudSegmentor(cloud_topic=rospy.get_param('~cloud_in', 'points'))
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()

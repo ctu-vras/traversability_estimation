@@ -275,9 +275,9 @@ def map_colors(values, colormap=cm.gist_rainbow, min_value=None, max_value=None)
         values = torch.tensor(values)
     assert callable(colormap) or isinstance(colormap, torch.Tensor)
     if min_value is None:
-        min_value = values.min()
+        min_value = values[torch.isfinite(values)].min()
     if max_value is None:
-        max_value = values.max()
+        max_value = values[torch.isfinite(values)].max()
     scale = max_value - min_value
     a = (values - min_value) / scale if scale > 0.0 else values - min_value
     if callable(colormap):
@@ -368,3 +368,17 @@ def convert_color(label, color_map):
             v = torch.as_tensor(v, dtype=torch.uint8).to(label.device)
         temp[label == k] = v
     return temp
+
+
+def get_label_map(path):
+    label_map = yaml.safe_load(open(path, 'r'))
+    assert isinstance(label_map, (dict, list))
+    if isinstance(label_map, dict):
+        label_map_dict = dict((int(k), int(v)) for k, v in label_map.items())
+        n = max(label_map_dict) + 1
+        label_map = np.zeros((n,), dtype=np.uint8)
+        for k, v in label_map_dict.items():
+            label_map[k] = v
+    elif isinstance(label_map, list):
+        label_map = np.asarray(label_map)
+    return label_map

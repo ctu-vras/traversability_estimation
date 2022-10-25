@@ -1,0 +1,883 @@
+Panels:
+  - Class: rviz/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /Points1/Autocompute Value Bounds1
+        - /Max Points 125mm1/Autocompute Value Bounds1
+      Splitter Ratio: 0.5
+    Tree Height: 621
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Pose Estimate1
+      - /2D Nav Goal1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz/Time
+    Name: Time
+    SyncMode: 0
+    SyncSource: Ground
+Preferences:
+  PromptSaveOnExit: true
+Toolbars:
+  toolButtonStyle: 2
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Class: rviz/RobotModel
+      Collision Enabled: true
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bullet:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bullet_antenna:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cam1_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        cam2_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_0:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        crystal:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gps:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        imu:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        imu_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        inertial_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        jetson:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        mount_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        os_sensor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_mount:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_mount_top:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        payload_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rs_lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rslidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_chassis_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_plate_front_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_plate_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_plate_rear_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        tower:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_camera_floor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_cap:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_cap_top:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        tower_lower_floor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_rear_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        user_rail_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Name: Robot Model
+      Robot Description: robot_description
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: false
+    - Alpha: 0.5
+      Cell Size: 10
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Fixed grid 10m
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 100
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Footprint grid 1m
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: base_footprint
+      Value: true
+    - Class: rviz/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        bullet:
+          Value: false
+        bullet_antenna:
+          Value: false
+        cam1_base:
+          Value: false
+        cam2_base:
+          Value: false
+        camera_0:
+          Value: false
+        camera_1:
+          Value: false
+        camera_2:
+          Value: false
+        camera_3:
+          Value: false
+        crystal:
+          Value: false
+        front_bumper_link:
+          Value: false
+        front_left_wheel_link:
+          Value: false
+        front_right_wheel_link:
+          Value: false
+        gps:
+          Value: false
+        imu:
+          Value: false
+        imu_link:
+          Value: false
+        inertial_link:
+          Value: false
+        jetson:
+          Value: false
+        lidar:
+          Value: false
+        map:
+          Value: true
+        mount_base:
+          Value: false
+        odom:
+          Value: true
+        os_imu:
+          Value: false
+        os_lidar:
+          Value: false
+        os_sensor:
+          Value: false
+        ouster_mount:
+          Value: false
+        ouster_mount_top:
+          Value: false
+        payload_frame:
+          Value: false
+        rear_bumper_link:
+          Value: false
+        rear_left_wheel_link:
+          Value: false
+        rear_right_corner:
+          Value: false
+        rear_right_wheel_link:
+          Value: false
+        robot_view:
+          Value: false
+        rs_lidar:
+          Value: false
+        rslidar:
+          Value: false
+        top_chassis_link:
+          Value: false
+        top_plate_front_link:
+          Value: false
+        top_plate_link:
+          Value: false
+        top_plate_rear_link:
+          Value: false
+        tower:
+          Value: false
+        tower_camera_floor:
+          Value: false
+        tower_cap:
+          Value: false
+        tower_cap_top:
+          Value: false
+        tower_lower_floor:
+          Value: false
+        tower_rear_right_corner:
+          Value: false
+        user_rail_link:
+          Value: false
+      Marker Alpha: 1
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        map:
+          odom:
+            base_link:
+              base_footprint:
+                {}
+              bullet:
+                bullet_antenna:
+                  {}
+              front_bumper_link:
+                {}
+              front_left_wheel_link:
+                {}
+              front_right_wheel_link:
+                {}
+              gps:
+                {}
+              imu_link:
+                {}
+              inertial_link:
+                {}
+              mount_base:
+                cam1_base:
+                  {}
+                cam2_base:
+                  {}
+                rs_lidar:
+                  lidar:
+                    {}
+                  rslidar:
+                    {}
+              payload_frame:
+                {}
+              rear_bumper_link:
+                {}
+              rear_left_wheel_link:
+                {}
+              rear_right_corner:
+                tower_rear_right_corner:
+                  tower:
+                    tower_camera_floor:
+                      camera_0:
+                        {}
+                      camera_1:
+                        {}
+                      camera_2:
+                        {}
+                      camera_3:
+                        {}
+                    tower_cap:
+                      tower_cap_top:
+                        ouster_mount:
+                          ouster_mount_top:
+                            os_sensor:
+                              crystal:
+                                {}
+                              os_imu:
+                                {}
+                              os_lidar:
+                                {}
+                    tower_lower_floor:
+                      imu:
+                        {}
+                      jetson:
+                        {}
+              rear_right_wheel_link:
+                {}
+              top_chassis_link:
+                {}
+              top_plate_link:
+                top_plate_front_link:
+                  {}
+                top_plate_rear_link:
+                  {}
+              user_rail_link:
+                {}
+          robot_view:
+            {}
+      Update Interval: 0
+      Value: true
+    - Class: jsk_rviz_plugin/TFTrajectory
+      Enabled: true
+      Name: TF Trajectory
+      Value: true
+      color: 25; 255; 240
+      duration: 600
+      frame: base_footprint
+      line_width: 0.05000000074505806
+    - Alpha: 0.20000000298023224
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 2
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Points
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.019999999552965164
+      Style: Flat Squares
+      Topic: /points
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: true
+      Value: false
+    - Alpha: 0.20000000298023224
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 2
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Filtered Points
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.019999999552965164
+      Style: Flat Squares
+      Topic: /points_filtered
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Min Color: 0; 0; 0
+      Name: Max Points 125mm
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic: /max_points_125mm
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: true
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: label
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 0; 255; 0
+      Max Intensity: 2
+      Min Color: 255; 0; 0
+      Min Intensity: 0
+      Name: Trav. Labels
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_projected_segmented
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: false
+      Value: true
+    - Alpha: 0.25
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: ground_z
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 0; 255; 0
+      Max Intensity: 0
+      Min Color: 255; 0; 0
+      Min Intensity: -1
+      Name: Trav. Ground Z
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_projected_segmented
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: true
+      Value: false
+    - Alpha: 0.25
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: ground
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 0; 255; 0
+      Max Intensity: 1
+      Min Color: 255; 0; 0
+      Min Intensity: 0
+      Name: Ground
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_projected_ground
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1
+        Min Value: -1
+        Value: false
+      Axis: Z
+      Channel Name: cost
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 1
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 1
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Geom. Traversability
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic: /geometric_traversability_raw
+      Unreliable: false
+      Use Fixed Frame: false
+      Use rainbow: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /projected_depth
+      Max Value: 65535
+      Median window: 5
+      Min Value: 60535
+      Name: Projected Depth
+      Normalize Range: false
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_front/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Front
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_left/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Left
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_right/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Right
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_rear/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Rear
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Default Light: true
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Theta std deviation: 0.2617993950843811
+      Topic: /initialpose
+      X std deviation: 0.5
+      Y std deviation: 0.5
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 6.524543285369873
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Field of View: 0.7853981852531433
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Focal Shape Fixed Size: false
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.7303981184959412
+      Target Frame: base_footprint
+      Yaw: 0.8753814697265625
+    Saved:
+      - Class: rviz/Orbit
+        Distance: 10
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Field of View: 0.7853981852531433
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 0
+        Focal Shape Fixed Size: false
+        Focal Shape Size: 0.05000000074505806
+        Invert Z Axis: false
+        Name: Orbit 10m
+        Near Clip Distance: 0.009999999776482582
+        Pitch: 0.7853981852531433
+        Target Frame: base_footprint
+        Yaw: 0.7853981852531433
+      - Class: rviz/ThirdPersonFollower
+        Distance: 5
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Field of View: 0.7853981852531433
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 0
+        Focal Shape Fixed Size: false
+        Focal Shape Size: 0.05000000074505806
+        Invert Z Axis: false
+        Name: Behind 5m
+        Near Clip Distance: 0.009999999776482582
+        Pitch: 0.5
+        Target Frame: base_footprint
+        Yaw: -3.140000104904175
+      - Angle: 0
+        Class: rviz/TopDownOrtho
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Invert Z Axis: false
+        Name: Top-down Robot
+        Near Clip Distance: 0.009999999776482582
+        Scale: 100
+        Target Frame: base_footprint
+        X: 0
+        Y: 0
+      - Angle: 0
+        Class: rviz/TopDownOrtho
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Invert Z Axis: false
+        Name: Top-down Map
+        Near Clip Distance: 0.009999999776482582
+        Scale: 10
+        Target Frame: map
+        X: 0
+        Y: 0
+Window Geometry:
+  Displays:
+    collapsed: false
+  Front:
+    collapsed: false
+  Height: 1136
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Left:
+    collapsed: false
+  Projected Depth:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000015600000315fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000013e00000315000000e60100001cfa000000000100000002fb000000100044006900730070006c0061007900730100000000000001560000015600fffffffb0000000a005600690065007700730100000000ffffffff0000010000fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000043dfc0200000002fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000074800000122fc0100000005fb0000000a00460072006f006e00740100000000000001cc0000005900fffffffb00000008004c00650066007401000001d2000001d50000005000fffffffb0000000a0052006900670068007401000003ad000001c40000005900fffffffb0000000800520065006100720100000577000001d10000005400fffffffb0000000a00560069006500770073030000004e00000080000002e100000197000000030000074800000100fc0100000003fb0000001e00500072006f006a00650063007400650064002000440065007000740068000000000000000748000000a400fffffffb0000000800540069006d00650000000000000007480000041800fffffffb0000000800540069006d00650100000000000004500000000000000000000005ec0000031500000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
+  Rear:
+    collapsed: false
+  Right:
+    collapsed: false
+  Selection:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1864
+  X: 56
+  Y: 27

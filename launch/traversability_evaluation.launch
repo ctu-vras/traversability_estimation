@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="rviz" default="true" doc="Launch RViz for data visualization or not"/>
+    <arg name="use_osm" default="true" doc="Whether to use Open Street Maps for path planning or not"/>
+<!--    <arg name="gpx_assignment" default="$(find gps_to_path)/data/CH-forest-north_short_circle_debug.gpx"/>-->
+    <arg name="gpx_assignment" default="$(find gps_to_path)/data/old/unhost_west_ex_long_field.gpx"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-10-33-15.bag"/>
+    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
+    <arg name="robot" default="$(eval list(filter(lambda x, bag=bag: x if x in bag else False, ('husky', 'marv', 'spot', 'tradr')))[0])"/>
+    <arg name="slam" default="false"/>
+    <arg name="ouster_driver" default="false"/>
+    <arg name="traversability" default="geometric"/>
+    <arg name="trav_fusion_mode" default="mean" doc="Cost fusion mode, on of ['merge', 'min', 'max', 'mean']"/>
+
+    <!-- Generate points from lidar packets -->
+    <group if="$(eval ouster_driver)">
+        <remap from="/os_cloud_node/points" to="/points"/>
+        <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
+            <arg name="fields_to_publish" value="intensity,t"/>
+        </include>
+    </group>
+
+    <!-- Traversability estimation and GPS path planning -->
+    <include file="$(dirname)/traversability_path_planner.launch" pass_all_args="true">
+        <arg name="rviz" value="false"/>
+    </include>
+
+    <!-- Robot points filtering and SLAM -->
+    <group>
+        <!-- Filter out robot points -->
+        <include file="$(dirname)/cloud_filter.launch">
+            <arg name="robot" value="$(arg robot)"/>
+            <arg name="cloud" value="points"/>
+        </include>
+        <!-- SLAM -->
+        <include if="$(arg slam)" file="$(dirname)/slam.launch">
+            <arg name="cloud" value="points_filtered"/>
+        </include>
+    </group>
+
+    <!-- Find actually traversed nodes in planning graph -->
+    <node pkg="traversability_estimation" type="find_traversed_points" name="traversed_points" output="screen">
+        <rosparam subst_value="true">
+            robot_frame: base_link
+            fixed_frame: odom
+            robot_radius: 0.5
+            horizon_time: 3.0
+            horizon_step: 1.0
+            cloud_in: graph_pcd
+            cloud_out: traversed_points/points
+            bag: $(arg bag)
+        </rosparam>
+    </node>
+
+    <!-- Fuse the traversed points and calculate total cost -->
+    <node name="cloud_fusion" pkg="traversability_estimation" type="cloud_fusion" output="screen">
+        <rosparam subst_value="true">
+            map_frame: odom
+            max_age: 0.2
+            pts_proximity_th: 0.5
+            label_to_fuse: 'untrav_cost'
+            fusion_mode: $(arg trav_fusion_mode)
+        </rosparam>
+        <remap from="cloud_in" to="traversed_points/points"/>
+        <remap from="cloud_out" to="cloud_fusion/points"/>
+    </node>
+
+    <!-- RVIZ -->
+    <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find traversability_estimation)/config/rviz/trav_eval.rviz"/>
+</launch>

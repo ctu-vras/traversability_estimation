@@ -243,13 +243,14 @@ class FlexibilityClouds(BaseDatasetClouds):
                  labels_mode='labels',
                  split=None,
                  fields=None,
-                 lidar_beams_step=1,
+                 lidar_H_step=2,
+                 lidar_W_step=4,
                  output='flexibility'
                  ):
         super(FlexibilityClouds, self).__init__(path=path, fields=fields,
                                                 depth_img_H=128, depth_img_W=1024,
                                                 lidar_fov_up=45.0, lidar_fov_down=-45.0,
-                                                lidar_beams_step=lidar_beams_step,
+                                                lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
                                                 output=output
                                                 )
         if sequences is None:
@@ -277,7 +278,7 @@ class FlexibilityClouds(BaseDatasetClouds):
         self.split = split
 
         self.fields = fields
-        self.lidar_beams_step = lidar_beams_step
+        self.lidar_beams_step = lidar_W_step
         assert self.output == 'flexibility'
 
         assert labels_mode in ['masks', 'labels']
@@ -341,14 +342,15 @@ class TraversabilityClouds(BaseDatasetClouds):
                  labels_mode='labels',
                  split=None,
                  fields=None,
-                 lidar_beams_step=1,
+                 lidar_H_step=2,
+                 lidar_W_step=4,
                  annotation_from_img=False,
                  output='traversability',
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
                                                    lidar_fov_up=45.0, lidar_fov_down=-45.0,
-                                                   lidar_beams_step=lidar_beams_step,
+                                                   lidar_H_step=lidar_H_step, lidar_W_step=lidar_W_step,
                                                    output=output
                                                    )
         if fields is None:
@@ -372,7 +374,7 @@ class TraversabilityClouds(BaseDatasetClouds):
         self.annotation_from_img = annotation_from_img
 
         self.fields = fields
-        self.lidar_beams_step = lidar_beams_step
+        self.lidar_beams_step = lidar_W_step
 
         self.get_scan()
 

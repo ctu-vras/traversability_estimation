@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     parser.add_argument('--weights', type=str, default='deeplabv3_resnet101.pth')
     parser.add_argument('--output', type=str, default=None)
-    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--n_workers', type=int, default=os.cpu_count())
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--vis_preds', action='store_true')
@@ -41,12 +41,15 @@ def main():
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     # device = torch.device('cpu')
 
-    model = torch.load(args.weights)
+    if not os.path.exists(args.weights):
+        model = torch.load(os.path.join(os.path.dirname(__file__), '../../config/weights/depth_cloud/', args.weights))
+    else:
+        model = torch.load(args.weights)
     model = model.to(device)
 
     # ----------------Evaluation----------------------------------------------------------
     # IoU/Jaccard score - https://en.wikipedia.org/wiki/Jaccard_index
-    metric_fn = torchmetrics.JaccardIndex(num_classes=len(valid_dataset.class_values) - 1,
+    metric_fn = torchmetrics.JaccardIndex(num_classes=len(valid_dataset.non_bg_classes),
                                           ignore_index=VOID_VALUE,
                                           multilabel=False).to(device)
 

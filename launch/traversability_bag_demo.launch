@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<launch>
+    <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-06-30-14-23-28.bag $(dirname)/../data/bags/traversability/tradr/ugv_2022-06-30-14-23-28_cameras.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.bag $(dirname)/../data/bags/traversability/husky_2022-06-30-15-11-49.no_sensors.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-12-16-27-46.bag"/>-->
+<!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-23-12-38-31.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-15-01-44.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-09-17-50-13.bag"/>-->
+
+    <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
+    <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
+    <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
+    <arg name="lidar_pkgs_to_points" default="true" doc="Where to run convert lidar packages to point cloud."/>
+    <arg name="traversability" default="fused" doc="One of ['geometric', 'semantic', 'fused']"/>
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth"/>-->
+<!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_74_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.199.pth"/>-->
+    <arg name="weights" default=" deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>
+    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_easy.gpx"/>
+    <arg name="planner" default="false"/>
+
+    <param name="use_sim_time" value="true"/>
+    <rosparam command="load" file="$(arg params)"/>
+    <node name="rosbag_play" pkg="rosbag" type="play"
+          args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)
+               /trav_obstacles_pcd_map:=/trav_obstacles_pcd_map_recorded
+               /path:=/path_recorded
+               /bumper_activations:=/bumper_activations_recorded
+               /bumper_bbx:=/bumper_bbx_recorded
+               /bumper_vis:=/bumper_vis_recorded
+               /graph_pcd:=/graph_pcd_recorded
+               /os_cloud_node/points:=/points
+               /gps/fix:=/fix
+               /gps/mag_azimuth:=/mag_azimuth"/>
+
+    <group if="$(arg lidar_pkgs_to_points)">
+        <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
+    </group>
+
+    <!-- Traversability estimation -->
+    <include file="$(dirname)/$(arg traversability)_traversability.launch">
+        <arg name="cloud" value="points"/>
+        <arg if="$(eval traversability == 'semantic')" name="weights" value="$(arg weights)"/>
+    </include>
+
+<!--    <include file="$(dirname)/semantic_traversability.launch">-->
+<!--        <arg name="cloud" value="/points"/>-->
+<!--        <arg name="weights" value="$(arg weights)"/>-->
+<!--        <arg name="preprocessing" value="false"/>-->
+<!--        <arg name="max_age" value="0.5"/>-->
+<!--    </include>-->
+<!--    <include file="$(dirname)/geometric_traversability.launch">-->
+<!--        <arg name="cloud" value="points"/>-->
+<!--    </include>-->
+
+    <!-- GPS Navigation -->
+    <include if="$(arg planner)" file="$(dirname)/path_planner.launch">
+        <arg name="use_osm" value="true"/>
+        <arg if="$(eval traversability == 'semantic')" name="cloud" value="cloud_segmentation/points"/>
+        <arg if="$(eval traversability == 'geometric')" name="cloud" value="geometric_traversability_raw"/>
+        <arg if="$(eval traversability == 'fused')" name="cloud" value="traversability_fusion/points"/>
+        <arg name="gpx_assignment" value="$(arg gpx_assignment)"/>
+    </include>
+
+    <!-- RVIZ -->
+    <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find traversability_estimation)/config/rviz/navigation.rviz"/>
+
+</launch>

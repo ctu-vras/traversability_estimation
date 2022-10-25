@@ -7,6 +7,9 @@
     <arg name="max_age" default="0.3"/>
     <arg name="nodelet_manager" default="segmentation_nodelet_manager"/>
     <arg name="cloud_in" default="points_filtered_jetson"/>
+    <arg name="range_projection" default="false"/>
+    <arg name="lidar_channels" default="128"/>
+    <arg name="lidar_beams" default="1024"/>
     <arg name="debug" default="false"/>
 
     <node name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
@@ -25,12 +28,27 @@
     <node name="cloud_projection" pkg="nodelet" type="nodelet"
           args="load cloud_proc/projection $(arg nodelet_manager)"
           respawn="true" respawn_delay="1.0" output="log">
-        <rosparam>
-            keep: 2
-            azimuth_only: true
+        <rosparam subst_value="true">
+            height: $(arg lidar_channels)
+            width: $(arg lidar_beams)
+            fov_azimuth: 6.283185307179586  <!-- 360 deg -->
+            fov_elevation: 1.5707963267948966  <!-- 90 deg -->
+            keep: 2  <!-- min depth -->
+            azimuth_only: false
+            frame: odom  <!-- rotate into odom -->
+            timeout: 0.1
         </rosparam>
         <remap from="input" to="points_filtered_5hz"/>
         <remap from="output" to="points_projected"/>
+    </node>
+
+    <node name="projected_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
+          respawn="true" respawn_delay="1.0" output="log">
+        <rosparam>
+            negative: true
+        </rosparam>
+        <remap from="cloud" to="points_projected"/>
+        <remap from="image" to="projected_depth"/>
     </node>
 
     <node name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation" output="screen">
@@ -38,15 +56,12 @@
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: $(arg max_age)
-            lidar_channels: 128
-            lidar_beams: 1024
-            lidar_fov_up: 45.0
-            lidar_fov_down: -45.0
-            input_fields: ['x', 'y', 'z', 'intensity']
-            output_fields: ['x', 'y', 'z', 'obstacle', 'obstacle_soft']
-            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_62_FlexibilityClouds_depth_labels_flexibility_iou_0.884.pth
+            range_projection: $(arg range_projection)
+            lidar_channels: $(arg lidar_channels)
+            lidar_beams: $(arg lidar_beams)
+            flexibility_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_79_FlexibilityClouds_depth_labels_flexibility_iou_0.797.pth
 <!--            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth-->
-            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_4_epoch_42_TraversabilityClouds_depth_labels_traversability_iou_0.901.pth
+            traversability_weights: deeplabv3_resnet101_lr_0.0001_bs_4_epoch_0_Rellis3DClouds_depth_labels_traversability_iou_0.821.pth
             model_output: $(arg model_output)
             debug: $(arg debug)
         </rosparam>

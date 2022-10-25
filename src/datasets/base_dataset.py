@@ -191,10 +191,12 @@ class BaseDatasetImages(data.Dataset):
 
 
 class BaseDatasetClouds(data.Dataset):
+    CLASSES = []
     def __init__(self,
                  path=None,
                  fields=None,
-                 lidar_beams_step=1,
+                 lidar_H_step=1,
+                 lidar_W_step=1,
                  depth_img_H=128,
                  depth_img_W=1024,
                  lidar_fov_up=45.0,
@@ -205,7 +207,8 @@ class BaseDatasetClouds(data.Dataset):
         self.split = None
         self.files = None
         self.rng = np.random.default_rng(42)
-        self.lidar_beams_step = lidar_beams_step
+        self.lidar_H_step = lidar_H_step
+        self.lidar_W_step = lidar_W_step
         if fields is None:
             fields = ['x', 'y', 'z', 'intensity', 'depth']
         self.fields = fields
@@ -314,10 +317,9 @@ class BaseDatasetClouds(data.Dataset):
 
         assert data.shape == (n_inputs, H, W)
 
-        # sample depth image points in horizontal direction
-        if self.lidar_beams_step:
-            data = data[..., ::self.lidar_beams_step]
-            label = label[..., ::self.lidar_beams_step]
+        # sample depth image points in vertical and horizontal directions
+        data = data[..., ::self.lidar_H_step, ::self.lidar_W_step]
+        label = label[..., ::self.lidar_H_step, ::self.lidar_W_step]
 
         if self.split == 'train':
             data, label = self.apply_augmentations(data, label)

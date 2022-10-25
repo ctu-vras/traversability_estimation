@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+from __future__ import absolute_import, division, print_function
+import rospy
+from cras_ouster_msgs.msg import SensorInfo
+
+
+class LatchSensorInfo(object):
+
+    def __init__(self):
+        self.pub = rospy.Publisher('/os_node/sensor_info', SensorInfo, queue_size=1, latch=True)
+        self.sub = rospy.Subscriber('/os_node/sensor_info', SensorInfo, self.callback)
+        self.published = False
+
+    def callback(self, msg):
+        assert isinstance(msg, SensorInfo)
+        if self.published:
+            return
+        self.published = True
+        self.pub.publish(msg)
+        rospy.loginfo('Sensor info published.')
+
+
+if __name__ == '__main__':
+    rospy.init_node('latch_sensor_info')
+    node = LatchSensorInfo()
+    rospy.spin()

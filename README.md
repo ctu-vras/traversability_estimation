@@ -4,38 +4,7 @@ Semantic Segmentation of Images and Point Clouds for Traversability Estimation
 
 ![](./docs/segmented_pc.png)
 
-## <a name="rellis3d">RELLIS-3D Dataset</a>
-
-A multimodal dataset collected in an off-road environment containing annotations
-for 13,556 LiDAR scans and 6,235 images (semantic segmentation).
-Data in ROS bag format, including RGB camera images, LiDAR point clouds, a pair of stereo images,
-high-precision GPS measurement, and IMU data.
-
-### Installation instruction
-
-- Go to the dataset [webpage](https://unmannedlab.github.io/research/RELLIS-3D).
-- Download the data to the relative path `./data`.
-- Extract the zip files in order to have the following layout on disk:
-
-```bash
-    ├─ Rellis_3D
-        ├── 00000
-        │   ├── os1_cloud_node_color_ply
-        │   ├── os1_cloud_node_kitti_bin
-        │   ├── os1_cloud_node_semantickitti_label_id
-        │   ├── pylon_camera_node
-        │   ├── pylon_camera_node_label_color
-        │   └── pylon_camera_node_label_id
-        ...
-        └── calibration
-            ├── 00000
-            ...
-            └── raw_data
-```
-
-See [rellis_3d.py](src/datasets/rellis_3d.py) for more details.
-
-### ROS wrapper
+### Installation (build ROS package)
 
 Prerequisite: install [ROS](http://wiki.ros.org/ROS/Installation)
 and build the package in a catkin workspace, for example:
@@ -48,19 +17,8 @@ cd ~/catkin_ws/
 catkin_make
 ```
 
-### Links to data and networks weights
-
-- [HRNet](https://github.com/unmannedlab/RELLIS-3D/tree/main/benchmarks/HRNet-Semantic-Segmentation-HRNet-OCR)
-
-    Download HRNet
-    [weights](https://drive.google.com/drive/folders/1TriTUg2sn3i2SzNgC5CSRuvM3pdt7EU_?usp=sharing) pretrained on RELLIS-3D
-    and bakbone [weights](https://onedrive.live.com/?authkey=%21AKvqI6pBZlifgJk&cid=F7FD0B7F26543CEB&id=F7FD0B7F26543CEB%21116&parId=F7FD0B7F26543CEB%21105&action=locate) (pretrained on ImageNet).
-
-- [SMP](https://github.com/qubvel/segmentation_models.pytorch):
-    [weights](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/image/)
-
 Put the [weights](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/)
-to `./config/weights` folder:
+to [./config/weights/](./config/weights/) folder:
 
 ```bash
 ./config/weights/
@@ -71,19 +29,8 @@ to `./config/weights` folder:
       └── se_resnext50_32x4d_352x640_lr1e-4.pth
 ```
 
-- [Traversability Dataset](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/):
-    - RGB images with segmentation labels (traversable, non-traversable area).
-    - Point clouds with self-supervised annotations of traversable area from robot's trajectories.
-    
-
-### RELLIS-3D demo
-
-Publish the RELLIS-3D data as ROS messages:
-
-```bash
-source ~/catkin_ws/devel/setup.bash
-roslaunch traversability_estimation robot_data.launch data_sequence:='00000' rviz:=True
-```
+One may also download datasets to train images and point cloud segmentation models.
+Please, refer to [./docs/rellis.md](./docs/rellis.md) or [./docs/trav_data.md](./docs/trav_data.md) for examples.
 
 ### Images Semantic Segmentation Node
 
@@ -101,6 +48,75 @@ roslaunch traversability_estimation robot_data.launch data_sequence:='00000' rvi
 - `legend [bool]` - if legend for segmentation is required
 - `image_transport [str]` - 'compressed' or 'raw' if input image topic is compressed
 
+Look at [segmentation_inferece](./scripts/segmentation_inference) for more details.
+
+
+### Point Cloud Semantic Segmentation Node
+
+#### Topics:
+
+- `cloud_in`: input point cloud to subscribe to (must be of fixed size, `H x W`)
+- `cloud_out`: returned segmented point cloud
+
+#### Parameters:
+
+For `flexibility_weights`, `traversability_weights`, and `model_output` please refer to
+Traversability Dataset documentation, [./docs/trav_data.md](./docs/trav_data.md)
+
+- `device`: device to run tensor operations on: cpu or cuda
+- `max_age`: maximum allowed time delay for point clouds time stamps to be processed
+- `range_projection [bool]`: whether to perform point cloud projection to range image inside a node
+- `lidar_channels`: number of lidar channels of input point cloud (for instance 32 or 64)
+- `lidar_beams`: number of lidar beams of input point cloud (for instance 1024 or 2048)
+- `flexibility_weights`: name of torch weights file (*.pth) for points flexibility estimation
+- `traversability_weights`: name of torch weights file (*.pth) for points traversability estimation
+- `model_output`: one of `traversability` or `flexibility`
+- `debug`: whether to publish debug information (for example range image): may slow down the node performance.
+
+Look at [cloud_segmentation](./scripts/cloud_segmentation) for more details.
+
+
+### Datasets
+
+- For **images** semantic segmentation we provide wrappers for the following datasets:
+  
+  - [Rellis3DImages](https://unmannedlab.github.io/research/RELLIS-3D)
+  - [CWT](https://gamma.umd.edu/researchdirections/autonomousdriving/excavator_tns/)
+  - [TraversabilityImages](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/supervised/images/)
+
+- For **point clouds** semantic segmentation we provide wrappers for the following datasets:
+  
+  - [Rellis3DClouds](https://unmannedlab.github.io/research/RELLIS-3D)
+  - [SeamanticKITTI](http://semantic-kitti.org/) and [SemanticUSL](https://unmannedlab.github.io/semanticusl)
+  - [TraversabilityClouds](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/supervised/clouds/) and [FlexibilityClouds](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/self_supervised/clouds/)
+
+### Models Training
+
+The following scripts should be run from the [./scripts/tools/](./scripts/tools/) folder:
+```commandline
+roscd traversability_estimation/scripts/tools/
+```
+
+Train point cloud segmentation model to predict traversability labels on SemanticKITTI and SemanticUSL data:
+
+```commandline
+python train_depth --datasets SemanticKITTI SemanticUSL --batch_size 4 --output traversability 
+```
+
+Train image segmentation model on Rellis3D data:
+
+```commandline
+python train_img --dataset Rellis3DImages --batch_size 4 --architecture fcn_resnet50 
+```
+
+### Models Evaluation
+
+Evaluate (get IOU score) a point cloud segmentation model trained on TraversabilityClouds data:
+
+```commandline
+python eval_depth --dataset TraversabilityClouds --weights /path/to/deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth --output traversability
+```
+
 ### Demos
 
 - Semantic segmentation of images from RELLIS-3D dataset with HRNet:
@@ -109,10 +125,10 @@ roslaunch traversability_estimation robot_data.launch data_sequence:='00000' rvi
     roslaunch traversability_estimation image_segmentation_demo.launch model_name:=hrnet
     ```
   
-- Semantic segmentation of point clouds from RELLIS-3D dataset with HRNet:
+- Semantic segmentation of point clouds from RELLIS-3D dataset:
 
     ```bash
-    roslaunch traversability_estimation cloud_segmentation_dataset_demo.launch
+    roslaunch traversability_estimation traversability_dataset_demo.launch
     ```
 
 - Coloring lidar cloud using calibrated cameras and semantic classes:

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+<!--    <arg name="bag"/>-->
+
+    <!-- 22-08-12_cimicky_haj -->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-18-34_loc.bag"/>-->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-30-22.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-15-30-22_loc.bag"/>-->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-08-17_loc.bag"/>-->
+<!--    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-37-03.bag-->
+<!--                             /media/petrito1/tp-t5/data/robingas/22-08-12_cimicky_haj/marv/ugv_2022-08-12-16-37-03_loc.bag"/>-->
+
+    <!-- 22-09-27-unhost -->
+    <arg name="bag" default="/media/petrito1/tp-t5/data/robingas/22-09-27-unhost/husky/husky_2022-09-27-15-01-44.bag"/>
+
+    <arg name="bag_name" default="$(eval bag.split()[0].split('.')[0])"/>
+    <arg name="params" default="$(eval bag_name + '.bag.params')"/>
+    <arg name="output_bag" default="$(eval bag_name + '/trav_src.bag')"/>
+    <arg name="robot" default="$(eval list(filter(lambda x, bag=bag: x if x in bag else False, ('husky', 'marv', 'spot', 'tradr')))[0])"/>
+    <arg name="start" default="0.0"/>
+    <arg name="rate" default="1.0"/>
+    <arg name="ouster_driver" default="false"/>
+    <arg name="record" default="false"/>
+    <arg name="slam" default="false"/>
+    <arg name="rviz" default="false"/>
+
+    <rosparam command="load" file="$(arg params)"/>
+    <param name="use_sim_time" value="true"/>
+
+    <node name="rosbag_play" pkg="rosbag" type="play" output="screen" required="$(arg record)"
+          args="--clock --delay 5.0 --start $(arg start) --rate $(arg rate) $(arg bag)"/>
+
+    <group if="$(eval ouster_driver)">
+        <remap from="/os_cloud_node/points" to="/points"/>
+        <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch">
+            <arg name="fields_to_publish" value="intensity,t"/>
+        </include>
+    </group>
+
+    <include file="$(dirname)/cloud_filter.launch">
+        <arg name="robot" value="$(arg robot)"/>
+    </include>
+
+    <include file="$(dirname)/cloud_projection.launch"/>
+
+    <node if="$(arg record)"
+          name="cloud_record" pkg="rosbag" type="record"
+          args="--lz4 --chunksize 65536 -O $(arg output_bag)
+                /points_projected
+                /tf
+                /tf_static"/>
+
+    <include if="$(arg slam)"
+             file="$(dirname)/slam.launch">
+        <arg name="cloud" value="points_filtered"/>
+    </include>
+
+    <node if="$(arg rviz)"
+          name="rviz" pkg="rviz" type="rviz"
+          args="-d $(dirname)/../config/rviz/$(arg robot).rviz"/>
+</launch>
