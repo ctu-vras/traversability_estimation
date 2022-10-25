@@ -1,20 +1,16 @@
 #!/usr/bin/env python
 
 import os
-import cv2
-from datasets.laserscan import SemLaserScan
-from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS, VOID_VALUE
-from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, FLEXIBILITY_LABELS
-from traversability_estimation.utils import get_label_map, convert_label, visualize_cloud, visualize_imgs
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import torch
-import yaml
 from threading import RLock
-
+from tconcord3d.builder import model_builder
+from tconcord3d.config.config import load_config_data
+from tconcord3d.utils.load_save_util import load_checkpoint
 
 pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -47,24 +43,25 @@ class CloudSegmentor:
         self.lidar_frame = None
 
         self.lock = RLock()
-        self.device = rospy.get_param('~device', 'cpu')
+        self.device = rospy.get_param('~device', 'cuda')
 
         self.model_weights = rospy.get_param('~weights', "student_kitti_traversablity_f0_0_time_ema.pt")
         self.model_path = os.path.join(pkg_path, "config/weights/", "t-concord3d/%s" % self.model_weights)
         assert os.path.exists(self.model_path)
-
-        # self.model = self.load_model()
-        # rospy.loginfo('Loaded cloud segmentation model: %s', self.model_weights)
+        model_config_path = os.path.join(pkg_path, 'src/tconcord3d/config/semantickitti/'
+                                         'semantickitti_S0_0_T11_33_ssl_s20_p80.yaml')
+        self.model_config = load_config_data(model_config_path)['model_params']
+        self.grid_size = np.asarray(self.model_config['output_shape'])
+        self.model = self.load_model()
+        rospy.loginfo('Loaded cloud segmentation model: %s', self.model_weights)
 
         self.input_pc_fields = ['x', 'y', 'z']
-        self.output_pc_fields = ['x', 'y', 'z', 'r', 'g', 'b', 'cost']
+        self.output_pc_fields = ['x', 'y', 'z', 'cost']
 
         self.debug = rospy.get_param('~debug', False)
 
         # point cloud which time stamp is older is not being processed
         self.max_age = rospy.get_param('~max_age', 0.5)
-
-        self.grid_size = np.array([480, 360,  32])
 
         self.segm_cloud_pub = rospy.Publisher(rospy.get_param('~cloud_out', '~points'), PointCloud2, queue_size=1)
         self.depth_pub = rospy.Publisher('~depth', Image, queue_size=1)
@@ -73,18 +70,10 @@ class CloudSegmentor:
         rospy.loginfo('Point cloud segmentation node is ready.')
 
     def load_model(self):
-        model = torch.load(self.model_path, map_location=self.device)
+        model = model_builder.build(self.model_config).to(self.device)
+        model = load_checkpoint(self.model_path, model)
         model = model.eval()
         return model
-
-    def preprocessing(self, cloud):
-        pass
-
-    def model_inference(self, depth):
-        pass
-
-    def postprocessing(self, label_pred, xyz):
-        pass
 
     def segment_cloud_cb(self, pc_msg):
         assert isinstance(pc_msg, PointCloud2)
@@ -105,6 +94,7 @@ class CloudSegmentor:
             rospy.logdebug('Point cloud of shape %s is received', xyz.shape)
 
             xyz = xyz.reshape((-1, 3))
+            # xyz[:, 2] += 0.46
             xyz_pol = cart2polar(xyz)
 
             max_bound_r = np.percentile(xyz_pol[:, 0], 100, axis=0)
@@ -119,7 +109,8 @@ class CloudSegmentor:
             cur_grid_size = self.grid_size
             intervals = crop_range / (cur_grid_size - 1)
 
-            if (intervals == 0).any(): print("Zero interval!")
+            if (intervals == 0).any():
+                print("Zero interval!")
             grid_ind = (np.floor((np.clip(xyz_pol, min_bound, max_bound) - min_bound) / intervals)).astype(int)
 
             # voxel_position = np.zeros(self.grid_size, dtype=np.float32)
@@ -136,16 +127,41 @@ class CloudSegmentor:
             sig = np.zeros((len(return_xyz), 1))
             return_fea = np.concatenate((return_xyz, sig), axis=1)
 
-            return_fea = torch.from_numpy(return_fea).to(self.device)
-            xyz = torch.from_numpy(xyz).to(self.device)
-            print(return_fea.shape, xyz.shape)
+            return_fea = torch.as_tensor(return_fea, dtype=torch.float32).to(self.device)
+            xyz_tensor = torch.as_tensor(xyz, dtype=torch.float32).to(self.device)
+            with torch.no_grad():
+                rospy.logdebug('Input shapes: %s, %s', return_fea.shape, xyz.shape)
 
-            # predict_labels_raw = self.model([return_fea], [xyz], batch_size=1)
-            # print(predict_labels_raw.shape)
+                t0 = rospy.Time.now().to_sec()
+                predict_labels_raw = self.model([return_fea], [xyz_tensor], batch_size=1)
+                rospy.loginfo('Inference took: %.3f [sec]', rospy.Time.now().to_sec() - t0)
+                rospy.logdebug('Output shape: %s', predict_labels_raw.shape)
+
+                predict_labels = torch.argmax(predict_labels_raw, dim=1)
+
+                # print(torch.unique(predict_labels, return_counts=True))
+                predict_probablity = torch.nn.functional.softmax(predict_labels_raw, dim=1)
+                predict_prob_max, predict_prob_ind = predict_probablity.max(dim=1)
+
+                predict_labels = predict_labels.cpu().detach().numpy().squeeze(0)
+                predict_probabilitys = predict_prob_max.cpu().detach().numpy().squeeze(0)
+
+            predict_label = predict_labels[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+            predict_prob = predict_probabilitys[grid_ind[:, 0], grid_ind[:, 1], grid_ind[:, 2]]
+
+            predict_labels_serialized = np.array(predict_label, dtype=np.int32)
+            predict_prob_serialized = np.array(predict_prob, dtype=np.float32)
+
+            print(predict_labels_serialized.shape, predict_prob_serialized.shape)
+
+            xyz_cost = np.concatenate([xyz, predict_prob_serialized.reshape((-1, 1))], axis=1)
+            segm_pc_msg = msgify_cloud(xyz_cost, frame=self.lidar_frame, stamp=rospy.Time.now(),
+                                       names=self.output_pc_fields)
+            self.segm_cloud_pub.publish(segm_pc_msg)
 
 
 def main():
-    rospy.init_node('cloud_segmentation_t_concord3d', log_level=rospy.DEBUG)
+    rospy.init_node('cloud_segmentation_tconcord3d', log_level=rospy.DEBUG)
     proc = CloudSegmentor(cloud_topic=rospy.get_param('~cloud_in', 'points'))
     rospy.spin()
 

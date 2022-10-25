@@ -1,0 +1,93 @@
+# Config format schema number
+format_version: 4
+
+###################
+## Model options
+model_params:
+  model_architecture: "cylinder_asym"
+
+  output_shape:
+    - 480
+    - 360
+    - 32
+
+  fea_dim: 9
+  out_fea_dim: 256
+  num_class: 20
+  num_input_features: 16
+  use_norm: True
+  init_size: 32
+
+###################
+## Dataset options
+dataset_params:
+  dataset_type: "cylinder_dataset"
+  pc_dataset_type: "SemKITTI_sk_multiscan" #"SemKITTI_sk_multiscan" #  #  # "SemKITTI_sk" #
+  ignore_label: 0
+  return_test: False
+  fixed_volume_space: True
+  label_mapping: "./config/label_mapping/sematickitti/semantic-kitti_2.yaml"
+  max_volume_space:
+    - 50
+    - 3.1415926
+    - 2
+  min_volume_space:
+    - 0
+    - -3.1415926
+    - -4
+
+###################
+## Data_loader options
+train_data_loader:
+  data_path: "/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences"
+  #"/mnt/data/vras/data/gebreawe/semantic-kitti/dataset/sequences"
+  #"/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences" #"/data/dataset/semantic_kitti/data_semkitti/dataset/sequences/"
+  imageset: "train"
+  return_ref: True
+  batch_size: 5 #4
+  shuffle: True
+  num_workers: 0
+
+val_data_loader:
+  data_path: "/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences"
+  #"/mnt/data/vras/data/gebreawe/semantic-kitti/dataset/sequences"
+  #"/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences" #"/data/dataset/semantic_kitti/data_semkitti/dataset/sequences/"
+  imageset: "val"
+  return_ref: True
+  batch_size: 5
+  shuffle: False
+  num_workers: 0
+  
+test_data_loader:
+  data_path: "/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences"
+  #"/mnt/data/vras/data/gebreawe/semantic-kitti/dataset/sequences"
+  #"/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences" #"/data/dataset/semantic_kitti/data_semkitti/dataset/sequences/"
+  imageset: "test"
+  return_ref: True
+  batch_size: 5
+  shuffle: False
+  num_workers: 0
+
+ssl_data_loader:
+  data_path: "/mnt/beegfs/gpu/argoverse-tracking-all-training/semantic-kitti/dataset/sequences"
+  imageset: "ssl"
+  return_ref: True
+  batch_size: 5
+  shuffle: False
+  num_workers: 4
+
+###################
+## test params
+train_params:
+  model_load_path: "./model_save_dir/model_save_f0_0_s20_b4_singlescan.pt"
+  model_save_path: "./model_save_dir/model_save_f0_0_s20_b4_singlescan.pt"
+  checkpoint_every_n_steps: 1000
+  max_num_epochs: 40
+  eval_every_n_steps: 1000
+  learning_rate: 0.001
+  past: 0
+  future: 0
+  T_past: 0
+  T_future: 20
+  ssl: False
+  rgb: False
