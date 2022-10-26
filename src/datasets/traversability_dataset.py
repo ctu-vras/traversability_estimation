@@ -347,7 +347,6 @@ class TraversabilityClouds(BaseDatasetClouds):
                  lidar_W_step=4,
                  annotation_from_img=False,
                  output='traversability',
-                 pts_augmentations=True,
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
@@ -369,7 +368,6 @@ class TraversabilityClouds(BaseDatasetClouds):
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
-        self.pts_augmentations = pts_augmentations
         self.labels_mapping = 'traversability'
 
         # whether to use semantic labels from annotated images
@@ -427,7 +425,7 @@ class TraversabilityClouds(BaseDatasetClouds):
         xyz = cloud[..., :3]
         # intensity = cloud[..., 3] if cloud.shape[-1] == 4 else None
 
-        if self.pts_augmentations:
+        if self.split == 'train':
             angle = np.random.random() * np.deg2rad(20)
             xyz = RandomAxisRotation(xyz, angle)
 
