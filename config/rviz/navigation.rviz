@@ -295,6 +295,8 @@ Visualization Manager:
           Value: true
         gps:
           Value: true
+        gps_odom:
+          Value: true
         imu:
           Value: true
         imu_link:
@@ -359,6 +361,10 @@ Visualization Manager:
           Value: true
         user_rail_link:
           Value: true
+        utm:
+          Value: true
+        utm_local:
+          Value: true
       Marker Alpha: 1
       Marker Scale: 1
       Name: TF
@@ -380,6 +386,10 @@ Visualization Manager:
                 {}
               front_right_wheel_link:
                 {}
+              gps_odom:
+                utm_local:
+                  utm:
+                    {}
               imu_link:
                 {}
               inertial_link:
@@ -645,7 +655,7 @@ Visualization Manager:
         Min Value: -10
         Value: true
       Axis: Z
-      Channel Name: untrav_cost
+      Channel Name: type
       Class: rviz/PointCloud2
       Color: 255; 255; 255
       Color Transformer: Intensity
@@ -831,9 +841,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7853981852531433
+      Pitch: 0.5103984475135803
       Target Frame: base_link
-      Yaw: 0.7853981852531433
+      Yaw: 5.8235859870910645
     Saved: ~
 Window Geometry:
   Camera Front:
