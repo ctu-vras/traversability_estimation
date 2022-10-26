@@ -96,7 +96,7 @@
     </node>
 
     <!-- Relay to planner input topic. -->
-    <node name="relay_traversability" pkg="topic_tools" type="relay"
+    <node name="relay_geometric_traversability" pkg="topic_tools" type="relay"
           args="geometric_traversability_raw $(arg output)"/>
 
     <node if="$(arg bumper)"

@@ -32,8 +32,8 @@ class TravFusion:
         else:
             self.device = torch.device("cpu")
 
-        self.geometric_topic = rospy.get_param('~geometric_trav', 'geometric_traversability_raw')
-        self.semantic_topic = rospy.get_param('~semantic_trav', 'cloud_segmentation/points')
+        self.geometric_topic = rospy.get_param('~geometric_trav', 'geometric_traversability')
+        self.semantic_topic = rospy.get_param('~semantic_trav', 'semantic_traversability')
         rospy.loginfo("Subscribing to %s and %s", self.geometric_topic, self.semantic_topic)
         self.dist_th = rospy.get_param('~dist_th', 0.25)
         self.max_time_diff = rospy.get_param('~max_time_diff', 0.2)
@@ -44,7 +44,8 @@ class TravFusion:
         self.sem_msg = None
         self.data_fields = ['x', 'y', 'z', 'cost']
 
-        self.fused_pc_pub = rospy.Publisher('~points', PointCloud2, queue_size=1)
+        self.output_topic = rospy.get_param('~cloud_out', 'fused_traversability')
+        self.fused_pc_pub = rospy.Publisher(self.output_topic, PointCloud2, queue_size=1)
 
         # self.geom_sub = rospy.Subscriber(self.geometric_topic, PointCloud2, queue_size=1, callback=self.update_geom_trav)
         # self.seman_sub = rospy.Subscriber(self.semantic_topic, PointCloud2, queue_size=1, callback=self.update_seman_trav)

@@ -37,7 +37,7 @@
             <remap from="output" to="points_first"/>
         </node>
 
-        <node name="max_filter_cloud_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
+        <node name="points_first_to_depth" pkg="traversability_estimation" type="cloud_to_depth"
               respawn="true" respawn_delay="1.0" output="screen">
             <rosparam>
                 negative: true
@@ -77,7 +77,7 @@
 
 
     <group>
-        <node name="cloud_range_filter_max" pkg="nodelet" type="nodelet"
+        <node name="cloud_range_filter_first" pkg="nodelet" type="nodelet"
               args="$(arg nodelet_action) cloud_proc/range_filter $(arg nodelet_manager)"
               respawn="true" respawn_delay="1.0" output="log">
             <rosparam>
@@ -88,7 +88,7 @@
             <remap from="output" to="semantic_traversability_range"/>
         </node>
 
-        <node name="cloud_voxel_filter_max" pkg="nodelet" type="nodelet"
+        <node name="cloud_voxel_filter_first" pkg="nodelet" type="nodelet"
               args="$(arg nodelet_action) cloud_proc/voxel_filter $(arg nodelet_manager)"
               respawn="true" respawn_delay="1.0" output="log">
             <rosparam>
@@ -102,6 +102,6 @@
     </group>
 
     <!-- Relay to planner input topic. -->
-    <node name="relay_traversability" pkg="topic_tools" type="relay"
+    <node name="relay_semantic_traversability" pkg="topic_tools" type="relay"
           args="semantic_traversability_range_125mm $(arg output)"/>
 </launch>
