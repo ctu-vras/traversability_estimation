@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda"/>
-    <arg name="input" default="points" doc="Input point cloud for segmentation"/>
+    <arg name="input" default="points_filtered_jetson" doc="Input point cloud for segmentation"/>
     <arg name="output" default="traversability" doc="Output traversability point cloud topic."/>
     <arg name="max_age" default="0.5"/>
     <arg name="debug" default="false"/>
@@ -49,8 +49,7 @@
     </group>
 
 <!--    Point cloud segmentation -->
-    <node unless="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation"
-          output="screen">
+    <node unless="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation">
         <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
@@ -67,7 +66,7 @@
         <param name="lidar_fov_up" value="$(eval arg('fov_elevation') / 2.)"/>
         <param name="lidar_fov_down" value="$(eval -arg('fov_elevation') / 2.)"/>
     </node>
-    <node if="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_tconcord3d" output="screen">
+    <node if="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation_tconcord3d">
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: $(arg max_age)

@@ -587,7 +587,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.05000000074505806
       Style: Spheres
-      Topic: /geometric_traversability_raw
+      Topic: /geometric_traversability
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: false

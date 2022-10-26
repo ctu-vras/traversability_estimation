@@ -7,10 +7,13 @@
 <!--        <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-18-34.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/marv/ugv_2022-08-12-15-30-22.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-09-08-11-49-31.bag"/>-->
-    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-23-12-38-31.bag"/>
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-23-12-38-31.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/husky/husky_2022-09-27-15-01-44.bag"/>-->
 <!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-08-09-17-50-13.bag"/>-->
+<!--    <arg name="bag" default="$(dirname)/../data/bags/traversability/tradr/ugv_2022-10-20-13-58-22.bag"/>-->
+    <arg name="bag" default="$(dirname)/../data/bags/traversability/spot/spot_2022-10-20-13-42-06.bag"/>
 
+    <arg name="robot" doc="Robot name from {ctu-robot, husky-robot, spot-3}"/><group if="$(eval {'ctu-robot': 0, 'husky-robot': 0, 'spot-3': 0}[robot])"/>
     <arg name="params" default="$(eval bag.split()[0] + '.params')"/>
     <arg name="device" default="cuda" doc="Device to run tensor operations on: cpu or cuda."/>
     <arg name="rviz" default="true" doc="Launch RViz for data visualization or not."/>
@@ -19,13 +22,15 @@
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth"/>-->
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_74_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.199.pth"/>-->
     <arg name="weights" default=" deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>
-    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_final_demo_husky_east"/>
+    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_test.gpx"/>
     <arg name="planner" default="false"/>
+    <arg name="start" default="0"/>
+    <arg name="input" default="points"/>
 
     <param name="use_sim_time" value="true"/>
     <rosparam command="load" file="$(arg params)"/>
     <node name="rosbag_play" pkg="rosbag" type="play"
-          args="--clock --delay 3.0 --rate 1.0 --start 0 $(arg bag)
+          args="--clock --delay 3.0 --rate 1.0 --start $(arg start) $(arg bag)
                /trav_obstacles_pcd_map:=/trav_obstacles_pcd_map_recorded
                /path:=/path_recorded
                /bumper_activations:=/bumper_activations_recorded
@@ -35,15 +40,17 @@
                /os_cloud_node/points:=/points
                /gps/mag_azimuth:=/mag_azimuth"/>
 
+<!--    <node pkg="traversability_estimation" type="play_tf_static" name="play_tf_static"/>-->
+
     <group if="$(arg lidar_pkgs_to_points)">
         <include file="$(find cras_ouster_driver)/launch/os_cloud_node.launch"/>
     </group>
 
     <!-- Traversability estimation -->
     <include file="$(dirname)/$(arg traversability)_traversability.launch">
-        <arg name="input" value="/points"/>
+        <arg name="input" value="$(arg input)"/>
         <arg unless="$(eval traversability == 'geometric')" name="device" value="$(arg device)"/>
-        <arg unless="$(eval traversability == 'semantic')" name="robot" value="husky"/>
+        <arg unless="$(eval traversability == 'semantic')" name="robot" value="$(arg robot)"/>
     </include>
 
     <!-- Fused Localization -->
