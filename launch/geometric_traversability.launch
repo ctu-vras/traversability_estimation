@@ -7,7 +7,8 @@
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
     <arg name="bumper" default="false"/>
     <arg name="height" default="128"/>
-    <arg name="width" default="256"/>
+    <arg if="$(eval 'spot' in robot)" name="width" default="1024"/>
+    <arg if="$(eval 'spot' not in robot)" name="width" default="256"/>
     <arg name="azimuth_only" default="$(eval height == 128)"/>
     <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
 
