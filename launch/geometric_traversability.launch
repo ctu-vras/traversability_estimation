@@ -87,7 +87,7 @@
             fixed_frame: odom
             timeout: 1.0
         </rosparam>
-        <rosparam if="$(eval robot == 'spot')">
+        <rosparam if="$(eval 'spot' in robot)">
             clearance_radius: 0.55
             clearance_high: 1.0
         </rosparam>
