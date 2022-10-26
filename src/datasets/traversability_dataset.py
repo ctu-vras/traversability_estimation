@@ -13,6 +13,7 @@ from datasets.base_dataset import FLEXIBILITY_LABELS, FLEXIBILITY_COLOR_MAP
 from datasets.base_dataset import BaseDatasetImages, BaseDatasetClouds
 from numpy.lib.recfunctions import structured_to_unstructured
 from PIL import Image
+from datasets.augmentations import RandomAxisRotation
 
 data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 'data'))
 
@@ -346,6 +347,7 @@ class TraversabilityClouds(BaseDatasetClouds):
                  lidar_W_step=4,
                  annotation_from_img=False,
                  output='traversability',
+                 pts_augmentations=True,
                  ):
         super(TraversabilityClouds, self).__init__(path=path, fields=fields,
                                                    depth_img_H=128, depth_img_W=1024,
@@ -367,7 +369,7 @@ class TraversabilityClouds(BaseDatasetClouds):
 
         assert split in [None, 'train', 'val', 'test']
         self.split = split
-
+        self.pts_augmentations = pts_augmentations
         self.labels_mapping = 'traversability'
 
         # whether to use semantic labels from annotated images
@@ -424,6 +426,10 @@ class TraversabilityClouds(BaseDatasetClouds):
 
         xyz = cloud[..., :3]
         # intensity = cloud[..., 3] if cloud.shape[-1] == 4 else None
+
+        if self.pts_augmentations:
+            angle = np.random.random() * np.deg2rad(20)
+            xyz = RandomAxisRotation(xyz, angle)
 
         self.scan.set_points(points=xyz)
         # self.scan.set_points(points=xyz, remissions=intensity)
