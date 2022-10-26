@@ -20,8 +20,6 @@
         <arg name="input" value="$(arg input)"/>
         <arg name="output" value="geometric_traversability_output"/>
         <arg name="robot" value="$(arg robot)"/>
-        <arg name="height" value="$(arg height)"/>
-        <arg name="width" value="$(arg width)"/>
     </include>
 
     <!-- Semantic segmentation -->
