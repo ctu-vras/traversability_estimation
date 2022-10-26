@@ -78,7 +78,7 @@
 <!--            normal_std_weight: 20.0  &lt;!&ndash; 0.05 m = unit cost &ndash;&gt;-->
             normal_std_weight: 10.0  <!-- 0.10 m = unit cost -->
 <!--            normal_std_weight: 6.66  &lt;!&ndash; 0.15 m = unit cost &ndash;&gt;-->
-            clearance_radius: 0.4
+            clearance_radius: 0.5
             clearance_low: 0.1
             clearance_high: 0.6
             obstacle_weight: 0.2  <!-- 5 obstacle points = unit cost -->
