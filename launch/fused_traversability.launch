@@ -19,22 +19,22 @@
     <!-- Geometric segmentation -->
     <include file="$(find traversability_estimation)/launch/geometric_traversability.launch">
         <arg name="input" value="$(arg input)"/>
-        <arg name="output" value="geometric_traversability"/>
+        <arg name="output" value="geometric_traversability_output"/>
         <arg name="robot" value="$(arg robot)"/>
     </include>
 
     <!-- Semantic segmentation -->
     <include file="$(find traversability_estimation)/launch/semantic_traversability.launch">
         <arg name="input" value="$(arg input)"/>
-        <arg name="output" value="semantic_traversability"/>
+        <arg name="output" value="semantic_traversability_output"/>
         <arg name="device" value="$(arg device)"/>
     </include>
 
     <!-- Traversability fusion -->
     <node pkg="traversability_estimation" type="traversability_fusion" name="traversability_fusion" output="screen">
         <rosparam subst_value="true">
-            geometric_trav: geometric_traversability
-            semantic_trav: semantic_traversability
+            geometric_trav: geometric_traversability_output
+            semantic_trav: semantic_traversability_output
             max_time_diff: 0.6
             flat_cost_th: 0.5
             obstacle_cost_th: 0.9

@@ -42,19 +42,10 @@
 
     <!-- Traversability estimation -->
     <include file="$(dirname)/$(arg traversability)_traversability.launch">
-        <arg name="input" value="points"/>
-        <arg if="$(eval traversability == 'semantic')" name="weights" value="$(arg weights)"/>
+        <arg name="input" value="/points"/>
+        <arg unless="$(eval traversability == 'geometric')" name="device" value="$(arg device)"/>
+        <arg unless="$(eval traversability == 'semantic')" name="robot" value="husky"/>
     </include>
-
-<!--    <include file="$(dirname)/semantic_traversability.launch">-->
-<!--        <arg name="cloud" value="/points"/>-->
-<!--        <arg name="weights" value="$(arg weights)"/>-->
-<!--        <arg name="preprocessing" value="false"/>-->
-<!--        <arg name="max_age" value="0.5"/>-->
-<!--    </include>-->
-<!--    <include file="$(dirname)/geometric_traversability.launch">-->
-<!--        <arg name="cloud" value="points"/>-->
-<!--    </include>-->
 
     <!-- GPS Navigation -->
     <include if="$(arg planner)" file="$(dirname)/path_planner.launch">
