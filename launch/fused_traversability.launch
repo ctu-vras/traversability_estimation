@@ -5,9 +5,6 @@
     <arg name="output" default="traversability"/>
     <arg name="nodelet_manager" default="traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
-    <arg name="height" default="64"/>
-    <arg name="width" default="256"/>
-    <arg name="fov_elevation" default="90"/>  <!-- 90 deg -->
     <arg name="device" default="cuda"/>
 
     <node if="$(eval nodelet_manager == 'traversability_manager')"
@@ -33,16 +30,24 @@
     <!-- Traversability fusion -->
     <node pkg="traversability_estimation" type="traversability_fusion" name="traversability_fusion" output="screen">
         <rosparam subst_value="true">
-            geometric_trav: geometric_traversability_output
-            semantic_trav: semantic_traversability_output
-            max_time_diff: 0.6
+            fixed_frame: gps_odom
+            trigger: geometric  <!-- both, geometric, semantic, timer -->
+            sync: false
+            max_time_diff: 1.0
+            dist_th: 0.25
             flat_cost_th: 0.5
             obstacle_cost_th: 0.9
-            cloud_out: fused_traversability
+            semantic_cost_offset: 0.5
+            timeout: 0.5
+            rate: 0.0
         </rosparam>
+        <remap from="geometric_traversability" to="geometric_traversability_output"/>
+        <remap from="semantic_traversability" to="semantic_traversability_output"/>
+        <remap from="fused_traversability" to="fused_traversability"/>
     </node>
 
     <!-- Relay to planner input topic. -->
-    <node name="relay_traversability" pkg="topic_tools" type="relay"
+    <node if="$(eval output != 'fused_traversability')"
+          name="relay_traversability" pkg="topic_tools" type="relay"
           args="fused_traversability $(arg output)"/>
 </launch>

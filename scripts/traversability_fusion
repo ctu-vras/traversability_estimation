@@ -1,100 +1,102 @@
 #!/usr/bin/env python
-
 from __future__ import absolute_import, division, print_function
 import rospy
 from sensor_msgs.msg import PointCloud2
-import torch
 from ros_numpy import msgify, numpify
 from message_filters import ApproximateTimeSynchronizer, Subscriber
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import scipy.spatial
 import numpy as np
 import matplotlib.pyplot as plt
+from threading import Lock
+from tf2_ros import Buffer, TransformException, TransformListener
 
-
-def to_cloud_msg(cloud, time_stamp, frame, names=None):
-    if not names:
-        names = ['x', 'y', 'z']
-        cloud = cloud[:, :3]
-    if cloud.dtype.names is None:
-        cloud = unstructured_to_structured(cloud, names=names)
-    pc_msg = msgify(PointCloud2, cloud)
-    pc_msg.header.stamp = time_stamp
-    pc_msg.header.frame_id = frame
-    return pc_msg
+GEOMETRIC_TOPIC = 'geometric_traversability'
+SEMANTIC_TOPIC = 'semantic_traversability'
+FUSED_TOPIC = 'fused_traversability'
 
 
 class TravFusion:
     def __init__(self):
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda:0")
-            torch.cuda.set_device(self.device)
-        else:
-            self.device = torch.device("cpu")
-
-        self.geometric_topic = rospy.get_param('~geometric_trav', 'geometric_traversability')
-        self.semantic_topic = rospy.get_param('~semantic_trav', 'semantic_traversability')
-        rospy.loginfo("Subscribing to %s and %s", self.geometric_topic, self.semantic_topic)
-        self.dist_th = rospy.get_param('~dist_th', 0.25)
+        self.fixed_frame = rospy.get_param('~fixed_frame', 'map')
+        self.trigger = rospy.get_param('~trigger', 'geometric')
+        assert self.trigger in ('both', 'geometric', 'semantic', 'timer')
+        self.sync = rospy.get_param('~sync', False)
         self.max_time_diff = rospy.get_param('~max_time_diff', 0.2)
+        self.dist_th = rospy.get_param('~dist_th', 0.25)
         self.flat_cost_th = rospy.get_param('~flat_cost_th', 0.5)
         self.obstacle_cost_th = rospy.get_param('~obstacle_cost_th', 1.0)
+        self.semantic_cost_offset = rospy.get_param('~semantic_cost_offset', self.flat_cost_th)
+        self.timeout = rospy.get_param('~timeout', 0.5)
+        self.rate = rospy.get_param('~rate', 0.0)
 
+        self.lock = Lock()
         self.geom_msg = None
         self.sem_msg = None
         self.data_fields = ['x', 'y', 'z', 'cost']
 
-        self.output_topic = rospy.get_param('~cloud_out', 'fused_traversability')
-        self.fused_pc_pub = rospy.Publisher(self.output_topic, PointCloud2, queue_size=1)
+        self.tf_buffer = Buffer(rospy.Duration.from_sec(2 * self.max_time_diff))
+        self.tf_sub = TransformListener(self.tf_buffer)
 
-        # self.geom_sub = rospy.Subscriber(self.geometric_topic, PointCloud2, queue_size=1, callback=self.update_geom_trav)
-        # self.seman_sub = rospy.Subscriber(self.semantic_topic, PointCloud2, queue_size=1, callback=self.update_seman_trav)
+        self.fused_pc_pub = rospy.Publisher(FUSED_TOPIC, PointCloud2, queue_size=1)
 
-        self.geom_sub = Subscriber(self.geometric_topic, PointCloud2)
-        self.seman_sub = Subscriber(self.semantic_topic, PointCloud2)
-        self.time_synch = ApproximateTimeSynchronizer([self.geom_sub, self.seman_sub], queue_size=1,
-                                                      slop=self.max_time_diff)
-        self.time_synch.registerCallback(self.update_trav)
+        rospy.loginfo("Subscribing to %s and %s...",
+                      rospy.resolve_name(GEOMETRIC_TOPIC),
+                      rospy.resolve_name(SEMANTIC_TOPIC))
 
-        self.rate = rospy.Rate(rospy.get_param('~rate', 10))
-        self.spin()
+        if self.sync:
+            self.geom_sub = Subscriber(GEOMETRIC_TOPIC, PointCloud2)
+            self.sem_sub = Subscriber(SEMANTIC_TOPIC, PointCloud2)
+            self.time_synch = ApproximateTimeSynchronizer([self.geom_sub, self.sem_sub], queue_size=1,
+                                                          slop=self.max_time_diff)
+            self.time_synch.registerCallback(self.update_trav)
+        else:
+            self.geom_sub = rospy.Subscriber(GEOMETRIC_TOPIC, PointCloud2, self.update_geom_trav, queue_size=1)
+            self.sem_sub = rospy.Subscriber(SEMANTIC_TOPIC, PointCloud2, self.update_sem_trav, queue_size=1)
+
+        if self.rate > 0.0:
+            self.timer = rospy.Timer(rospy.Duration.from_sec(1.0 / self.rate), self.timer_callback)
 
     def update_trav(self, geom_msg, sem_msg):
-        self.geom_msg = geom_msg
-        self.sem_msg = sem_msg
+        with self.lock:
+            self.geom_msg = geom_msg
+            self.sem_msg = sem_msg
+        if self.trigger in ('both',):
+            self.fuse_available_msgs()
 
     def update_geom_trav(self, msg):
-        self.geom_msg = msg
+        with self.lock:
+            self.geom_msg = msg
+        if self.trigger in ('geometric', 'both'):
+            self.fuse_available_msgs()
 
-    def update_seman_trav(self, msg):
-        self.sem_msg = msg
+    def update_sem_trav(self, msg):
+        with self.lock:
+            self.sem_msg = msg
+        if self.trigger in ('semantic', 'both'):
+            self.fuse_available_msgs()
 
-    def msg_to_cloud(self, msg):
-        cloud = numpify(msg, PointCloud2)
-        cloud = cloud[self.data_fields]
-        cloud = structured_to_unstructured(cloud)
-        return cloud
+    def fuse_clouds(self, geom_cloud, sem_cloud, sem_to_geom):
+        geom_pts = structured_to_unstructured(geom_cloud.ravel()[self.data_fields])
+        sem_pts = structured_to_unstructured(sem_cloud.ravel()[self.data_fields])
+        geom_pts, geom_cost = geom_pts[..., :3], geom_pts[..., 3]
+        sem_pts, sem_cost = sem_pts[..., :3], sem_pts[..., 3]
 
-    def fusion(self, geom_cloud, sem_cloud, distance_filter=False):
-        # choose closest points from semantic cloud to geometric cloud
-        tree = scipy.spatial.cKDTree(geom_cloud)
-        dists, idxs = tree.query(sem_cloud, k=1)
-        geom_cloud = geom_cloud[idxs]
+        R = sem_to_geom[:3, :3]
+        t = sem_to_geom[:3, 3:]
+        sem_pts = np.matmul(sem_pts, R.T) + t.T
 
-        if distance_filter:
-            dists_mask = dists <= self.dist_th
-            geom_cloud = geom_cloud[dists_mask]
-            sem_cloud = sem_cloud[dists_mask]
-
-        assert geom_cloud.shape[0] == sem_cloud.shape[0]
-        fused_cloud = sem_cloud.copy()
-
-        geom_cost = geom_cloud[:, 3]
-        sem_cost = sem_cloud[:, 3]
-
-        fused_cost = geom_cost.copy()
-        fused_cost[geom_cost > self.flat_cost_th] = self.flat_cost_th + sem_cost[geom_cost > self.flat_cost_th]
-        fused_cost[geom_cost > self.obstacle_cost_th] = geom_cost[geom_cost > self.obstacle_cost_th]
+        # Match geometric to semantic, so that every geometric point
+        #  with appropriate costs is updated.
+        fused_cloud = geom_cloud.copy()
+        fused_cost = fused_cloud['cost']
+        tree = scipy.spatial.cKDTree(sem_pts)
+        dists, idxs = tree.query(geom_pts, k=1)
+        mask = dists <= self.dist_th
+        mask = np.logical_and(mask, geom_cost >= self.flat_cost_th)
+        mask = np.logical_and(mask, geom_cost <= self.obstacle_cost_th)
+        fused_cost[mask] = sem_cost[idxs[mask]] + self.semantic_cost_offset
+        fused_cloud['cost'] = fused_cost
 
         # plt.cla()
         # plt.plot(geom_cost[::10], label='Geom cost')
@@ -105,56 +107,68 @@ class TravFusion:
         # plt.draw()
         # plt.pause(0.1)
 
-        fused_cloud[:, 3] = fused_cost
-
-        del sem_cloud
-        del geom_cloud
-        del geom_cost
-        del sem_cost
-
         return fused_cloud
 
-    def spin(self):
-        # plt.figure(figsize=(20, 10))
-        while not rospy.is_shutdown():
-            if not self.geom_msg:
-                rospy.logwarn('Geometric traversability is not received')
-                fused_cloud = self.msg_to_cloud(self.sem_msg) if self.sem_msg else None
-            elif not self.sem_msg:
-                rospy.logwarn('Semantic traversability is not received')
-                fused_cloud = self.msg_to_cloud(self.geom_msg) if self.geom_msg else None
-            else:
-                assert isinstance(self.geom_msg, PointCloud2)
-                assert isinstance(self.sem_msg, PointCloud2)
-                assert self.geom_msg.header.frame_id == self.sem_msg.header.frame_id
+    def fuse_available_msgs(self):
+        with self.lock:
+            geom_msg = self.geom_msg
+            sem_msg = self.sem_msg
 
-                geom_cloud = self.msg_to_cloud(self.geom_msg)
-                sem_cloud = self.msg_to_cloud(self.sem_msg)
+        # Handle special cases first.
+        # Publish what is available if there is nothing to merge.
+        if not geom_msg and not sem_msg:
+            return
+        elif not sem_msg:
+            # Publish geometric traversability as fused.
+            self.fused_pc_pub.publish(geom_msg)
+            return
+        elif not geom_msg:
+            # Publish semantic traversability as fused.
+            self.fused_pc_pub.publish(sem_msg)
+            return
 
-                assert geom_cloud.ndim == sem_cloud.ndim == 2
-                assert geom_cloud.shape[1] == sem_cloud.shape[1] == 4
+        # Publish geometric in case of large time difference.
+        time_diff = abs((sem_msg.header.stamp - geom_msg.header.stamp).to_sec())
+        if time_diff > self.max_time_diff:
+            rospy.logwarn('Geometric and semantic clouds have big time stamp difference: %.3f s. '
+                          'Using geometric segmentation as fusion result.',
+                          time_diff)
+            self.fused_pc_pub.publish(geom_msg)
+            return
 
-                time_diff = abs(self.sem_msg.header.stamp.to_sec() - self.geom_msg.header.stamp.to_sec())
-                if time_diff > self.max_time_diff:
-                    rospy.logwarn_once('Geometric and semantic clouds have big time stamp difference: %s.\n'
-                                       'Using geometric segmentation as fusion result',
-                                       time_diff)
-                    fused_cloud = geom_cloud
+        # Find transform from semantic to geometric cloud to match points and update costs.
+        # Publish geometric if we cannot transform between clouds.
+        try:
+            tf = self.tf_buffer.lookup_transform_full(geom_msg.header.frame_id, geom_msg.header.stamp,
+                                                      sem_msg.header.frame_id, sem_msg.header.stamp,
+                                                      self.fixed_frame, rospy.Duration.from_sec(self.timeout))
+            sem_to_geom = numpify(tf.transform)
+        except TransformException as ex:
+            rospy.logerr('Cannot transform from %s to %s through fixed %s: %s. '
+                         'Using geometric traversability as fusion result.',
+                         sem_msg.header.frame_id, geom_msg.header.frame_id, self.fixed_frame, ex)
+            self.fused_pc_pub.publish(geom_msg)
+            return
 
-                else:
-                    rospy.logdebug('Running traversability fusion: geometric + semantic')
-                    fused_cloud = self.fusion(geom_cloud, sem_cloud)
+        # Take geometric costs as default and correct it with semantic.
+        geom_cloud = numpify(geom_msg)
+        sem_cloud = numpify(sem_msg)
 
-            if fused_cloud is not None:
-                frame = self.sem_msg.header.frame_id if self.sem_msg else self.geom_msg.header.frame_id
-                now = rospy.Time.now()
-                fused_trav_msg = to_cloud_msg(fused_cloud, time_stamp=now, frame=frame, names=self.data_fields)
-                self.fused_pc_pub.publish(fused_trav_msg)
+        rospy.logdebug('Running traversability fusion: geometric + semantic...')
+        fused_cloud = self.fuse_clouds(geom_cloud, sem_cloud, sem_to_geom)
+        fused_msg = msgify(PointCloud2, fused_cloud)
+        fused_msg.header = geom_msg.header
+        self.fused_pc_pub.publish(fused_msg)
 
-            self.rate.sleep()
+    def timer_callback(self, event):
+        self.fuse_available_msgs()
+
+
+def main():
+    rospy.init_node('traversability_fusion', log_level=rospy.INFO)
+    node = TravFusion()
+    rospy.spin()
 
 
 if __name__ == '__main__':
-    rospy.init_node('traversability_fusion', log_level=rospy.INFO)
-    proc = TravFusion()
-    rospy.spin()
+    main()

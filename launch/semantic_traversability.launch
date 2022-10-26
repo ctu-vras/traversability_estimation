@@ -77,7 +77,6 @@
         </rosparam>>
     </node>
 
-
     <group>
         <node name="cloud_range_filter_first" pkg="nodelet" type="nodelet"
               args="$(arg nodelet_action) cloud_proc/range_filter $(arg nodelet_manager)"
@@ -104,6 +103,7 @@
     </group>
 
     <!-- Relay to planner input topic. -->
-    <node name="relay_semantic_traversability" pkg="topic_tools" type="relay"
+    <node if="$(eval output != 'semantic_traversability_range_125mm')"
+          name="relay_semantic_traversability" pkg="topic_tools" type="relay"
           args="semantic_traversability_range_125mm $(arg output)"/>
 </launch>
