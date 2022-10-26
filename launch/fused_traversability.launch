@@ -6,8 +6,6 @@
     <arg name="nodelet_manager" default="traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
     <arg name="device" default="cuda"/>
-    <arg name="height" default="64"/>
-    <arg name="width" default="256"/>
 
     <node if="$(eval nodelet_manager == 'traversability_manager')"
           name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
@@ -20,8 +18,8 @@
         <arg name="input" value="$(arg input)"/>
         <arg name="output" value="geometric_traversability_output"/>
         <arg name="robot" value="$(arg robot)"/>
-        <arg name="height" value="$(arg height)"/>
-        <arg name="width" value="$(arg width)"/>
+        <arg name="height" value="128"/>
+        <arg name="width" value="256"/>
     </include>
 
     <!-- Semantic segmentation -->
@@ -29,8 +27,8 @@
         <arg name="input" value="$(arg input)"/>
         <arg name="output" value="semantic_traversability_output"/>
         <arg name="device" value="$(arg device)"/>
-        <arg name="height" value="$(arg height)"/>
-        <arg name="width" value="$(arg width)"/>
+        <arg name="height" value="64"/>
+        <arg name="width" value="256"/>
     </include>
 
     <!-- Traversability fusion -->
