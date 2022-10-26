@@ -19,7 +19,7 @@
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth"/>-->
 <!--    <arg name="weights" default="deeplabv3_resnet101_lr_0.0001_bs_16_epoch_74_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.199.pth"/>-->
     <arg name="weights" default=" deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth"/>
-    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_easy.gpx"/>
+    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_final_demo_husky_east"/>
     <arg name="planner" default="false"/>
 
     <param name="use_sim_time" value="true"/>
@@ -33,7 +33,6 @@
                /bumper_vis:=/bumper_vis_recorded
                /graph_pcd:=/graph_pcd_recorded
                /os_cloud_node/points:=/points
-               /gps/fix:=/fix
                /gps/mag_azimuth:=/mag_azimuth"/>
 
     <group if="$(arg lidar_pkgs_to_points)">
@@ -47,13 +46,16 @@
         <arg unless="$(eval traversability == 'semantic')" name="robot" value="husky"/>
     </include>
 
-    <!-- GPS Navigation -->
-    <include if="$(arg planner)" file="$(dirname)/path_planner.launch">
-        <arg name="use_osm" value="true"/>
-        <arg if="$(eval traversability == 'semantic')" name="cloud" value="cloud_segmentation/points"/>
-        <arg if="$(eval traversability == 'geometric')" name="cloud" value="geometric_traversability_raw"/>
-        <arg if="$(eval traversability == 'fused')" name="cloud" value="traversability_fusion/points"/>
+    <!-- Fused Localization -->
+    <include file="$(find cras_gps_odom)/launch/gps_odom.launch">
+        <arg name="fix_topic" value="/gps/fix"/>
+<!--        <arg name="odom_topic" value="/husky_velocity_controller/odom"/>-->
+    </include>
+
+    <!-- Path Planner -->
+    <include file="$(find gps_to_path)/launch/path_planner_igraph.launch">
         <arg name="gpx_assignment" value="$(arg gpx_assignment)"/>
+        <arg name="use_osm" value="true"/>
     </include>
 
     <!-- RVIZ -->
