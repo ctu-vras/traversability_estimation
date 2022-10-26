@@ -90,6 +90,7 @@
         </rosparam>
         <rosparam if="$(eval 'spot' in robot)">
             clearance_radius: 0.55
+            clearance_low: 0.2
             clearance_high: 1.0
         </rosparam>
         <remap from="input" to="max_points_125mm"/>
