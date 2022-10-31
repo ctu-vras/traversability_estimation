@@ -252,8 +252,8 @@ class CloudSegmentor:
             # xyz_l_lsoft[bushes_mask, 2] = mean_height
 
             # publish segmented point cloud
-            stamp = rospy.Time.now()
-            segm_pc_msg = msgify_cloud(xyz_l_lsoft, frame=self.lidar_frame, stamp=stamp, names=self.output_pc_fields)
+            segm_pc_msg = msgify_cloud(xyz_l_lsoft, frame=pc_msg.header.frame_id, stamp=pc_msg.header.stamp,
+                                       names=self.output_pc_fields)
             self.segm_cloud_pub.publish(segm_pc_msg)
 
             if self.debug:
@@ -264,6 +264,8 @@ class CloudSegmentor:
                 depth_img[depth_img > 0] = (depth_img[depth_img > 0] - depth_img[depth_img > 0].min()) / \
                                            (depth_img[depth_img > 0].max() - depth_img[depth_img > 0].min())
                 depth_msg = msgify(Image, depth_img, '32FC1')
+                depth_msg.header.stamp = pc_msg.header.stamp
+                depth_msg.header.frame_id = pc_msg.header.frame_id
                 self.depth_pub.publish(depth_msg)
 
             t4 = rospy.Time.now().to_sec()
