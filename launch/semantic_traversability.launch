@@ -50,7 +50,7 @@
 
 <!--    Point cloud segmentation -->
     <node unless="$(arg tconcord3d)" name="cloud_segmentation" pkg="traversability_estimation" type="cloud_segmentation">
-        <env name="PYTHONPATH" value="/home/robot/workspace/traversability/src/traversability_estimation/thirdparty/vision:$(optenv PYTHONPATH)"/>
+        <env name="PYTHONPATH" value="$(dirname)/../thirdparty/vision:$(optenv PYTHONPATH)"/>
         <rosparam subst_value="true">
             device: $(arg device)
             max_age: $(arg max_age)
