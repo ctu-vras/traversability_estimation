@@ -5,40 +5,83 @@
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
     <arg name="cloud" default="points"/>
 
-    <node name="laser_filter" pkg="nodelet" type="nodelet"
-          args="$(arg nodelet_action) pcl/CropBox $(arg nodelet_manager)"
-          respawn="true" respawn_delay="1.0" output="log">
-        <rosparam if="$(eval robot == 'husky')">
-            min_x: -0.49
-            max_x: 0.49
-            min_y: -0.3354
-            max_y: 0.3354
-            min_z: -0.13228
-            max_z: 0.62818
-        </rosparam>
-        <rosparam if="$(eval robot == 'marv')">
-            min_x: -0.65
-            max_x: 0.65
-            min_y: -0.30
-            max_y: 0.30
-            min_z: -0.14
-            max_z: 0.8
-        </rosparam>
-        <rosparam if="$(eval robot == 'spot')">
-            min_x: -0.56
-            max_x: 0.56
-            min_y: -0.26
-            max_y: 0.26
-            min_z: -0.6
-            max_z: 0.5
-        </rosparam>
-        <rosparam>
-            negative: true
-            keep_organized: true
-            input_frame: base_link
-<!--            output_frame: os_sensor-->
-        </rosparam>
-        <remap from="~input" to="$(arg cloud)"/>
-        <remap from="~output" to="points_filtered"/>
-    </node>
+    <group if="$(eval 'husky' in robot)">
+        <!-- Lidar processing from cras_husky_bringup/launch/laser.launch. -->
+        <node name="cloud_motion_deskew" pkg="nodelet" type="nodelet"
+              args="$(arg nodelet_action) PointCloud2Deskew $(arg nodelet_manager)"
+              respawn="true" respawn_delay="1.0" output="log">
+            <remap from="input_point_cloud" to="points" />
+            <remap from="output_point_cloud" to="points_deskewed"/>
+        </node>
+
+        <node name="laser_filter" pkg="nodelet" type="nodelet"
+              args="$(arg nodelet_action) cloud_proc/CropBoxImproved $(arg nodelet_manager)"
+              respawn="true" respawn_delay="1.0" output="log">
+            <rosparam>
+                min_x: -0.5
+                max_x: 0.5
+                min_y: -0.3
+                max_y: 0.3
+                min_z: -0.14
+                max_z: 0.9
+                negative: true
+                keep_organized: true
+                input_frame: base_link
+                output_frame: os_sensor
+                receive:
+                    rate:
+                        desired: 10
+                    delay:
+                        min: 0.1
+                        max: 0.2
+                publish:
+                    rate:
+                        desired: 10
+                    delay:
+                        min: 0.1
+                        max: 0.2
+            </rosparam>
+            <remap from="~input" to="points_deskewed"/>
+            <remap from="~output" to="points_filtered"/>
+        </node>
+    </group>
+
+    <group if="$(eval 'husky' not in robot)">
+        <node name="laser_filter" pkg="nodelet" type="nodelet"
+              args="$(arg nodelet_action) pcl/CropBox $(arg nodelet_manager)"
+              respawn="true" respawn_delay="1.0" output="log">
+            <rosparam if="$(eval robot == 'husky')">
+                min_x: -0.49
+                max_x: 0.49
+                min_y: -0.3354
+                max_y: 0.3354
+                min_z: -0.13228
+                max_z: 0.62818
+            </rosparam>
+            <rosparam if="$(eval robot == 'marv')">
+                min_x: -0.65
+                max_x: 0.65
+                min_y: -0.30
+                max_y: 0.30
+                min_z: -0.14
+                max_z: 0.8
+            </rosparam>
+            <rosparam if="$(eval robot == 'spot')">
+                min_x: -0.56
+                max_x: 0.56
+                min_y: -0.26
+                max_y: 0.26
+                min_z: -0.6
+                max_z: 0.5
+            </rosparam>
+            <rosparam>
+                negative: true
+                keep_organized: true
+                input_frame: base_link
+    <!--            output_frame: os_sensor-->
+            </rosparam>
+            <remap from="~input" to="$(arg cloud)"/>
+            <remap from="~output" to="points_filtered"/>
+        </node>
+    </group>
 </launch>
