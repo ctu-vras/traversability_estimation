@@ -1,0 +1,1058 @@
+Panels:
+  - Class: rviz/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /TF1/Frames1
+        - /Follower Viz1/Namespaces1
+        - /VideoCapture1
+      Splitter Ratio: 0.5352941155433655
+    Tree Height: 604
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Pose Estimate1
+      - /2D Nav Goal1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz/Time
+    Name: Time
+    SyncMode: 0
+    SyncSource: Front
+Preferences:
+  PromptSaveOnExit: true
+Toolbars:
+  toolButtonStyle: 2
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 1
+      Class: rviz/RobotModel
+      Collision Enabled: true
+      Enabled: false
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+      Name: Nifti Robot Model
+      Robot Description: nifti_robot_description
+      TF Prefix: ""
+      Update Interval: 0
+      Value: false
+      Visual Enabled: false
+    - Alpha: 1
+      Class: rviz/RobotModel
+      Collision Enabled: true
+      Enabled: true
+      Links:
+        All Links Enabled: true
+        Expand Joint Details: false
+        Expand Link Details: false
+        Expand Tree: false
+        Link Tree Style: Links in Alphabetic Order
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bullet:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        bullet_antenna:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        cam1_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        cam2_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        camera_0:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_1:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_2:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        camera_3:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        crystal:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        front_bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gps:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        imu:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        imu_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        inertial_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        jetson:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        mount_base:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        os_sensor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_mount:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        ouster_mount_top:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        payload_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rear_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rear_right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rs_lidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        rslidar:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_chassis_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_plate_front_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        top_plate_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_plate_rear_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        tower:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_camera_floor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_cap:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_cap_top:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        tower_lower_floor:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        tower_rear_right_corner:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        user_rail_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+      Name: Robot Model
+      Robot Description: robot_description
+      TF Prefix: ""
+      Update Interval: 0
+      Value: true
+      Visual Enabled: false
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: false
+      Length: 1
+      Name: Robot Axes
+      Radius: 0.10000000149011612
+      Reference Frame: base_link
+      Show Trail: false
+      Value: false
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Robot Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: base_link
+      Value: true
+    - Alpha: 0.25
+      Cell Size: 2
+      Class: rviz/Grid
+      Color: 52; 101; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Map Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 1000
+      Reference Frame: gps_odom
+      Value: true
+    - Class: rviz/TF
+      Enabled: false
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+      Marker Alpha: 1
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        {}
+      Update Interval: 0
+      Value: false
+    - Class: jsk_rviz_plugin/TFTrajectory
+      Enabled: true
+      Name: TF Trajectory
+      Value: true
+      color: 25; 255; 240
+      duration: 60
+      frame: base_link
+      line_width: 0.02500000037252903
+    - Alpha: 0.25
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 21.70810890197754
+        Min Value: -1.1471226215362549
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 1627
+      Min Color: 0; 0; 0
+      Min Intensity: 4
+      Name: Points
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 0.25
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 21.70810890197754
+        Min Value: -1.1471226215362549
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 1627
+      Min Color: 0; 0; 0
+      Min Intensity: 4
+      Name: Filtered Points
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.02500000037252903
+      Style: Flat Squares
+      Topic: /points_filtered_slow
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1.007645606994629
+        Min Value: -0.19190162420272827
+        Value: true
+      Axis: Z
+      Channel Name: cost
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 1
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Geometric Cost
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.10000000149011612
+      Style: Flat Squares
+      Topic: /geometric_traversability
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1.007645606994629
+        Min Value: -0.19190162420272827
+        Value: true
+      Axis: Z
+      Channel Name: inclination
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 0.6108652353286743
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Geom. Inclination
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic: /geometric_traversability
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1.007645606994629
+        Min Value: -0.19190162420272827
+        Value: true
+      Axis: Z
+      Channel Name: normal_std
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 0.10000000149011612
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Geom. Normal Std
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic: /geometric_traversability
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1.007645606994629
+        Min Value: -0.19190162420272827
+        Value: true
+      Axis: Z
+      Channel Name: obstacles
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 5
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Geom. Obstacles
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.05000000074505806
+      Style: Flat Squares
+      Topic: /geometric_traversability
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: cost
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 1
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Semantic Cost
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.10000000149011612
+      Style: Flat Squares
+      Topic: /semantic_traversability
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
+    - Alpha: 0.75
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: cost
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: false
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 1
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Cost (to Planner)
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.10000000149011612
+      Style: Flat Squares
+      Topic: /traversability
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: false
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 114; 159; 207
+      Enabled: false
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.10000000149011612
+      Name: Original Waypoints
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 2
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /original_waypoints_path
+      Unreliable: false
+      Value: false
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 252; 233; 79
+      Enabled: false
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.10000000149011612
+      Name: Processed Waypoints
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 2
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /processed_waypoints_path
+      Unreliable: false
+      Value: false
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.10000000149011612
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 2
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /path
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 25; 255; 0
+      Enabled: false
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.10000000149011612
+      Name: Path UTM
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 2
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /path_utm
+      Unreliable: false
+      Value: false
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 255; 25; 0
+      Enabled: false
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.05000000074505806
+      Name: Control Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 2
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /control_path
+      Unreliable: false
+      Value: false
+    - Alpha: 0.5
+      Autocompute Intensity Bounds: false
+      Autocompute Value Bounds:
+        Max Value: 1.007645606994629
+        Min Value: -0.19190162420272827
+        Value: true
+      Axis: Z
+      Channel Name: untrav_cost
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 0; 0
+      Max Intensity: 100
+      Min Color: 0; 255; 0
+      Min Intensity: 0
+      Name: Graph
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.25
+      Style: Flat Squares
+      Topic: /graph_pcd
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: true
+    - Alpha: 0.20000000298023224
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 1.007645606994629
+        Min Value: -0.19190162420272827
+        Value: true
+      Axis: Z
+      Channel Name: total_cost
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGBF32
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 239; 41; 41
+      Min Color: 138; 226; 52
+      Name: OSM
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: false
+      Size (Pixels): 3
+      Size (m): 0.5
+      Style: Flat Squares
+      Topic: /osm_pcd
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_front/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Front
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /camera_left/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Left
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /camera_right/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Right
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /camera_rear/image_color
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Rear
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /max_points_depth
+      Max Value: 65535
+      Median window: 5
+      Min Value: 60535
+      Name: Depth Max
+      Normalize Range: false
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /points_first_depth
+      Max Value: 65535
+      Median window: 5
+      Min Value: 60535
+      Name: Depth First
+      Normalize Range: false
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /current_waypoint
+      Name: Current Waypoint
+      Namespaces:
+        {}
+      Queue Size: 2
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /path_follower/markers
+      Name: Follower Viz
+      Namespaces:
+        {}
+      Queue Size: 2
+      Value: true
+    - Alpha: 1
+      Angular Arrow Scale: 2
+      Angular Color: 204; 204; 51
+      Arrow Width: 0.5
+      Class: rviz/TwistStamped
+      Enabled: true
+      Hide Small Values: true
+      History Length: 1
+      Linear Arrow Scale: 2
+      Linear Color: 204; 51; 51
+      Name: Cmd Vel
+      Queue Size: 2
+      Topic: /nav/cmd_vel_stamped
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /rviz/geometric_traversability_scene
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Geometric Cost
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /rviz/semantic_traversability_scene
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Semantic Cost
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /rviz/fused_traversability_scene
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Fused Cost
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+    - Class: jsk_rviz_plugin/VideoCapture
+      Enabled: true
+      Name: VideoCapture
+      Value: true
+      filename: output.avi
+      fps: 5
+      height: 600
+      start capture: false
+      use 3D viewer size: true
+      width: 800
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Default Light: true
+    Fixed Frame: gps_odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Theta std deviation: 0.2617993950843811
+      Topic: /initialpose
+      X std deviation: 0.5
+      Y std deviation: 0.5
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Angle: 0
+      Class: rviz/TopDownOrtho
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Scale: 50
+      Target Frame: base_link
+      X: 0
+      Y: 0
+    Saved:
+      - Class: rviz/Orbit
+        Distance: 10
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Field of View: 0.7853981852531433
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 0
+        Focal Shape Fixed Size: false
+        Focal Shape Size: 0.05000000074505806
+        Invert Z Axis: false
+        Name: Orbit 10m
+        Near Clip Distance: 0.009999999776482582
+        Pitch: 0.7853981852531433
+        Target Frame: base_link
+        Yaw: 0.7853981852531433
+      - Class: rviz/Orbit
+        Distance: 20
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Field of View: 0.7853981852531433
+        Focal Point:
+          X: 0
+          Y: 0
+          Z: 0
+        Focal Shape Fixed Size: false
+        Focal Shape Size: 0.05000000074505806
+        Invert Z Axis: false
+        Name: Orbit 20m
+        Near Clip Distance: 0.009999999776482582
+        Pitch: 0.7853981852531433
+        Target Frame: base_link
+        Yaw: 0.7853981852531433
+      - Angle: 0
+        Class: rviz/TopDownOrtho
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Invert Z Axis: false
+        Name: Topdown Close
+        Near Clip Distance: 0.009999999776482582
+        Scale: 100
+        Target Frame: base_link
+        X: 0
+        Y: 0
+      - Angle: 0
+        Class: rviz/TopDownOrtho
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Invert Z Axis: false
+        Name: Topdown Far
+        Near Clip Distance: 0.009999999776482582
+        Scale: 50
+        Target Frame: base_link
+        X: 0
+        Y: 0
+      - Angle: 0
+        Class: rviz/TopDownOrtho
+        Enable Stereo Rendering:
+          Stereo Eye Separation: 0.05999999865889549
+          Stereo Focal Distance: 1
+          Swap Stereo Eyes: false
+          Value: false
+        Invert Z Axis: false
+        Name: "Topdown Map "
+        Near Clip Distance: 0.009999999776482582
+        Scale: 50
+        Target Frame: gps_odom
+        X: -158.496826171875
+        Y: 123.33209991455078
+Window Geometry:
+  Depth First:
+    collapsed: false
+  Depth Max:
+    collapsed: false
+  Displays:
+    collapsed: false
+  Front:
+    collapsed: false
+  Fused Cost:
+    collapsed: false
+  Geometric Cost:
+    collapsed: false
+  Height: 1136
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Left:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000015600000304fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000001600000304000000e60100001cfa000000000100000002fb000000100044006900730070006c0061007900730100000000000001560000015600fffffffb0000000a005600690065007700730100000000ffffffff0000010000fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000014e00000304fc0200000005fb0000001c00470065006f006d0065007400720069006300200043006f007300740100000016000001010000001600fffffffb0000001a00530065006d0061006e00740069006300200043006f00730074010000011d000000fd0000001600fffffffb000000140046007500730065006400200043006f007300740100000220000000fa0000001600fffffffb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000074800000039fc0100000002fb0000000800540069006d00650000000000000007480000041800fffffffb0000000a00560069006500770073030000004e00000080000002e100000197000000030000074800000133fc0100000007fb0000000a00460072006f006e00740100000000000001c40000005900fffffffb00000008004c0065006600740000000179000001720000005000fffffffb0000000a005200690067006800740000000309000001760000005900fffffffb00000008005200650061007201000001ca000001ca0000005400fffffffb0000001600440065007000740068002000460069007200730074010000039a000003ae0000008100fffffffb00000012004400650070007400680020004d0061007800000005d4000001740000007f00fffffffb0000000800540069006d00650100000000000004500000000000000000000004980000030400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730000000000ffffffff0000000000000000
+  Rear:
+    collapsed: false
+  Right:
+    collapsed: false
+  Selection:
+    collapsed: false
+  Semantic Cost:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1864
+  X: 56
+  Y: 27

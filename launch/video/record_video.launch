@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<launch>
+    <arg name="image" default="image"/>
+    <arg name="filename" default="$(dirname)/output.avi"/>
+    <arg name="fps" default="10"/>
+    <arg name="codec" default="MJPG"/>
+<!--    <arg name="codec" default="H264"/>-->
+    <arg name="encoding" default="bgr8"/>
+    <arg name="height" default=""/>
+    <arg name="width" default=""/>
+    <arg name="resized" default="$(eval height != '' and width != '')"/>
+
+    <node if="$(arg resized)" pkg="image_proc" type="resize" name="image_resize">
+        <rosparam subst_value="true">
+            height: $(arg height)
+            width: $(eval width)
+        </rosparam>
+        <remap from="image" to="$(arg image)"/>
+        <remap from="~image" to="$(arg image)_resized"/>
+    </node>
+
+    <node name="$(anon video_recorder)" pkg="image_view" type="video_recorder">
+        <rosparam subst_value="true">
+            filename: $(arg filename)
+            fps: $(arg fps)
+            codec: $(arg codec)
+            encoding: $(arg encoding)
+        </rosparam>
+        <remap if="$(arg resized)" from="image" to="$(arg image)_resized"/>
+        <remap unless="$(arg resized)" from="image" to="$(arg image)"/>
+    </node>
+</launch>
