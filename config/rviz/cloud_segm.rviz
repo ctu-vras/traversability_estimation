@@ -62,11 +62,53 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        camera_realsense:
+          Value: true
+        camera_realsense_gazebo:
+          Value: true
+        camera_realsense_lens:
+          Value: true
+        camera_realsense_mountpoint:
+          Value: true
+        front_bumper_link:
+          Value: true
+        front_left_wheel_link:
+          Value: true
+        front_right_wheel_link:
+          Value: true
+        gps:
+          Value: true
+        imu_link:
+          Value: true
+        inertial_link:
+          Value: true
         odom:
           Value: true
         ouster_lidar:
           Value: true
+        ouster_link:
+          Value: true
         pylon_camera:
+          Value: true
+        rear_bumper_link:
+          Value: true
+        rear_left_wheel_link:
+          Value: true
+        rear_right_wheel_link:
+          Value: true
+        top_chassis_link:
+          Value: true
+        top_plate_front_link:
+          Value: true
+        top_plate_link:
+          Value: true
+        top_plate_rear_link:
+          Value: true
+        user_rail_link:
           Value: true
       Marker Alpha: 1
       Marker Scale: 1
@@ -76,6 +118,43 @@ Visualization Manager:
       Show Names: true
       Tree:
         odom:
+          base_link:
+            base_footprint:
+              {}
+            front_bumper_link:
+              {}
+            front_left_wheel_link:
+              {}
+            front_right_wheel_link:
+              {}
+            gps:
+              {}
+            imu_link:
+              {}
+            inertial_link:
+              {}
+            rear_bumper_link:
+              {}
+            rear_left_wheel_link:
+              {}
+            rear_right_wheel_link:
+              {}
+            top_chassis_link:
+              {}
+            top_plate_link:
+              camera_realsense_mountpoint:
+                camera_realsense_lens:
+                  camera_realsense:
+                    camera_realsense_gazebo:
+                      {}
+              ouster_link:
+                {}
+              top_plate_front_link:
+                {}
+              top_plate_rear_link:
+                {}
+            user_rail_link:
+              {}
           ouster_lidar:
             pylon_camera:
               {}
@@ -164,21 +243,23 @@ Visualization Manager:
           Use rainbow: true
           Value: false
         - Alpha: 1
-          Autocompute Intensity Bounds: true
+          Autocompute Intensity Bounds: false
           Autocompute Value Bounds:
             Max Value: 10
             Min Value: -10
             Value: true
           Axis: Z
-          Channel Name: intensity
+          Channel Name: cost
           Class: rviz/PointCloud2
           Color: 255; 255; 255
-          Color Transformer: RGBF32
+          Color Transformer: Intensity
           Decay Time: 0
           Enabled: true
           Invert Rainbow: false
-          Max Color: 255; 255; 255
-          Min Color: 0; 0; 0
+          Max Color: 0; 255; 0
+          Max Intensity: 0.9999998807907104
+          Min Color: 239; 41; 41
+          Min Intensity: 0
           Name: Segmented Lidar Points
           Position Transformer: XYZ
           Queue Size: 10
@@ -186,41 +267,11 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.07999999821186066
           Style: Spheres
-          Topic: /cloud_segmentation/points
+          Topic: /semantic_traversability
           Unreliable: false
           Use Fixed Frame: true
-          Use rainbow: true
+          Use rainbow: false
           Value: true
-        - Alpha: 1
-          Autocompute Intensity Bounds: false
-          Autocompute Value Bounds:
-            Max Value: 10
-            Min Value: -10
-            Value: true
-          Axis: Z
-          Channel Name: obstacle
-          Class: rviz/PointCloud2
-          Color: 255; 255; 255
-          Color Transformer: Intensity
-          Decay Time: 0
-          Enabled: false
-          Invert Rainbow: false
-          Max Color: 255; 255; 255
-          Max Intensity: 1
-          Min Color: 0; 0; 0
-          Min Intensity: 0
-          Name: Segmented Obstacles
-          Position Transformer: XYZ
-          Queue Size: 10
-          Selectable: true
-          Size (Pixels): 3
-          Size (m): 0.07999999821186066
-          Style: Spheres
-          Topic: /cloud_segmentation/lidar_cloud
-          Unreliable: false
-          Use Fixed Frame: true
-          Use rainbow: true
-          Value: false
         - Alpha: 1
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:

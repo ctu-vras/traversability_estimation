@@ -13,7 +13,7 @@
 
     <!-- Traversability estimation -->
     <include file="$(dirname)/$(arg traversability)_traversability.launch">
-        <arg name="cloud" value="robot_data/lidar_cloud"/>
+        <arg name="input" value="robot_data/lidar_cloud"/>
         <arg name="height" value="64"/>
         <arg name="width" value="2048"/>
         <arg name="fov_elevation" value="45"/>
