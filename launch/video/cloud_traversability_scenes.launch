@@ -15,7 +15,8 @@
     <arg name="rviz_args" default="-d $(dirname)/traversability_scene.rviz"/>
 
 <!--    640x480x24-->
-    <arg name="screen" default="672x532x24"/>
+<!--    <arg name="screen" default="672x532x24"/>-->
+    <arg name="screen" default="560x592x24"/>
     <node if="1" name="rviz_geometric_traversability_scene" pkg="rviz" type="rviz"
           args="$(arg rviz_args)" launch-prefix="vglrun +v -d :1 xvfb-run -a -s '-screen 0 $(arg screen)'"
           respawn="true" respawn_delay="1.0" output="screen">
@@ -31,16 +32,24 @@
     </node>
 
     <node if="1" name="rviz_fused_traversability_scene" pkg="rviz" type="rviz"
-          args="$(arg rviz_args)" launch-prefix="vglrun +v -d :1 xvfb-run -a -s '-screen 0 $(arg screen)'"
+          args="$(arg rviz_args)"
+          launch-prefix="vglrun +v -d :1 xvfb-run -a -s '-screen 0 $(arg screen)'"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="fused_traversability"/>
         <remap from="rviz/scene" to="rviz/fused_traversability_scene"/>
     </node>
 
+    <node if="1" name="rviz_graph_scene" pkg="rviz" type="rviz"
+          args="-d $(dirname)/graph_pcd_scene.rviz"
+          launch-prefix="vglrun +v -d :1 xvfb-run -a -s '-screen 0 $(arg screen)'"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <remap from="graph_pcd" to="graph_pcd"/>
+        <remap from="rviz/scene" to="rviz/graph_pcd_scene"/>
+    </node>
+
+    <group if="0">
     <include file="$(dirname)/record_video.launch">
         <arg name="image" value="rviz/geometric_traversability_scene"/>
-<!--        <arg name="filename" value="$(dirname)/geometric_traversability.h264.avi"/>-->
-<!--        <arg name="codec" value="H264"/>-->
         <arg name="filename" value="$(dirname)/geometric_traversability.avi"/>
     </include>
 
@@ -53,5 +62,11 @@
         <arg name="image" value="rviz/fused_traversability_scene"/>
         <arg name="filename" value="$(dirname)/fused_traversability.avi"/>
     </include>
+
+    <include file="$(dirname)/record_video.launch">
+        <arg name="image" value="rviz/graph_pcd_scene"/>
+        <arg name="filename" value="$(dirname)/graph_pcd.avi"/>
+    </include>
+    </group>
 
 </launch>

@@ -8,18 +8,22 @@
     <arg name="encoding" default="bgr8"/>
     <arg name="height" default=""/>
     <arg name="width" default=""/>
-    <arg name="resized" default="$(eval height != '' and width != '')"/>
+    <arg name="resized" default="$(eval height != '' or width != '')"/>
 
-    <node if="$(arg resized)" pkg="image_proc" type="resize" name="image_resize">
+    <node if="$(arg resized)" name="$(anon image_resize)" pkg="nodelet" type="nodelet"
+          args="standalone image_proc/resize"
+          output="screen">
         <rosparam subst_value="true">
+            use_scale: false
             height: $(arg height)
-            width: $(eval width)
+            width: $(arg width)
         </rosparam>
         <remap from="image" to="$(arg image)"/>
         <remap from="~image" to="$(arg image)_resized"/>
     </node>
 
-    <node name="$(anon video_recorder)" pkg="image_view" type="video_recorder">
+    <node name="$(anon video_recorder)" pkg="image_view" type="video_recorder"
+          output="screen">
         <rosparam subst_value="true">
             filename: $(arg filename)
             fps: $(arg fps)
