@@ -6,6 +6,7 @@
     <arg name="nodelet_manager" default="traversability_manager"/>
     <arg name="nodelet_action" default="$(eval 'load' if nodelet_manager.strip() else 'standalone')"/>
     <arg name="device" default="cuda"/>
+    <arg name="azimuth_only" default="true"/>
 
     <node if="$(eval nodelet_manager == 'traversability_manager')"
           name="$(arg nodelet_manager)" pkg="nodelet" type="nodelet" args="manager"
@@ -18,6 +19,7 @@
         <arg name="input" value="$(arg input)"/>
         <arg name="output" value="geometric_traversability_output"/>
         <arg name="robot" value="$(arg robot)"/>
+        <arg name="azimuth_only" value="$(arg azimuth_only)"/>
     </include>
 
     <!-- Semantic segmentation -->
