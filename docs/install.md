@@ -7,7 +7,7 @@ If you want to use only semantic cloud segmentation node just build the package 
 ```bash
 mkdir -p ~/catkin_ws/src
 cd ~/catkin_ws/src
-git clone https://github.com/RuslanAgishev/traversability_estimation
+git clone https://github.com/ctu-vras/traversability_estimation
 cd ~/catkin_ws/
 catkin build traversability_estimation
 ```
