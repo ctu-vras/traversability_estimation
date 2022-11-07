@@ -4,33 +4,9 @@ Semantic Segmentation of Images and Point Clouds for Traversability Estimation
 
 ![](./docs/segmented_pc.png)
 
-### Installation (build ROS package)
+### Installation
 
-Prerequisite: install [ROS](http://wiki.ros.org/ROS/Installation)
-and build the package in a catkin workspace, for example:
-
-```bash
-mkdir -p ~/catkin_ws/src
-cd ~/catkin_ws/src
-git clone https://github.com/RuslanAgishev/traversability_estimation
-cd ~/catkin_ws/
-catkin_make
-```
-
-Put the [weights](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/)
-to [./config/weights/](./config/weights/) folder:
-
-```bash
-./config/weights/
-  ├── hrnetv2_w48_imagenet_pretrained.pth
-  ├── seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/
-  ├── depth_cloud/
-  └── smp/
-      └── se_resnext50_32x4d_352x640_lr1e-4.pth
-```
-
-One may also download datasets to train images and point cloud segmentation models.
-Please, refer to [./docs/rellis.md](./docs/rellis.md) or [./docs/trav_data.md](./docs/trav_data.md) for examples.
+Please, follow the instructions in [./docs/install.md](./docs/install.md).
 
 ### Images Semantic Segmentation Node
 
@@ -55,7 +31,7 @@ Look at [segmentation_inferece](./scripts/segmentation_inference) for more detai
 
 #### Topics:
 
-- `cloud_in`: input point cloud to subscribe to (must be of fixed size, `H x W`)
+- `cloud_in`: input point cloud to subscribe to
 - `cloud_out`: returned segmented point cloud
 
 #### Parameters:
