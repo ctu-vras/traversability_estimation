@@ -40,9 +40,6 @@ Look at [segmentation_inferece](./scripts/segmentation_inference) for more detai
 
 #### Parameters:
 
-For `flexibility_weights`, `traversability_weights`, and `model_output` please refer to
-Traversability Dataset documentation, [./docs/trav_data.md](./docs/trav_data.md)
-
 - `device`: device to run tensor operations on: cpu or cuda
 - `max_age`: maximum allowed time delay for point clouds time stamps to be processed
 - `range_projection [bool]`: whether to perform point cloud projection to range image inside a node
