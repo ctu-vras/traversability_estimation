@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
-    <arg name="dir" default="/media/petrito1/tp-t5/data/robingas"/>
+<!--    <arg name="dir" default="/media/petrito1/tp-t5/data/robingas"/>-->
 <!--    <arg name="dir" default="/media/petrito1/Elements/robingas"/>-->
-<!--    <arg name="dir" default="$(env HOME)/workspace/data/robingas"/>-->
+    <arg name="dir" default="$(env HOME)/workspace/data/robingas"/>
 <!--    <arg name="dir" default="/subtdata/data/robingas/data"/>-->
 
     <!-- 22-10-27-unhost-final-demo -->
