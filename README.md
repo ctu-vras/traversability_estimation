@@ -68,9 +68,12 @@ Traversability Dataset documentation, [./docs/trav_data.md](./docs/trav_data.md)
 - `range_projection [bool]`: whether to perform point cloud projection to range image inside a node
 - `lidar_channels`: number of lidar channels of input point cloud (for instance 32 or 64)
 - `lidar_beams`: number of lidar beams of input point cloud (for instance 1024 or 2048)
-- `flexibility_weights`: name of torch weights file (*.pth) for points flexibility estimation
-- `traversability_weights`: name of torch weights file (*.pth) for points traversability estimation
-- `model_output`: one of `traversability` or `flexibility`
+- `lidar_fov_up`: LiDAR sensor vertical field of view (from X-axis to Z-axis direction)
+- `lidar_fov_down`: LiDAR sensor vertical field of view (from X-axis against Z-axis direction)
+- `weights`: name of torch weights file (*.pth), located in
+   [./config/weights/depth_cloud/](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/depth_cloud/) folder
+- `cloud_in`: topic name to subscribe to (point cloud being segmented)
+- `clou_out`: topic name to publish segmented cloud to
 - `debug`: whether to publish debug information (for example range image): may slow down the node performance.
 
 Look at [cloud_segmentation](./scripts/cloud_segmentation) for more details.
