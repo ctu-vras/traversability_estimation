@@ -1,25 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <launch>
-    <arg name="rviz_args" default="-d $(dirname)/traversability_scene.rviz"/>
     <arg name="screen" default="560x592x24"/>
     <arg name="display" default="$(env DISPLAY)"/>
 
     <node if="1" name="rviz_geometric_traversability_scene" pkg="rviz" type="rviz"
-          args="$(arg rviz_args)" launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
+          args="-d $(dirname)/traversability_scene.rviz"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="geometric_traversability"/>
         <remap from="rviz/scene" to="rviz/geometric_traversability_scene"/>
     </node>
 
     <node if="1" name="rviz_semantic_traversability_scene" pkg="rviz" type="rviz"
-          args="$(arg rviz_args)" launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
+          args="-d $(dirname)/traversability_scene.rviz"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="semantic_traversability"/>
         <remap from="rviz/scene" to="rviz/semantic_traversability_scene"/>
     </node>
 
     <node if="1" name="rviz_fused_traversability_scene" pkg="rviz" type="rviz"
-          args="$(arg rviz_args)"
+          args="-d $(dirname)/traversability_scene.rviz"
           launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="fused_traversability"/>

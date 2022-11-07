@@ -69,8 +69,8 @@
                 --start $(arg start)
                 --rate $(arg rate)
                 $(arg topics)
-                -- $(arg bag)">
-    </node>
+                -- $(arg bag)"
+          required="true"/>
 
 <!--    <include if="$(arg lidar_proc)" file="$(dirname)/lidar_proc.launch">-->
 <!--        <arg name="rviz" value="false"/>-->
