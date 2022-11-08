@@ -32,6 +32,10 @@
     <arg name="traversability" default="geometric"/>
     <arg name="device" default="cpu"/>
     <arg name="display" default="$(env DISPLAY)"/>
+    <arg name="in_fps" default="5"/>
+    <arg name="out_fps" default="20"/>
+    <arg name="speedup" defaupt="$(eval round(out_fps / in_fps))"/>
+    <arg name="codec" default="MJPG" doc="{MJPG, H264}"/>
 
     <arg name="robot" default="husky-robot" if="$(eval 'husky' in bag)"/>
     <arg name="robot" default="marv-robot" if="$(eval 'marv' in bag)"/>
@@ -151,7 +155,7 @@
         <rosparam subst_value="true">
             device: cuda
             size: [1080, 1920]
-            fps: 2
+            fps: $(arg in_fps)
             streams:  # 3 x 2 grid (W x H)
               # Row 0
               - topic: /camera_front/image_color/compressed
@@ -178,8 +182,8 @@
 
     <include file="$(dirname)/record_video.launch">
         <arg name="image" value="composite"/>
-        <arg name="filename" value="$(dirname)/$(arg bag_name)_10x.avi"/>
-        <arg name="fps" value="20"/>
-        <arg name="codec" value="H264"/>
+        <arg name="filename" value="$(dirname)/$(arg bag_name)_$(arg speedup)x.avi"/>
+        <arg name="fps" value="$(arg out_fps)"/>
+        <arg name="codec" value="$(arg codec)"/>
     </include>
 </launch>
