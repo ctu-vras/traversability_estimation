@@ -127,7 +127,7 @@ Please, have a look at the T-Concord3D project repository for more details about
 
 - `device`: device to run tensor operations on: cpu or cuda
 - `max_age`: maximum allowed time delay for point clouds time stamps to be processed
-- `weights`: name of torch weights file (*.pth), located in
+- `weights`: name of torch weights file (*.pt), located in
    [./config/weights/t-concord3d/](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/t-concord3d/) folder
 - `cloud_in`: topic name to subscribe to (point cloud being segmented)
 - `clou_out`: topic name to publish segmented cloud to
