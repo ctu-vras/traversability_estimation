@@ -302,7 +302,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 1000
-      Reference Frame: gps_odom
+      Reference Frame: <Fixed Frame>
       Value: true
     - Alpha: 0.5
       Cell Size: 100
@@ -320,7 +320,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 100
-      Reference Frame: gps_odom
+      Reference Frame: <Fixed Frame>
       Value: true
     - Class: rviz/TF
       Enabled: false
