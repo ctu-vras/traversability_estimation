@@ -1,11 +1,13 @@
-# [Traversability Estimation](https://docs.google.com/document/d/1ZKGbDJ3xky1IdwFRN3pk5FYKq3wiQ5QcbyBPlOGammw/edit?usp=sharing)
+# Traversability Estimation
 
 Segmentation of Images and Point Clouds for Traversability Estimation.
 
 The module assigns to individual measured LiDAR points either a binary flag or non-negative cost
 of passing the point by a given robot.
 Exit from this module could be used as one of the inputs of the planning module.
-Its use allows planning safe paths around obstacles in a mostly static environment. 
+Its use allows planning safe paths around obstacles in a mostly static environment.
+Example of the module being used in navigation pipeline:
+[video](https://drive.google.com/file/d/1n_Ba2h8XUM64c3eQR-tHYTJO4hkhtB8i/view?usp=share_link).
 
 ![](./docs/segmented_pc.png)
 
@@ -13,7 +15,7 @@ Its use allows planning safe paths around obstacles in a mostly static environme
 
 Please, follow the instructions in [./docs/install.md](./docs/install.md).
 
-### Images Semantic Segmentation Node
+### [Images Semantic Segmentation Node](https://docs.google.com/document/d/1ZKGbDJ3xky1IdwFRN3pk5FYKq3wiQ5QcbyBPlOGammw/edit?usp=sharing)
 
 #### Topics:
 
