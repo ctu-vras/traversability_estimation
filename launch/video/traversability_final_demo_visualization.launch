@@ -31,7 +31,11 @@
 <!--    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_final_demo_spot_west_trimmed.gpx"/>-->
     <arg name="traversability" default="geometric"/>
     <arg name="device" default="cpu"/>
+
+    <arg name="screen" default="560x592x24"/>
     <arg name="display" default="$(env DISPLAY)"/>
+    <arg name="launch_prefix" default="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"/>
+
     <arg name="in_fps" default="5"/>
     <arg name="out_fps" default="20"/>
     <arg name="speedup" default="$(eval round(out_fps / in_fps))"/>
@@ -148,7 +152,9 @@
           respawn="true" respawn_delay="1.0" output="screen"/>
 
     <include file="$(dirname)/cloud_traversability_scenes.launch">
+        <arg name="screen" value="560x592x24"/>
         <arg name="display" value="$(arg display)"/>
+        <arg name="launch_prefix" value="$(arg launch_prefix)"/>
     </include>
 
     <node name="image_composer" pkg="nifti_vision_data" type="image_composer" output="screen">

@@ -2,10 +2,12 @@
 <launch>
     <arg name="screen" default="560x592x24"/>
     <arg name="display" default="$(env DISPLAY)"/>
+    <arg name="launch_prefix" default="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"/>
 
+<!--    launch-prefix="$(arg launch_prefix)"-->
     <node if="1" name="rviz_geometric_traversability_scene" pkg="rviz" type="rviz"
           args="-d $(dirname)/traversability_scene.rviz"
-          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
+          launch-prefix="$(arg launch_prefix)"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="geometric_traversability"/>
         <remap from="rviz/scene" to="rviz/geometric_traversability_scene"/>
@@ -13,7 +15,7 @@
 
     <node if="1" name="rviz_semantic_traversability_scene" pkg="rviz" type="rviz"
           args="-d $(dirname)/traversability_scene.rviz"
-          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
+          launch-prefix="$(arg launch_prefix)"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="semantic_traversability"/>
         <remap from="rviz/scene" to="rviz/semantic_traversability_scene"/>
@@ -21,7 +23,7 @@
 
     <node if="1" name="rviz_fused_traversability_scene" pkg="rviz" type="rviz"
           args="-d $(dirname)/traversability_scene.rviz"
-          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
+          launch-prefix="$(arg launch_prefix)"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="traversability" to="fused_traversability"/>
         <remap from="rviz/scene" to="rviz/fused_traversability_scene"/>
@@ -29,7 +31,7 @@
 
     <node if="1" name="rviz_graph_scene" pkg="rviz" type="rviz"
           args="-d $(dirname)/graph_pcd_scene.rviz"
-          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 $(arg screen)'"
+          launch-prefix="$(arg launch_prefix)"
           respawn="true" respawn_delay="1.0" output="screen">
         <remap from="graph_pcd" to="graph_pcd"/>
         <remap from="rviz/scene" to="rviz/graph_pcd_scene"/>
