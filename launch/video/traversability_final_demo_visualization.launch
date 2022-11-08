@@ -34,7 +34,7 @@
     <arg name="display" default="$(env DISPLAY)"/>
     <arg name="in_fps" default="5"/>
     <arg name="out_fps" default="20"/>
-    <arg name="speedup" defaupt="$(eval round(out_fps / in_fps))"/>
+    <arg name="speedup" default="$(eval round(out_fps / in_fps))"/>
     <arg name="codec" default="MJPG" doc="{MJPG, H264}"/>
 
     <arg name="robot" default="husky-robot" if="$(eval 'husky' in bag)"/>
