@@ -500,7 +500,7 @@ Visualization Manager:
       Selectable: false
       Size (Pixels): 3
       Size (m): 1
-      Style: Flat Squares
+      Style: Boxes
       Topic: /current_waypoint
       Unreliable: false
       Use Fixed Frame: true
@@ -540,7 +540,7 @@ Visualization Manager:
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: gps_odom
+    Fixed Frame: utm_local
     Frame Rate: 10
   Name: root
   Tools:
