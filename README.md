@@ -17,6 +17,9 @@ Please, follow the instructions in [./docs/install.md](./docs/install.md).
 
 ### [Images Semantic Segmentation Node](https://docs.google.com/document/d/1ZKGbDJ3xky1IdwFRN3pk5FYKq3wiQ5QcbyBPlOGammw/edit?usp=sharing)
 
+The node takes as input RGB images and intrinsics (from several cameras as well is supported).
+Output is a set of semantic labels for each input RGB image.
+
 #### Topics:
 
 - `input_0/rgb, ... input_{num_cameras - 1}/rgb`
@@ -34,6 +37,12 @@ Please, follow the instructions in [./docs/install.md](./docs/install.md).
 Look at [segmentation_inferece](./scripts/segmentation_inference) for more details.
 
 ### Point Cloud Semantic Segmentation Node
+
+The node takes as input a point cloud from which a depth image is calculated.
+The depth image is an input for semantic segmentation network (2D-convolutions based) from
+[torchvision.models.segmentation](https://pytorch.org/vision/0.11/models.html#semantic-segmentation).
+The network predicts semantic label for each pixel in the depth image.
+The labels are futher used to output segmented point cloud.
 
 #### Topics:
 
@@ -97,6 +106,33 @@ Evaluate (get IoU score) a point cloud segmentation model trained on Traversabil
 ```commandline
 python eval_depth --dataset TraversabilityClouds --weights /path/to/deeplabv3_resnet101_lr_0.0001_bs_8_epoch_90_TraversabilityClouds_depth_labels_traversability_iou_0.972.pth --output traversability
 ```
+
+### 3D-Point Cloud Semantic Segmentation Node
+
+The node takes as input a point cloud and utilizes a 3D-convolutions-based network to predict semantic labels for each point.
+The model is trained using the semi-supervised technique for domain adaptation proposed in
+[T-Concord3D](https://github.com/ctu-vras/T-Concord3D) project.
+[Rellis3DClouds](https://unmannedlab.github.io/research/RELLIS-3D)
+data was utilized as the source dataset, while
+[TraversabilityDataset](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/self_supervised/clouds/)
+was utilized as the target dataset (using pseudo-labels).
+Please, have a look at the T-Concord3D project repository for more details about the training procedure.
+
+#### Topics:
+
+- `cloud_in`: input point cloud to subscribe to
+- `cloud_out`: returned segmented point cloud
+
+#### Parameters:
+
+- `device`: device to run tensor operations on: cpu or cuda
+- `max_age`: maximum allowed time delay for point clouds time stamps to be processed
+- `weights`: name of torch weights file (*.pt), located in
+   [./config/weights/t-concord3d/](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/t-concord3d/) folder
+- `cloud_in`: topic name to subscribe to (point cloud being segmented)
+- `clou_out`: topic name to publish segmented cloud to
+
+Look at [cloud_segmentation_tconcord3d](./scripts/cloud_segmentation_tconcord3d) for more details.
 
 ### Geometric Traversability Node
 
