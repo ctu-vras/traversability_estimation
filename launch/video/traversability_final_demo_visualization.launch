@@ -175,7 +175,7 @@
 
     <include file="$(dirname)/record_video.launch">
         <arg name="image" value="composite"/>
-        <arg name="filename" value="$(dirname)/composite_10x.avi"/>
+        <arg name="filename" value="$(dirname)/$(arg bag_name)_10x.avi"/>
         <arg name="fps" value="20"/>
         <arg name="codec" value="H264"/>
     </include>
