@@ -154,9 +154,9 @@ class SemanticUSL(SemanticKITTI):
 def demo(n_runs=1):
     from traversability_estimation.utils import visualize_imgs, visualize_cloud
 
-    ds = SemanticUSL()
-    ds_trav = SemanticUSL(output='traversability')
-    ds_flex = SemanticUSL(output='flexibility')
+    ds = SemanticUSL(lidar_H_step=1, lidar_W_step=1)
+    ds_trav = SemanticUSL(output='traversability', lidar_H_step=1, lidar_W_step=1)
+    ds_flex = SemanticUSL(output='flexibility', lidar_H_step=1, lidar_W_step=1)
 
     for _ in range(n_runs):
         idx = np.random.choice(range(len(ds)))

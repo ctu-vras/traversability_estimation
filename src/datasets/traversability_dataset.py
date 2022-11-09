@@ -489,7 +489,7 @@ def flexibility_demo(run_times=1):
     from traversability_estimation.utils import visualize_imgs
     import open3d as o3d
 
-    ds = FlexibilityClouds(split='test')
+    ds = FlexibilityClouds(split='test', lidar_W_step=1, lidar_H_step=1)
 
     for _ in range(run_times):
         depth_img, label = ds[np.random.choice(len(ds))]
@@ -513,8 +513,9 @@ def flexibility_demo(run_times=1):
         color = ds.label_to_color(label.astype('uint8'))
 
         visualize_imgs(layout='columns',
-                       depth_img_with_flex_points=depth_img_with_flex_points,
-                       depth_img_with_non_flex_points=depth_img_with_non_flex_points,
+                       depth_img_vis=depth_img_vis,
+                       # depth_img_with_flex_points=depth_img_with_flex_points,
+                       # depth_img_with_non_flex_points=depth_img_with_non_flex_points,
                        flexibility=color)
 
         pcd = o3d.geometry.PointCloud()
@@ -527,7 +528,7 @@ def traversability_demo(num_runs=1):
     from traversability_estimation.utils import visualize_imgs
     import open3d as o3d
 
-    ds = TraversabilityClouds(split=None, annotation_from_img=False)
+    ds = TraversabilityClouds(split=None, annotation_from_img=False, lidar_H_step=1, lidar_W_step=1)
     # ds = TraversabilityClouds(split=None, annotation_from_img=True)
 
     for i in range(num_runs):
@@ -555,8 +556,9 @@ def traversability_demo(num_runs=1):
         color = ds.label_to_color(label.astype('uint8'))
 
         visualize_imgs(layout='columns',
-                       depth_img_with_trav_points=traversable_area,
-                       depth_img_with_non_trav_points=non_traversable_area,
+                       depth_img_vis=depth_img_vis,
+                       # depth_img_with_trav_points=traversable_area,
+                       # depth_img_with_non_trav_points=non_traversable_area,
                        traversability=color)
 
         pcd = o3d.geometry.PointCloud()
@@ -724,17 +726,24 @@ def label_cloud_from_img(visualize=False, save_clouds=True, n_runs=1):
 def images_demo(num_runs=1):
     from traversability_estimation.utils import visualize_imgs, convert_color
 
-    ds = TraversabilityImages(split='val')
+    ds = TraversabilityImages(split='test')
 
     for _ in range(num_runs):
         i = np.random.choice(range(len(ds)))
         img, label = ds[i]
 
-        img_vis = img.transpose((1, 2, 0)) * ds.std + ds.mean
+        if ds.split != 'test':
+            img = img.transpose((1, 2, 0))
+        img = img * ds.std + ds.mean
+
         label = label.argmax(axis=0)
         mask = convert_color(label, ds.color_map)
 
-        visualize_imgs(img=img_vis, label=mask)
+        result = 0.7 * (img / img.max()) + 0.3 * (mask / mask.max())
+        result = result / result.max()
+
+        # visualize_imgs(img=img_vis, label=mask)
+        visualize_imgs(result=result)
 
 
 def clouds_save_labels():
@@ -771,11 +780,11 @@ def clouds_save_labels():
 
 
 def main():
-    clouds_save_labels()
-    # images_demo(1)
+    # clouds_save_labels()
+    images_demo(1)
     # images_save_labels()
-    # flexibility_demo(1)
-    # traversability_demo(1)
+    flexibility_demo(1)
+    traversability_demo(1)
     # label_cloud_from_img(visualize=True)
 
 

@@ -381,7 +381,8 @@ def semantic_laser_scan_demo(n_runs=1):
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
                        map_location='cpu').eval()
     for _ in range(n_runs):
-        ind = np.random.choice(range(len(ds)))
+        # ind = np.random.choice(range(len(ds)))
+        ind = 1035
 
         xyzid, label = ds[ind]
         label_trav = ds_trav[ind][1]
@@ -404,6 +405,8 @@ def semantic_laser_scan_demo(n_runs=1):
         with torch.no_grad():
             pred = model(batch)['out']
         pred = pred.squeeze(0).cpu().numpy()
+        pred = np.argmax(pred, axis=0)
+        pred[label == 0] = 0
 
         color_pred = ds.label_to_color(pred)
 
@@ -457,7 +460,7 @@ def semseg_test(n_runs=1):
 def colored_cloud_demo(n_runs=1):
     import open3d as o3d
 
-    ds = Rellis3DClouds(split='test', lidar_W_step=1)
+    ds = Rellis3DClouds(split='test', lidar_W_step=2, lidar_H_step=1)
 
     model_name = 'deeplabv3_resnet101_lr_0.0001_bs_16_epoch_40_Rellis3DClouds_depth_labels_None_iou_0.138.pth'
     model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
@@ -466,6 +469,7 @@ def colored_cloud_demo(n_runs=1):
 
     for _ in range(n_runs):
         i = np.random.choice(range(len(ds)))
+        # i = 1035
         xyzid, label = ds[i]
 
         xyz = xyzid[:3, ...].reshape((3, -1))
@@ -497,7 +501,8 @@ def colored_cloud_demo(n_runs=1):
         pcd_gt.points = o3d.utility.Vector3dVector(xyz + np.array([150, 0, 0]))
         pcd_gt.colors = o3d.utility.Vector3dVector(color_gt)
 
-        o3d.visualization.draw_geometries([pcd_pred, pcd_gt])
+        # o3d.visualization.draw_geometries([pcd_pred, pcd_gt])
+        o3d.visualization.draw_geometries([pcd_gt])
 
 
 def trav_cloud_demo(n_runs=1):
@@ -505,11 +510,18 @@ def trav_cloud_demo(n_runs=1):
 
     ds = Rellis3DClouds(split='test', output='traversability')
 
+    model_name = 'deeplabv3_resnet101_lr_0.0001_bs_8_epoch_42_TraversabilityClouds_depth_labels_traversability_iou_0.961.pth'
+    model = torch.load(os.path.join(data_dir, '../config/weights/depth_cloud/', model_name),
+                       map_location='cpu')
+    model.eval()
+
     for _ in range(n_runs):
         i = np.random.choice(range(len(ds)))
-        xyzid, label = ds[i]
+        # i = 1035
 
-        xyz = xyzid[:3, ...].reshape((3, -1))
+        cloud, label = ds[i]
+
+        xyz = cloud[:3, ...].reshape((3, -1))
         xyz = xyz.T
 
         color_gt = ds.label_to_color(label)
@@ -517,10 +529,28 @@ def trav_cloud_demo(n_runs=1):
         color_gt = color_gt.reshape((-1, 3))
         assert xyz.shape == color_gt.shape
 
+        # Apply inference preprocessing transforms
+        batch = torch.from_numpy(cloud[-1:]).unsqueeze(0)  # model takes as input only and d
+
+        # Use the model and visualize the prediction
+        with torch.no_grad():
+            pred = model(batch)['out']
+        pred = pred.squeeze(0).cpu().numpy()
+
+        color_pred = ds.label_to_color(pred)
+
+        color_pred = color_pred.reshape((-1, 3))
+        assert xyz.shape == color_pred.shape
+
+        pcd_pred = o3d.geometry.PointCloud()
+        pcd_pred.points = o3d.utility.Vector3dVector(xyz)
+        pcd_pred.colors = o3d.utility.Vector3dVector(color_pred)
+
         pcd_gt = o3d.geometry.PointCloud()
         pcd_gt.points = o3d.utility.Vector3dVector(xyz + np.array([150, 0, 0]))
         pcd_gt.colors = o3d.utility.Vector3dVector(color_gt)
 
+        # o3d.visualization.draw_geometries([pcd_pred, pcd_gt])
         o3d.visualization.draw_geometries([pcd_gt])
 
 
@@ -627,14 +657,14 @@ def traversability_mapping_demo(n_runs=1):
 
 
 def main():
-    # colored_cloud_demo(1)
-    # trav_cloud_demo(1)
-    semantic_laser_scan_demo(4)
-    # semseg_test(1)
-    # lidar_map_demo()
-    # lidar2cam_demo(1)
-    # semseg_demo(1)
-    # traversability_mapping_demo(1)
+    colored_cloud_demo(1)
+    trav_cloud_demo(1)
+    semantic_laser_scan_demo(1)
+    semseg_test(1)
+    lidar_map_demo()
+    lidar2cam_demo(1)
+    semseg_demo(1)
+    traversability_mapping_demo(1)
 
 
 if __name__ == '__main__':

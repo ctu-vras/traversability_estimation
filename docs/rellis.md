@@ -27,6 +27,10 @@ high-precision GPS measurement, and IMU data.
             └── raw_data
 ```
 
+Run the demo to explore data samples (assuming that the package is built):
+```bash
+python -m datasets.rellis_3d
+```
 See [rellis_3d.py](../src/datasets/rellis_3d.py) for more details.
 
 ### ROS and Rellis3D

@@ -14,4 +14,9 @@ Forest environment            |  Town environment
     
 Download the data to the path [traversability_estimation/data](../data).
 
+Run the demo to explore data samples (assuming that the package is built):
+```bash
+python -m datasets.traversability_dataset
+```
+
 See [traversability_dataset.py](../src/datasets/traversability_dataset.py) for more details.
