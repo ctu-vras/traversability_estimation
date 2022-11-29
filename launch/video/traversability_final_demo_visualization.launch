@@ -29,7 +29,7 @@
     <arg name="ouster_driver" default="true"/>
     <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_final_demo_husky_west.gpx"/>
 <!--    <arg name="gpx_assignment" default="$(find gps_to_path)/data/unhost_final_demo_spot_west_trimmed.gpx"/>-->
-    <arg name="traversability" default="geometric"/>
+    <arg name="traversability" default="fused"/>
     <arg name="device" default="cpu"/>
 
     <arg name="screen" default="560x592x24"/>
@@ -54,23 +54,6 @@
     <param name="use_sim_time" value="true"/>
 
     <arg name="topics" default=""/>
-<!--    <arg name="topics" default="-->
-<!--        &#45;&#45;topics-->
-<!--        /fix-->
-<!--        /gps/filtered-->
-<!--        /points-->
-<!--        /tf-->
-<!--        /tf_static-->
-<!--    "/>-->
-<!--    <arg name="topics" default="-->
-<!--        &#45;&#45;topics-->
-<!--        /os_node/imu_packets-->
-<!--        /os_node/lidar_packets-->
-<!--        /os_node/sensor_info-->
-<!--        /tf-->
-<!--        /tf_static-->
-<!--    "/>-->
-<!--    &#45;&#45;wait-for-subscribers-->
     <node name="rosbag_play" pkg="rosbag" type="play" output="screen"
           args="--clock
                 --delay $(arg delay)
@@ -78,14 +61,37 @@
                 --rate $(arg rate)
                 $(arg topics)
                 -- $(arg bag)"
-          required="true"/>
+          required="true">
+          <!-- Remap static transforms for filtering. -->
+        <remap from="/tf_static" to="/tf_static/orig"/>
+    </node>
+    <!-- Fix camera optical frames: filter these out from tf static... -->
+    <node name="tf_filter" pkg="nifti_vision_data" type="tf_filter">
+        <rosparam>
+            exclude_children: [camera_0, camera_2]
+            latch: true
+        </rosparam>
+        <remap from="tf" to="/tf_static/orig"/>
+        <remap from="tf_filtered" to="/tf_static"/>
+    </node>
+    <!-- Add corrected transforms. -->
+    <node name="camera_tf_static_pub" pkg="tf_static_publisher" type="tf_static_publisher"
+          output="screen">
+        <rosparam>
+            transforms:
+                camera_front: [0.01, 0.048, 0.002, -1.571, 0.0, -1.571, tower_camera_floor, camera_0]  # front
+                camera_rear: [-0.01, -0.048, 0.002, 1.571, 0.0, -1.571, tower_camera_floor, camera_2]  # rear
+        </rosparam>
+    </node>
 
-<!--    <include if="$(arg lidar_proc)" file="$(dirname)/lidar_proc.launch">-->
-<!--        <arg name="rviz" value="false"/>-->
-<!--    </include>-->
-<!--    <include if="$(arg slam)" file="$(dirname)/slam.launch">-->
-<!--        <arg name="cloud" value="points_filtered"/>-->
-<!--    </include>-->
+    <!--
+    <include if="$(arg lidar_proc)" file="$(dirname)/lidar_proc.launch">
+        <arg name="rviz" value="false"/>
+    </include>
+    <include if="$(arg slam)" file="$(dirname)/slam.launch">
+        <arg name="cloud" value="points_filtered"/>
+    </include>
+    -->
     <node if="$(arg ouster_driver)"
           name="latch_sensor_info" pkg="traversability_estimation" type="latch_sensor_info"
           output="screen">
@@ -151,13 +157,74 @@
           args="-d $(dirname)/traversability_final_demo_visualization.rviz"
           respawn="true" respawn_delay="1.0" output="screen"/>
 
-    <include file="$(dirname)/cloud_traversability_scenes.launch">
-        <arg name="screen" value="560x592x24"/>
-        <arg name="display" value="$(arg display)"/>
-        <arg name="launch_prefix" value="$(arg launch_prefix)"/>
-    </include>
+    <!-- RViz scenes: front and rear cameras with scene overlay. -->
+    <node if="1" name="rviz_front_camera_overlay" pkg="rviz" type="rviz"
+          args="-d $(dirname)/front_overlay_camera.rviz"
+          respawn="true" respawn_delay="1.0" output="screen"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 872x487x24'"/>
+    <node if="1" name="rviz_rear_camera_overlay" pkg="rviz" type="rviz"
+          args="-d $(dirname)/rear_overlay_camera.rviz"
+          respawn="true" respawn_delay="1.0" output="screen"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 872x487x24'"/>
 
-    <node name="image_composer" pkg="nifti_vision_data" type="image_composer" output="screen">
+    <!-- RViz scenes: geometric, semantic, fused traversability, and planning graph. -->
+    <node if="1" name="rviz_geometric_traversability_scene" pkg="rviz" type="rviz"
+          args="-d $(dirname)/traversability_scene.rviz"
+          respawn="true" respawn_delay="1.0" output="screen"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 572x592x24'">
+        <remap from="traversability" to="geometric_traversability"/>
+        <remap from="rviz/scene" to="rviz/geometric_traversability_scene"/>
+    </node>
+
+    <node if="1" name="rviz_semantic_traversability_scene" pkg="rviz" type="rviz"
+          args="-d $(dirname)/traversability_scene.rviz"
+          respawn="true" respawn_delay="1.0" output="screen"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 572x592x24'">
+        <remap from="traversability" to="semantic_traversability"/>
+        <remap from="rviz/scene" to="rviz/semantic_traversability_scene"/>
+    </node>
+
+    <node if="1" name="rviz_fused_traversability_scene" pkg="rviz" type="rviz"
+          args="-d $(dirname)/traversability_scene.rviz"
+          respawn="true" respawn_delay="1.0" output="screen"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 572x592x24'">
+        <remap from="traversability" to="fused_traversability"/>
+        <remap from="rviz/scene" to="rviz/fused_traversability_scene"/>
+    </node>
+
+    <node if="1" name="rviz_graph_scene" pkg="rviz" type="rviz"
+          args="-d $(dirname)/graph_pcd_scene.rviz"
+          respawn="true" respawn_delay="1.0" output="screen"
+          launch-prefix="vglrun +v -d $(arg display) xvfb-run -a -s '-screen 0 572x592x24'">
+        <remap from="graph_pcd" to="graph_pcd"/>
+        <remap from="rviz/scene" to="rviz/graph_pcd_scene"/>
+    </node>
+
+    <!-- Depth image of original point cloud. -->
+    <node name="destagger_points" pkg="nodelet" type="nodelet"
+          args="$(arg nodelet_action) cloud_proc/projection $(arg nodelet_manager)"
+          respawn="true" respawn_delay="1.0" output="log">
+            <rosparam subst_value="true">
+                keep: 0  <!-- keep first -->
+                azimuth_only: true
+            </rosparam>
+            <remap from="input" to="points"/>
+            <remap from="output" to="points_destaggered"/>
+    </node>
+
+    <node name="points_to_depth" pkg="cloud_proc" type="cloud_to_image"
+          respawn="true" respawn_delay="1.0" output="screen">
+        <rosparam>
+            scale: -25.5
+            offset: 255
+            encoding: mono8
+        </rosparam>
+        <remap from="cloud" to="points_destaggered"/>
+        <remap from="image" to="points_depth"/>
+    </node>
+
+    <!-- v1 -->
+    <node if="0" name="image_composer" pkg="nifti_vision_data" type="image_composer" output="screen">
         <rosparam subst_value="true">
             device: cuda
             size: [1080, 1920]
@@ -183,6 +250,42 @@
               - topic: /rviz/graph_pcd_scene
                 offset: [540, 1392]
                 size: [540, 528]
+        </rosparam>
+    </node>
+
+    <!-- v2 -->
+    <node name="image_composer" pkg="nifti_vision_data" type="image_composer" output="screen">
+        <rosparam subst_value="true">
+            device: cuda
+            size: [1080, 1920]
+            fps: $(arg in_fps)
+            streams:  # 3 x 1 | 2 x 2 (H x W)
+              # Left column 3 x 1
+              - topic: /points_depth
+                offset: [0, 0]
+                size: [210, 840]
+              - topic: /rviz/front_camera_overlay
+                offset: [210, 0]
+                size: [435, 840]
+              - topic: /rviz/rear_camera_overlay
+                offset: [645, 0]
+                size: [435, 840]
+
+              # Right column / row 0
+              - topic: /rviz/geometric_traversability_scene
+                offset: [0, 840]
+                size: [540, 540]
+              - topic: /rviz/semantic_traversability_scene
+                offset: [0, 1380]
+                size: [540, 540]
+              
+              # Right column / row 1
+              - topic: /rviz/fused_traversability_scene
+                offset: [540, 840]
+                size: [540, 540]
+              - topic: /rviz/graph_pcd_scene
+                offset: [540, 1380]
+                size: [540, 540]
         </rosparam>
     </node>
 
