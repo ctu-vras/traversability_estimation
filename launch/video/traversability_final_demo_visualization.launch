@@ -21,6 +21,7 @@
 <!--    <arg name="bag" default="$(arg dir)/22-10-27-unhost-final-demo/robingas_src/husky_2022-10-27-15-44-30.bag"/>-->
 <!--    <arg name="bag" default="$(arg dir)/22-10-27-unhost-final-demo/robingas_src/husky_2022-10-27-16-09-55.bag"/>-->
     <arg name="is_husky" default="$(eval 'husky' in bag)"/>
+    <arg name="is_spot" default="$(eval 'spot' in bag)"/>
 
     <arg name="bag_dir" default="$(eval '/'.join(bag.split('/')[:-1]))"/>
     <arg name="bag_name" default="$(eval bag.split()[0].split('/')[-1])"/>
@@ -83,6 +84,17 @@
                 transforms:
                     camera_front: [0.01, 0.048, 0.002, -1.571, 0.0, -1.571, tower_camera_floor, camera_0]  # front
                     camera_rear: [-0.01, -0.048, 0.002, 1.571, 0.0, -1.571, tower_camera_floor, camera_2]  # rear
+            </rosparam>
+        </node>
+    </group>
+    <group if="$(arg is_spot)">
+        <!-- Add frames used in images and calibration. -->
+        <node name="camera_tf_static_pub" pkg="tf_static_publisher" type="tf_static_publisher"
+            output="screen">
+            <rosparam>
+                transforms:
+                    camera_front: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pylon_camera_front, camera_0]  # front
+                    camera_rear: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pylon_camera_rear, camera_2]  # rear
             </rosparam>
         </node>
     </group>
