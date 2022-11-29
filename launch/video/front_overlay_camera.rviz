@@ -252,7 +252,7 @@ Visualization Manager:
         Y: 0
         Z: 0
       Roll: 1.5707999467849731
-      Target Frame: camera_0
+      Target Frame: base_link
       Yaw: 0
     Saved:
       - Class: rviz/FrameAligned
