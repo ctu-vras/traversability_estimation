@@ -20,6 +20,7 @@
 <!--    <arg name="bag" default="$(arg dir)/22-10-27-unhost-final-demo/robingas_src/husky_2022-10-27-15-33-57.bag"/>-->
 <!--    <arg name="bag" default="$(arg dir)/22-10-27-unhost-final-demo/robingas_src/husky_2022-10-27-15-44-30.bag"/>-->
 <!--    <arg name="bag" default="$(arg dir)/22-10-27-unhost-final-demo/robingas_src/husky_2022-10-27-16-09-55.bag"/>-->
+    <arg name="is_husky" default="$(eval 'husky' in bag)"/>
 
     <arg name="bag_dir" default="$(eval '/'.join(bag.split('/')[:-1]))"/>
     <arg name="bag_name" default="$(eval bag.split()[0].split('/')[-1])"/>
@@ -63,26 +64,28 @@
                 -- $(arg bag)"
           required="true">
           <!-- Remap static transforms for filtering. -->
-        <remap from="/tf_static" to="/tf_static/orig"/>
+        <remap if="$(arg is_husky)" from="/tf_static" to="/tf_static/orig"/>
     </node>
-    <!-- Fix camera optical frames: filter these out from tf static... -->
-    <node name="tf_filter" pkg="nifti_vision_data" type="tf_filter">
-        <rosparam>
-            exclude_children: [camera_0, camera_2]
-            latch: true
-        </rosparam>
-        <remap from="tf" to="/tf_static/orig"/>
-        <remap from="tf_filtered" to="/tf_static"/>
-    </node>
-    <!-- Add corrected transforms. -->
-    <node name="camera_tf_static_pub" pkg="tf_static_publisher" type="tf_static_publisher"
-          output="screen">
-        <rosparam>
-            transforms:
-                camera_front: [0.01, 0.048, 0.002, -1.571, 0.0, -1.571, tower_camera_floor, camera_0]  # front
-                camera_rear: [-0.01, -0.048, 0.002, 1.571, 0.0, -1.571, tower_camera_floor, camera_2]  # rear
-        </rosparam>
-    </node>
+    <group if="$(arg is_husky)">
+        <!-- Fix camera optical frames: filter these out from tf static... -->
+        <node name="tf_filter" pkg="nifti_vision_data" type="tf_filter">
+            <rosparam>
+                exclude_children: [camera_0, camera_2]
+                latch: true
+            </rosparam>
+            <remap from="tf" to="/tf_static/orig"/>
+            <remap from="tf_filtered" to="/tf_static"/>
+        </node>
+        <!-- Add corrected transforms. -->
+        <node name="camera_tf_static_pub" pkg="tf_static_publisher" type="tf_static_publisher"
+            output="screen">
+            <rosparam>
+                transforms:
+                    camera_front: [0.01, 0.048, 0.002, -1.571, 0.0, -1.571, tower_camera_floor, camera_0]  # front
+                    camera_rear: [-0.01, -0.048, 0.002, 1.571, 0.0, -1.571, tower_camera_floor, camera_2]  # rear
+            </rosparam>
+        </node>
+    </group>
 
     <!--
     <include if="$(arg lidar_proc)" file="$(dirname)/lidar_proc.launch">
