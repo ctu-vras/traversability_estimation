@@ -93,7 +93,7 @@
             output="screen">
             <rosparam>
                 transforms:
-                    camera_front: [0.0, 0.0, 0.0, 0.0, 0.0, 3.142, pylon_camera_front, camera_0]  # front
+                    camera_front: [0.0, 0.0, 0.0, 3.142, 0.0, 0.0, pylon_camera_front, camera_0]  # front
                     camera_rear: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, pylon_camera_rear, camera_2]  # rear
             </rosparam>
         </node>
