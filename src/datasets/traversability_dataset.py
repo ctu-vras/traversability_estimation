@@ -231,9 +231,9 @@ class FlexibilityClouds(BaseDatasetClouds):
     """
     FlexibilityClouds dataset, where the traversable area is generated using real robot poses.
     For each point cloud frame, points which were traversed by robot's path within constant
-    amount of time are labelled as 'traversable'.
-    The rest of the points are marked as 'background',
-    'non-traversable' category is added using local geometry estimate
+    amount of time are labelled as `traversable`,
+    `non-traversable` category is added using local geometry estimate.
+    The rest of the points are marked as `background`.
     """
     CLASSES = ["background", "traversable", "non-traversable"]
 
@@ -317,13 +317,13 @@ class FlexibilityClouds(BaseDatasetClouds):
         cloud = self.read_cloud(cloud_path)
 
         xyz = structured_to_unstructured(cloud[['x', 'y', 'z']])
-        traversability = cloud['flexible'].copy()
+        flexibility = cloud['flexible'].copy()
 
         self.scan.set_points(points=xyz)
         bg_value = self.mask_targets["background"]
         self.scan.proj_sem_label = np.full((self.scan.proj_H, self.scan.proj_W), bg_value,
                                            dtype=np.uint8)  # [H,W]  label
-        self.scan.set_label(label=traversability)
+        self.scan.set_label(label=flexibility)
 
         label = self.scan.proj_sem_label
         assert set(np.unique(label)) <= set(self.class_values)
