@@ -32,7 +32,7 @@ def parse_arguments():
     parser.add_argument('--data_fields', nargs='+', type=str, default=['depth'])
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--vis_preds', action='store_true')
-    parser.add_argument('--loss_fn', type=str, default='cross_entropy')
+    parser.add_argument('--loss_fn', type=str, default='lovasz')
     args = parser.parse_args()
 
     return args
@@ -240,12 +240,16 @@ class Trainer(object):
         self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=args.lr)
 
         # Dice/F1 score - https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient
-        assert self.cfg.loss_fn in ['cross_entropy', 'dice']
+        assert self.cfg.loss_fn in ['cross_entropy', 'dice', 'lovasz']
         if self.cfg.loss_fn == 'dice':
             self.criterion_fn = smp.losses.DiceLoss(mode='multiclass',
                                                     log_loss=True,
                                                     from_logits=True,
                                                     ignore_index=self.ignore_label)
+        elif self.cfg.loss_fn == 'lovasz':
+            self.criterion_fn = smp.losses.LovaszLoss(mode='multiclass',
+                                                      from_logits=True,
+                                                      ignore_index=self.ignore_label)
         elif self.cfg.loss_fn == 'cross_entropy':
             weights = torch.as_tensor([0.8, 0.2], device=self.device) if self.cfg.output == 'flexibility' else None
             self.criterion_fn = torch.nn.CrossEntropyLoss(ignore_index=self.ignore_label,
@@ -325,7 +329,7 @@ class Trainer(object):
 
             losses_epoch.append(loss.item())
 
-            self.tb_logger.add_scalar('Train_Dice_Loss (iter)', loss.item(), self.train_itr)
+            self.tb_logger.add_scalar('Train Loss (iter)', loss.item(), self.train_itr)
             self.train_itr += 1
 
         return np.mean(losses_epoch)
@@ -348,8 +352,8 @@ class Trainer(object):
             metrics_epoch.append(iou)
             losses_epoch.append(loss_val.item())
 
-            self.tb_logger.add_scalar('Valid_mIoU (iter)', iou, self.val_itr)
-            self.tb_logger.add_scalar('Val_Dice_Loss (iter)', loss_val.item(), self.val_itr)
+            self.tb_logger.add_scalar('Val mIoU (iter)', iou, self.val_itr)
+            self.tb_logger.add_scalar('Val Loss (iter)', loss_val.item(), self.val_itr)
             self.val_itr += 1
 
         metric_val = np.mean(metrics_epoch)
@@ -407,7 +411,7 @@ class Trainer(object):
             loss_train = self.train_epoch()
 
             print('Train loss at epoch %i: %f' % (epoch_n, float(loss_train)))
-            self.tb_logger.add_scalar('Train_Dice_Loss(epoch)', loss_train, epoch_n)
+            self.tb_logger.add_scalar('Train Loss(epoch)', loss_train, epoch_n)
 
             print('Validation ...')
             self.model = self.model.eval()
@@ -431,8 +435,8 @@ class Trainer(object):
                     torch.save(self.model, os.path.join(os.path.dirname(__file__), name))
 
             print('Validation mIoU at epoch %i: %f' % (epoch_n, float(metric_val)))
-            self.tb_logger.add_scalar('Valid_mIoU(epoch)', metric_val, epoch_n)
-            self.tb_logger.add_scalar('Valid_Dice_Loss(epoch)', loss_val, epoch_n)
+            self.tb_logger.add_scalar('Val mIoU(epoch)', metric_val, epoch_n)
+            self.tb_logger.add_scalar('Valid Loss(epoch)', loss_val, epoch_n)
 
             # change learning rate
             if epoch_n % 30 == 0 and epoch_n > 0:
