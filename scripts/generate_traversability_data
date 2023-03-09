@@ -12,6 +12,7 @@ Multi-pass processing:
    the model primitives.
 """
 from __future__ import absolute_import, division, print_function
+
 from argparse import ArgumentParser
 from glob import glob
 from matplotlib import cm
@@ -30,8 +31,8 @@ from tqdm import tqdm
 
 DEPTH_FIELD_NAME = 'depth'
 LABEL_FIELD_NAME = 'traversability'
-# LABEL_FIELD_NAME = 'label'
 LABEL_IGNORE = 255
+LABEL_OBSTACLE = 2
 
 
 def str2bool(v):
@@ -56,11 +57,11 @@ def arg_parser():
     parser.add_argument('--input-end', type=float, default=float('inf'), help='End time in seconds.')
     parser.add_argument('--discard-model', type=str, default=None,
                         help='Model at current position discarding points.')
-    parser.add_argument('--traversable-model', type=str, default=None,
+    parser.add_argument('--robot-model', type=str, default=None,
                         help='Model to move along robot path marking points traversable.')
-    parser.add_argument('--rigid-model', type=str, default=None,
+    parser.add_argument('--obstacles-model', type=str, default=None,
                         help='Model to move along robot path marking points rigid.')
-    parser.add_argument('--rigid-primitives', type=str2bool, default=False,
+    parser.add_argument('--obstacles-primitives', type=str2bool, default=False,
                         help='Fit primitives and mark the inliers as rigid.')
     parser.add_argument('--distance-horizon', '-d', type=float, default=10.0)
     parser.add_argument('--time-horizon', '-t', type=float, nargs=2, default=[0.0, 10.0])
@@ -71,6 +72,7 @@ def arg_parser():
     parser.add_argument('--output-period', type=float, default=None)
     parser.add_argument('--visualize', type=str2bool, default=False)
     parser.add_argument('bag_paths', type=str, nargs='+')
+    parser.add_argument('--z-support', type=str, default=None, help='Z support configuration or empty.')
     return parser
 
 
@@ -168,16 +170,19 @@ def fit_primitives(x_valid):
 
 
 def normalize(x):
-    if x.min() != x.max():
-        x = x - x.min()
+    x = x - x.min()
+    if x.max() > 0:
         x = x / x.max()
     return x
 
 
-def segment_cloud(model, arr, input_to_robot_tfs, trav_datas,
+def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
                   discard_tf=None, discard_model=None,
+                  obstacles_model=None, obstacles_primitives=True,
+                  input_to_fixed_tf=None, z_support=None,
                   visualize=False):
-    assert model is None or isinstance(model, Body)
+
+    assert robot_model is None or isinstance(robot_model, Body)
     assert isinstance(arr, np.ndarray)
     assert discard_model is None or isinstance(discard_model, Body)
 
@@ -196,21 +201,38 @@ def segment_cloud(model, arr, input_to_robot_tfs, trav_datas,
     traversability = np.full((x.shape[1],), np.nan, dtype=float)
     for input_to_robot_tf, trav_data in zip(input_to_robot_tfs, trav_datas):
         assert isinstance(input_to_robot_tf, np.ndarray)
+
         x_robot = affine(input_to_robot_tf, x)
-        if model:
-            robot_points = model.contains_point(x_robot)
+
+        if robot_model:
+            robot_points = robot_model.contains_point(x_robot)
             # average currently received traversability values with previous ones in the map
             traversability[robot_points] = np.nanmean([traversability[robot_points],
                                                        trav_data * np.ones_like(traversability[robot_points])], axis=0)
+
     mask_traversed = ~np.isnan(traversability)
     print('%.3g = %i / %i traversed points' % (mask_traversed.mean(), mask_traversed.sum(), mask_traversed.size))
 
+    # Fit geometric primitives to points and mark their inliers as obstacles.
+    obstacles = np.zeros((x.shape[1],), dtype=bool)
+    if obstacles_primitives:
+        primitives = fit_primitives(x)
+        for primitive, indices in primitives:
+            obstacles[indices] = True
+        print('%.3g = %i / %i obstacle points' % (obstacles.mean(), obstacles.sum(), obstacles.size))
+
+    if z_support:
+        support, tmp_rigid = compute_rigid_support(arr_valid, transform=input_to_fixed_tf, **z_support)
+        # rigid[support > 30] = True
+        obstacles[tmp_rigid] = True
+
     # normalize traversability labels as float points in a range between 0 and 1
     traversability[mask_traversed] = normalize(traversability[mask_traversed])
-    traversability[~mask_traversed] = LABEL_IGNORE
-    labels[valid_ind] = traversability
+    labels[valid_ind[mask_traversed]] = traversability[mask_traversed]
+    labels[valid_ind[obstacles]] = LABEL_OBSTACLE
 
     if visualize:
+        # show_cloud(x.T, labels[valid_ind], colormap=cm.jet)
         show_cloud(x.T, labels[valid_ind], min=0., max=1., colormap=cm.jet)
 
     labels = labels.reshape(arr.shape)
@@ -219,8 +241,8 @@ def segment_cloud(model, arr, input_to_robot_tfs, trav_datas,
 
 def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_frame=None, robot_frame=None,
                   exclude_times=None, input_step=1, input_start=0.0, input_end=float('inf'),
-                  discard_model=None, traversable_model=None,
-                  rigid_model=None, rigid_primitives=False,
+                  discard_model=None, robot_model=None,
+                  obstacles_model=None, obstacles_primitives=False, z_support=None,
                   discard_empty=True, distance_horizon=None, time_horizon=None, time_step=None,
                   output_path=None, output_bag_path=None, output_topic=None, output_period=None,
                   visualize=False):
@@ -288,7 +310,7 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_fram
                 except TransformException as ex:
                     print('Could not transform from %s to %s at %.3f s.' % (msg.header.frame_id, fixed_frame, msg.header.stamp.to_sec()))
                     continue
-                input_to_fixed = numpify(input_to_fixed.transform)
+                input_to_fixed_tf = numpify(input_to_fixed.transform)
 
                 # Find transforms from input cloud to robot positions within the horizon.
                 input_to_robot_tfs = []
@@ -332,8 +354,10 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_fram
                     # assert depth_struct.shape == input_struct.shape, (depth_struct.shape, input_struct.shape)
 
                     # H x W unstructured label image.
-                    label = segment_cloud(traversable_model, input_struct, input_to_robot_tfs, trav_data_horizon,
+                    label = segment_cloud(robot_model, input_struct, input_to_robot_tfs, trav_data_horizon,
                                           discard_tf=input_to_robot_tfs[n[0]], discard_model=discard_model,
+                                          obstacles_model=obstacles_model, obstacles_primitives=obstacles_primitives,
+                                          input_to_fixed_tf=input_to_fixed_tf, z_support=z_support,
                                           visualize=visualize)
                     # H x W structured label cloud.
                     label_struct = label.reshape((input_struct.size, -1))
@@ -387,12 +411,12 @@ def main():
     if args.discard_model:
         args.discard_model = eval(args.discard_model)
         print('Discard model:', args.discard_model)
-    if args.traversable_model:
-        args.traversable_model = eval(args.traversable_model)
-        print('Traversable model:', args.traversable_model)
-    if args.rigid_model:
-        args.rigid_model = eval(args.rigid_model)
-        print('Rigid model:', args.rigid_model)
+    if args.robot_model:
+        args.robot_model = eval(args.robot_model)
+        print('Robot model:', args.robot_model)
+    if args.obstacles_model:
+        args.obstacles_model = eval(args.obstacles_model)
+        print('Obstacles model:', args.obstacles_model)
 
     generate_data(**vars(args))
 
