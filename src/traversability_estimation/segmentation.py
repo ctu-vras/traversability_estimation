@@ -522,7 +522,7 @@ def compute_rigid_support(arr, transform=None, range=None, grid=None, scale=1.0,
     filtered = scale * filtered
 
     tree = cKDTree(filtered, compact_nodes=False, balanced_tree=False)
-    ind = tree.query_ball_point(xyz, radius, n_jobs=-1)
+    ind = tree.query_ball_point(xyz, radius, workers=-1)
 
     support = np.array([len(i) for i in ind]).astype(np.uint32)
     support = support.reshape(arr.shape)
