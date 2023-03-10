@@ -2,7 +2,6 @@
 
 import os
 import numpy as np
-import torchvision.models.segmentation
 import torch
 from torch.utils.data import DataLoader, BatchSampler
 from torch.utils.data.sampler import SequentialSampler
@@ -13,7 +12,7 @@ from tqdm import tqdm
 from time import time
 import segmentation_models_pytorch as smp
 from typing import Iterator, List
-from traversability_estimation.utils import visualize_imgs
+from traversability_estimation.utils import visualize_imgs, create_model
 from datasets.base_dataset import VOID_VALUE
 import torchmetrics
 
@@ -36,37 +35,6 @@ def parse_arguments():
     args = parser.parse_args()
 
     return args
-
-
-def create_model(architecture, n_inputs, n_outputs, pretrained_backbone=True):
-    assert architecture in ['fcn_resnet50', 'fcn_resnet101', 'deeplabv3_resnet50', 'deeplabv3_resnet101',
-                            'deeplabv3_mobilenet_v3_large', 'lraspp_mobilenet_v3_large']
-
-    print('Creating model %s with %i inputs and %i outputs' % (architecture, n_inputs, n_outputs))
-    Architecture = eval('torchvision.models.segmentation.%s' % architecture)
-    model = Architecture(pretrained=pretrained_backbone)
-
-    arch = architecture.split('_')[0]
-    encoder = '_'.join(architecture.split('_')[1:])
-
-    # Change input layer to accept n_inputs
-    if encoder == 'mobilenet_v3_large':
-        model.backbone['0'][0] = torch.nn.Conv2d(n_inputs, 16,
-                                                 kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
-    else:
-        model.backbone['conv1'] = torch.nn.Conv2d(n_inputs, 64,
-                                                  kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-
-    # Change final layer to output n classes
-    if arch == 'lraspp':
-        model.classifier.low_classifier = torch.nn.Conv2d(40, n_outputs, kernel_size=(1, 1), stride=(1, 1))
-        model.classifier.high_classifier = torch.nn.Conv2d(128, n_outputs, kernel_size=(1, 1), stride=(1, 1))
-    elif arch == 'fcn':
-        model.classifier[-1] = torch.nn.Conv2d(512, n_outputs, kernel_size=(1, 1), stride=(1, 1))
-    elif arch == 'deeplabv3':
-        model.classifier[-1] = torch.nn.Conv2d(256, n_outputs, kernel_size=(1, 1), stride=(1, 1))
-
-    return model
 
 
 class CommonBatchSampler(BatchSampler):
@@ -259,7 +227,7 @@ class Trainer(object):
         # self.metric_fn = smp.utils.metrics.IoU(threshold=0.5)
         self.metric_fn = torchmetrics.JaccardIndex(num_classes=len(self.non_bg_classes),
                                                    ignore_index=self.ignore_label,
-                                                   multilabel=False,
+                                                   task='multiclass',
                                                    average='none').to(self.device)
 
         log_dir = '%s_lr_%g_bs_%d_%s_%s_labels_%s_%s' % \

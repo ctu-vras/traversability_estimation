@@ -12,7 +12,6 @@ Multi-pass processing:
    the model primitives.
 """
 from __future__ import absolute_import, division, print_function
-
 from argparse import ArgumentParser
 from glob import glob
 from matplotlib import cm
@@ -26,7 +25,7 @@ from sensor_msgs.msg import PointCloud2, Imu
 from tf2_ros import BufferCore, TransformException
 from traversability_estimation.geometry import affine, Bodies, Body, Box, inverse, Sphere  # needed for eval
 from traversability_estimation.segmentation import compute_rigid_support, fit_planes, position, valid_point_mask
-from traversability_estimation.utils import show_cloud, slots
+from traversability_estimation.utils import show_cloud, slots, normalize
 from tqdm import tqdm
 
 DEPTH_FIELD_NAME = 'depth'
@@ -169,13 +168,6 @@ def fit_primitives(x_valid):
     return models
 
 
-def normalize(x):
-    x = x - x.min()
-    if x.max() > 0:
-        x = x / x.max()
-    return x
-
-
 def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
                   discard_tf=None, discard_model=None,
                   obstacles_model=None, obstacles_primitives=True,
@@ -199,6 +191,7 @@ def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
 
     # Mark valid points which are contained by future model poses as empty.
     traversability = np.full((x.shape[1],), np.nan, dtype=float)
+    assert len(input_to_robot_tfs) == len(trav_datas)
     for input_to_robot_tf, trav_data in zip(input_to_robot_tfs, trav_datas):
         assert isinstance(input_to_robot_tf, np.ndarray)
 
@@ -211,7 +204,8 @@ def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
                                                        trav_data * np.ones_like(traversability[robot_points])], axis=0)
 
     mask_traversed = ~np.isnan(traversability)
-    print('%.3g = %i / %i traversed points' % (mask_traversed.mean(), mask_traversed.sum(), mask_traversed.size))
+    n_traversed_pts = mask_traversed.sum()
+    print('%.3g = %i / %i traversed points' % (mask_traversed.mean(), n_traversed_pts, mask_traversed.size))
 
     # Fit geometric primitives to points and mark their inliers as obstacles.
     obstacles = np.zeros((x.shape[1],), dtype=bool)
@@ -226,10 +220,11 @@ def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
         # rigid[support > 30] = True
         obstacles[tmp_rigid] = True
 
-    # normalize traversability labels as float points in a range between 0 and 1
-    traversability[mask_traversed] = normalize(traversability[mask_traversed])
-    labels[valid_ind[mask_traversed]] = traversability[mask_traversed]
-    labels[valid_ind[obstacles]] = LABEL_OBSTACLE
+    if n_traversed_pts > 0:
+        # normalize traversability labels as float points in a range between 0 and 1
+        traversability[mask_traversed] = normalize(traversability[mask_traversed])
+        labels[valid_ind[mask_traversed]] = traversability[mask_traversed]
+        labels[valid_ind[obstacles]] = LABEL_OBSTACLE
 
     if visualize:
         # show_cloud(x.T, labels[valid_ind], colormap=cm.jet)

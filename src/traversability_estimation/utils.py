@@ -7,6 +7,7 @@ from PIL import Image, ImageFile
 import rospy
 from timeit import default_timer as timer
 import torch
+import torchvision.models.segmentation
 import yaml
 try:
     import open3d as o3d
@@ -382,3 +383,34 @@ def get_label_map(path):
     elif isinstance(label_map, list):
         label_map = np.asarray(label_map)
     return label_map
+
+
+def create_model(architecture, n_inputs, n_outputs, pretrained_backbone=True):
+    assert architecture in ['fcn_resnet50', 'fcn_resnet101', 'deeplabv3_resnet50', 'deeplabv3_resnet101',
+                            'deeplabv3_mobilenet_v3_large', 'lraspp_mobilenet_v3_large']
+
+    print('Creating model %s with %i inputs and %i outputs' % (architecture, n_inputs, n_outputs))
+    Architecture = eval('torchvision.models.segmentation.%s' % architecture)
+    model = Architecture(pretrained=pretrained_backbone)
+
+    arch = architecture.split('_')[0]
+    encoder = '_'.join(architecture.split('_')[1:])
+
+    # Change input layer to accept n_inputs
+    if encoder == 'mobilenet_v3_large':
+        model.backbone['0'][0] = torch.nn.Conv2d(n_inputs, 16,
+                                                 kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    else:
+        model.backbone['conv1'] = torch.nn.Conv2d(n_inputs, 64,
+                                                  kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+
+    # Change final layer to output n classes
+    if arch == 'lraspp':
+        model.classifier.low_classifier = torch.nn.Conv2d(40, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+        model.classifier.high_classifier = torch.nn.Conv2d(128, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+    elif arch == 'fcn':
+        model.classifier[-1] = torch.nn.Conv2d(512, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+    elif arch == 'deeplabv3':
+        model.classifier[-1] = torch.nn.Conv2d(256, n_outputs, kernel_size=(1, 1), stride=(1, 1))
+
+    return model

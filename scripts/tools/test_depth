@@ -45,7 +45,7 @@ def main():
     Dataset = eval('datasets.%s' % args.dataset)
     ds = Dataset(split='test', fields=data_fields,
                  output=output,
-                 lidar_beams_step=1)
+                 lidar_W_step=1)
 
     for _ in range(5):
         # Apply inference preprocessing transforms
