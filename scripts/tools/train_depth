@@ -12,7 +12,7 @@ from tqdm import tqdm
 from time import time
 import segmentation_models_pytorch as smp
 from typing import Iterator, List
-from traversability_estimation.utils import visualize_imgs, create_model
+from traversability_estimation.utils import visualize_imgs, visualize_cloud, create_model
 from datasets.base_dataset import VOID_VALUE
 import torchmetrics
 
@@ -96,10 +96,12 @@ def create_dataloaders(args):
     train_dataset = Dataset(split='train',
                             output=args.output,
                             fields=args.data_fields, num_samples=args.n_samples,
+                            lidar_W_step=1,
                             labels_mode='labels')
     valid_dataset = Dataset(split='val',
                             output=args.output,
                             fields=args.data_fields, num_samples=args.n_samples,
+                            lidar_W_step=1,
                             labels_mode='labels')
 
     train_datasets, valid_datasets = [train_dataset], [valid_dataset]
@@ -362,11 +364,22 @@ class Trainer(object):
         self.tb_logger.add_image('Depth image', depth_img, dataformats='HW')
 
         if self.cfg.vis_preds:
+            color_pred_masked = color_pred.copy()
+            color_pred_masked[label == 255] = color_gt[label == 255]
+
+            label_flex = np.argmax(pred, axis=0) == dataset.mask_targets['flexible']
+            depth_img_with_flex_points = (0.3 * depth_img + 0.7 * label_flex).astype("float")
+
             visualize_imgs(layout='columns',
                            prediction=color_pred,
+                           prediction_masked=color_pred_masked,
                            ground_truth=color_gt,
-                           depth_img=depth_img,
+                           # depth_img=depth_img,
+                           depth_img=depth_img_with_flex_points,
                            )
+
+            # visualize_cloud(xyz=dataset.scan.proj_xyz[::dataset.lidar_H_step].reshape((-1, 3)),
+            #                 color=color_pred.reshape((-1, 3)))
 
     def train(self):
         print(self)

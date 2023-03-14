@@ -13,9 +13,9 @@ def main():
     parser = ArgumentParser()
     # parser.add_argument('--dataset', type=str, default='Rellis3DClouds')
     # parser.add_argument('--dataset', type=str, default='TraversabilityClouds')
-    # parser.add_argument('--dataset', type=str, default='FlexibilityClouds')
-    parser.add_argument('--dataset', type=str, default='SemanticUSL')
-    parser.add_argument('--weights', type=str, default='deeplabv3_resnet101_lr_0.0001_bs_16_epoch_74_SemanticKITTI_SemanticUSL_depth_labels_None_iou_0.199.pth')
+    parser.add_argument('--dataset', type=str, default='FlexibilityClouds')
+    # parser.add_argument('--dataset', type=str, default='SemanticUSL')
+    parser.add_argument('--weights', type=str, default='deeplabv3_resnet101_lr_0.0001_bs_6_epoch_80_FlexibilityClouds_depth_64x1024_labels_flexibility_iou_0.790.pth')
     parser.add_argument('--device', type=str, default='cpu')
     args = parser.parse_args()
     print(args)
@@ -45,7 +45,7 @@ def main():
     Dataset = eval('datasets.%s' % args.dataset)
     ds = Dataset(split='test', fields=data_fields,
                  output=output,
-                 lidar_W_step=1)
+                 lidar_H_step=2, lidar_W_step=1)
 
     for _ in range(5):
         # Apply inference preprocessing transforms
@@ -87,12 +87,12 @@ def main():
         # visualize_cloud(xyz=ds.scan.proj_xyz.reshape((-1, 3)), color=color_gt.reshape((-1, 3)))
 
         pcd = o3d.geometry.PointCloud()
-        xyz = ds.scan.proj_xyz
+        xyz = ds.scan.proj_xyz[::ds.lidar_H_step]
         pcd.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)))
         pcd.colors = o3d.utility.Vector3dVector(color_pred.reshape((-1, 3)) / color_pred.max())
 
         pcd_gt = o3d.geometry.PointCloud()
-        pcd_gt.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)) + np.asarray([150, 0, 0]))
+        pcd_gt.points = o3d.utility.Vector3dVector(xyz.reshape((-1, 3)) + np.asarray([50, 0, 0]))
         pcd_gt.colors = o3d.utility.Vector3dVector(color_gt.reshape((-1, 3)) / color_gt.max())
 
         o3d.visualization.draw_geometries([pcd, pcd_gt])

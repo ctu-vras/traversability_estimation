@@ -1,0 +1,257 @@
+#!/usr/bin/env python
+
+import numpy as np
+from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
+import torch
+from torch.utils.data import DataLoader, Dataset
+from matplotlib import cm
+import os
+from traversability_estimation.utils import show_cloud, normalize, create_model
+import matplotlib.pyplot as plt
+import segmentation_models_pytorch as smp
+from tqdm import tqdm
+
+
+# data augmentation
+def horizontal_shift(img, shift):
+    if shift > 0:
+        img_shifted = np.zeros_like(img)
+        img_shifted[..., :shift] = img[..., -shift:]
+        img_shifted[..., shift:] = img[..., :-shift]
+    else:
+        img_shifted = img
+    return img_shifted
+    
+class TraversabilityData(Dataset):
+
+    def __init__(self, path):
+        super(Dataset, self).__init__()
+        self.path = path
+        self.ids = [f[:-4] for f in os.listdir(path)]
+        self.proj_fov_up = 45
+        self.proj_fov_down = -45
+        self.proj_H = 128
+        self.proj_W = 1024
+        self.ignore_label = 255
+
+    def range_projection(self, points, labels):
+        """ Project a point cloud into a sphere.
+        """
+        # laser parameters
+        fov_up = self.proj_fov_up / 180.0 * np.pi  # field of view up in rad
+        fov_down = self.proj_fov_down / 180.0 * np.pi  # field of view down in rad
+        fov = abs(fov_down) + abs(fov_up)  # get field of view total in rad
+
+        # get depth of all points
+        depth = np.linalg.norm(points, 2, axis=1)
+
+        # get scan components
+        scan_x = points[:, 0]
+        scan_y = points[:, 1]
+        scan_z = points[:, 2]
+
+        # get angles of all points
+        yaw = -np.arctan2(scan_y, scan_x)
+        pitch = np.arcsin(scan_z / (depth + 1e-8))
+
+        # get projections in image coords
+        proj_x = 0.5 * (yaw / np.pi + 1.0)  # in [0.0, 1.0]
+        proj_y = 1.0 - (pitch + abs(fov_down)) / fov  # in [0.0, 1.0]
+
+        # scale to image size using angular resolution
+        proj_x *= self.proj_W  # in [0.0, W]
+        proj_y *= self.proj_H  # in [0.0, H]
+
+        # round and clamp for use as index
+        proj_x = np.floor(proj_x)
+        proj_x = np.minimum(self.proj_W - 1, proj_x)
+        proj_x = np.maximum(0, proj_x).astype(np.int32)  # in [0,W-1]
+
+        proj_y = np.floor(proj_y)
+        proj_y = np.minimum(self.proj_H - 1, proj_y)
+        proj_y = np.maximum(0, proj_y).astype(np.int32)  # in [0,H-1]
+
+        # order in decreasing depth
+        indices = np.arange(depth.shape[0])
+        order = np.argsort(depth)[::-1]
+        depth = depth[order]
+        proj_y = proj_y[order]
+        proj_x = proj_x[order]
+        indices = indices[order]
+
+        # assing to image
+        proj_range = np.full((self.proj_H, self.proj_W), -1, dtype=np.float32)
+        proj_range[proj_y, proj_x] = depth
+
+        # projected index (for each pixel, what I am in the pointcloud)
+        # [H,W] index (-1 is no data)
+        proj_idx = np.full((self.proj_H, self.proj_W), -1, dtype=np.int32)
+        proj_idx[proj_y, proj_x] = indices
+        # only map colors to labels that exist
+        mask = proj_idx >= 0
+
+        # projection color with semantic labels
+        proj_sem_label = np.full((self.proj_H, self.proj_W), self.ignore_label, dtype=np.float32)  # [H,W]  label
+        proj_sem_label[mask] = labels[proj_idx[mask]]
+
+        # projected point cloud xyz - [H,W,3] xyz coord (-1 is no data)
+        proj_xyz = np.full((self.proj_H, self.proj_W, 3), -1, dtype=np.float32)
+        proj_xyz[proj_y, proj_x] = points[order]
+
+        return proj_range, proj_sem_label, proj_xyz
+        
+    def __getitem__(self, i, visualize=False):
+        ind = self.ids[i]
+        cloud = np.load(os.path.join(self.path, '%s.npz' % ind))['cloud']
+        
+        if cloud.ndim == 2:
+            cloud = cloud.reshape((-1,))
+            
+        points = structured_to_unstructured(cloud[['x', 'y', 'z']])
+        trav = np.asarray(cloud['traversability'], dtype=points.dtype)
+
+        depth_proj, label_proj, points_proj = self.range_projection(points, trav)
+        
+        # data augmentation: add rotation around vertical axis (Z)
+        H, W = depth_proj.shape
+        shift = np.random.choice(range(1, W))
+        depth_proj = horizontal_shift(depth_proj, shift=shift)
+        label_proj = horizontal_shift(label_proj, shift=shift)
+        # point projected have shape (H, W, 3)
+        points_proj_shifted = np.zeros_like(points_proj)
+        points_proj_shifted[:, :shift, :] = points_proj[:, -shift:, :]
+        points_proj_shifted[:, shift:, :] = points_proj[:, :-shift, :]
+
+        if visualize:
+            valid = trav != self.ignore_label
+            show_cloud(points_proj_shifted.reshape((-1, 3)), label_proj.reshape(-1,),
+                       min=trav[valid].min(), max=trav[valid].max() + 1, colormap=cm.jet)
+
+        return depth_proj[None], label_proj[None], points_proj_shifted.reshape((-1, 3))
+    
+    def __len__(self):
+        return len(self.ids)
+
+
+class Trainer(object):
+
+    def __init__(self, dataset, batch_size=2, lr=1e-3, model_arch='deeplabv3_resnet50'):
+        self.ds = dataset
+        self.dataloader = DataLoader(self.ds, batch_size=batch_size, shuffle=True)
+        self.device = torch.device('cuda:0')
+        self.model_arch = model_arch
+        self.model = create_model(self.model_arch, n_inputs=1, n_outputs=1)
+        self.model = self.model.train()
+        self.model = self.model.to(self.device)
+        self.optimizer = torch.optim.Adam(lr=lr, params=self.model.parameters())
+        self.loss_fn = torch.nn.MSELoss()
+        # self.loss_fn = smp.losses.LovaszLoss(mode='multilabel', from_logits=False)
+        self.losses = []
+
+    def train(self, n_epochs=1, vis=False):
+        min_loss = np.inf
+        for e in range(n_epochs):
+            print('Training epoch %i' % e)
+            
+            for i, sample in tqdm(enumerate(self.dataloader)):
+                # get sample from data loader (depth image, traversability label and points for visualization only)
+                depth, label, points = sample
+                depth = depth.to(self.device)
+                label = label.to(self.device)
+                # model inference
+                pred = self.model(depth)['out']
+                # loss is computed for the part of the prediction where the label is valid
+                valid = label != self.ds.ignore_label
+                loss = self.loss_fn(pred[valid], label[valid])
+
+                # backpropagate gradients and update model params
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+
+                print('Iter: %i, training loss: %f' % (i, loss.item()))
+                self.losses.append(loss.item())
+
+                # save better model
+                if min_loss > loss.item():
+                    min_loss = loss.item()
+                    best_model_name = '%s_epoch_%d_loss_%.3f.pth' % (self.model_arch, e, min_loss)
+                    print("Saving Model:", best_model_name)
+                    torch.save(self.model, os.path.join(os.path.dirname(__file__), best_model_name))
+
+                if vis and i % 100 == 0:
+                    visualize(pred, label, depth, ignore_label=self.ds.ignore_label)
+
+            # decrease learning rate for the next epoch
+            self.optimizer.param_groups[0]['lr'] = self.optimizer.param_groups[0]['lr'] / 2.
+            print('Decreasing learning rate to: %f' % self.optimizer.param_groups[0]['lr'])
+
+
+def visualize(pred, label, depth_range, points=None, ignore_label=255, min_color=None, max_color=None):
+    plt.figure(figsize=(20, 10))
+    plt.subplot(4, 1, 1)
+    plt.title('Prediction')
+    pred_vis = torch.clone(pred)
+    pred_vis = normalize(pred_vis.detach().cpu())
+    plt.imshow(pred_vis[0].squeeze())
+
+    plt.subplot(4, 1, 2)
+    plt.title('Masked Prediction')
+    pred_vis[label == ignore_label] = 0
+    plt.imshow(pred_vis[0].squeeze())
+
+    plt.subplot(4, 1, 3)
+    plt.title('Label')
+    label_vis = torch.clone(label)
+    label_vis = normalize(label_vis.detach().cpu())
+    label_vis[label == ignore_label] = 0
+    label_vis = label_vis[0].squeeze()
+    plt.imshow(label_vis)
+
+    plt.subplot(4, 1, 4)
+    plt.title('Range image')
+    depth_vis = normalize(torch.clone(depth_range)[0].squeeze().detach().cpu().numpy())
+    plt.imshow(depth_vis)
+
+    plt.show()
+
+    if points is not None:
+        show_cloud(points[0], pred[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+        # show_cloud(points[0], label[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+
+
+def main():
+    # path = '/home/ruslan/data/bags/traversability/husky/husky_2022-09-27-15-01-44/points/'
+    path = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34/os_cloud_node/destaggered_points/'
+    assert os.path.exists(path)
+    ds = TraversabilityData(path)
+    print('Dataset have %i samples' % len(ds))
+
+    # # visualize a sample from the data set
+    # for i in np.random.choice(range(len(ds)), 5):
+    #     _ = ds.__getitem__(i, visualize=True)
+
+    trainer = Trainer(ds, batch_size=8, lr=1e-3)
+    trainer.train(n_epochs=5, vis=False)
+
+    # test the trained model
+    device = torch.device('cpu')
+    # model = torch.load('deeplabv3_resnet50_epoch_0_loss_0.236.pth', map_location=device)
+    model = trainer.model.to(device)
+    for _ in range(5):
+        sample = next(iter(trainer.dataloader))
+
+        depth, label, points = sample
+        depth = depth.to(device)
+        label = label.to(device)
+
+        pred = model(depth)['out']
+
+        # visualize traversability
+        # visualize(pred, label, depth, points, min_color=0, max_color=1.1)
+        # visualize traversability + obstacles
+        visualize(pred, label, depth, points, min_color=0, max_color=2.1)
+
+
+if __name__ == "__main__":
+    main()

@@ -70,6 +70,7 @@ def arg_parser():
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
     parser.add_argument('--visualize', type=str2bool, default=False)
+    parser.add_argument('--save-data', type=str2bool, default=True)
     parser.add_argument('bag_paths', type=str, nargs='+')
     parser.add_argument('--z-support', type=str, default=None, help='Z support configuration or empty.')
     return parser
@@ -217,8 +218,8 @@ def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
 
     if z_support:
         support, tmp_rigid = compute_rigid_support(arr_valid, transform=input_to_fixed_tf, **z_support)
-        # rigid[support > 30] = True
         obstacles[tmp_rigid] = True
+        print('Obstacles points: %i' % obstacles.sum())
 
     if n_traversed_pts > 0:
         # normalize traversability labels as float points in a range between 0 and 1
@@ -226,12 +227,12 @@ def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
         labels[valid_ind[mask_traversed]] = traversability[mask_traversed]
         labels[valid_ind[obstacles]] = LABEL_OBSTACLE
 
-    if visualize:
+    if visualize and (n_traversed_pts > 100):
         # show_cloud(x.T, labels[valid_ind], colormap=cm.jet)
-        show_cloud(x.T, labels[valid_ind], min=0., max=1., colormap=cm.jet)
+        show_cloud(x.T, labels[valid_ind], min=0, max=3, colormap=cm.jet)
 
     labels = labels.reshape(arr.shape)
-    return labels
+    return labels, n_traversed_pts
 
 
 def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_frame=None, robot_frame=None,
@@ -240,7 +241,7 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_fram
                   obstacles_model=None, obstacles_primitives=False, z_support=None,
                   discard_empty=True, distance_horizon=None, time_horizon=None, time_step=None,
                   output_path=None, output_bag_path=None, output_topic=None, output_period=None,
-                  visualize=False):
+                  visualize=False, save_data=True):
     assert bag_paths, bag_paths
     assert not exclude_times or all(len(t) == 2 for t in exclude_times), exclude_times
     assert len(time_horizon) == 2, time_horizon
@@ -349,11 +350,11 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_fram
                     # assert depth_struct.shape == input_struct.shape, (depth_struct.shape, input_struct.shape)
 
                     # H x W unstructured label image.
-                    label = segment_cloud(robot_model, input_struct, input_to_robot_tfs, trav_data_horizon,
-                                          discard_tf=input_to_robot_tfs[n[0]], discard_model=discard_model,
-                                          obstacles_model=obstacles_model, obstacles_primitives=obstacles_primitives,
-                                          input_to_fixed_tf=input_to_fixed_tf, z_support=z_support,
-                                          visualize=visualize)
+                    label, n_traversed_pts = segment_cloud(robot_model, input_struct, input_to_robot_tfs, trav_data_horizon,
+                                                           discard_tf=input_to_robot_tfs[n[0]], discard_model=discard_model,
+                                                           obstacles_model=obstacles_model, obstacles_primitives=obstacles_primitives,
+                                                           input_to_fixed_tf=input_to_fixed_tf, z_support=z_support,
+                                                           visualize=visualize)
                     # H x W structured label cloud.
                     label_struct = label.reshape((input_struct.size, -1))
                     label_struct = unstructured_to_structured(label_struct, names=[LABEL_FIELD_NAME])
@@ -366,25 +367,30 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, fixed_fram
 
                     n_valid_labels = (label != LABEL_IGNORE).sum()
                     if discard_empty and (n_valid_labels < 1000):
-                        print('Discarding cloud with no valid labels.')
+                        print('Discarding cloud with not enough valid labels.')
                         continue
-                    else:
-                        print('Storing cloud with %i valid labels.' % n_valid_labels)
+                    elif n_traversed_pts < 100:
+                        print('Discarding cloud with not enough traversed points.')
+                        continue
 
                     last_out[topic] = start
 
-                    # write np arrays
-                    if output_path is not None:
-                        p = output_path.format(**fmt_kwargs)
-                        os.makedirs(os.path.dirname(p), exist_ok=True)
-                        np.savez_compressed(p, cloud=cloud_struct)
+                    if save_data:
+                        print('Storing cloud with %i valid labels and %i traversed points.' %
+                              (n_valid_labels, n_traversed_pts))
 
-                    # write segmented point cloud topic to a bag file
-                    if output_bag is not None:
-                        t = output_topic.format(topic=topic)
-                        segmented_msg = msgify(PointCloud2, cloud_struct)
-                        segmented_msg.header = msg.header
-                        output_bag.write(t, segmented_msg, stamp)
+                        # write np arrays
+                        if output_path is not None:
+                            p = output_path.format(**fmt_kwargs)
+                            os.makedirs(os.path.dirname(p), exist_ok=True)
+                            np.savez_compressed(p, cloud=cloud_struct)
+
+                        # write segmented point cloud topic to a bag file
+                        if output_bag is not None:
+                            t = output_topic.format(topic=topic)
+                            segmented_msg = msgify(PointCloud2, cloud_struct)
+                            segmented_msg.header = msg.header
+                            output_bag.write(t, segmented_msg, stamp)
 
     if output_bag:
         output_bag.close()
@@ -412,6 +418,17 @@ def main():
     if args.obstacles_model:
         args.obstacles_model = eval(args.obstacles_model)
         print('Obstacles model:', args.obstacles_model)
+
+    if args.z_support is None:
+        # TODO: obstacles generation settings for Cemicky les only
+        args.z_support = {}
+        scale = [1.0, 1.0, 0.05]
+        scale = np.asarray(scale).reshape((-1, 3))
+        args.z_support['scale'] = scale
+        args.z_support['grid'] = 0.05
+        args.z_support['radius'] = 0.05
+        args.z_support['range'] = [0.6, 8.0]
+        print('Z support:', args.z_support)
 
     generate_data(**vars(args))
 

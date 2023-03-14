@@ -59,7 +59,7 @@ class GeometricCloudSegmentation(object):
 
         arrays = []
         for name in sorted(features):
-            f = features[name]
+            f = features[name][0]
             f = f.flatten().reshape((input.size, -1))
             array = unstructured_to_structured(f, names=[name])
             array = array.reshape(input.shape)
