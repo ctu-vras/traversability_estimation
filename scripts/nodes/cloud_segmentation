@@ -14,9 +14,11 @@ from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_s
 import torch
 import yaml
 from threading import RLock
+import rospkg
 
 
-pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+# pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..'))
+pkg_path = rospkg.RosPack().get_path('traversability_estimation')
 
 
 def msgify_cloud(cloud, frame, stamp, names):

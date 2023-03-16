@@ -4,7 +4,7 @@ import os
 import cv2 as cv
 import yaml
 import torch
-import rospy
+import rospy, rospkg
 import numpy as np
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
@@ -16,7 +16,8 @@ from hrnet.config import config
 from hrnet import models
 
 
-pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+# pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..'))
+pkg_path = rospkg.RosPack().get_path('traversability_estimation')
 RELLIS_CONFIG = os.path.join(pkg_path, "config/rellis.yaml")
 RELLIS_CONFIG_TRAVERSABILITY = os.path.join(pkg_path, "config/rellis_to_traversability.yaml")
 

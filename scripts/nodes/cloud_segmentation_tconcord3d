@@ -2,6 +2,7 @@
 
 import os
 import rospy
+import rospkg
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify
 import numpy as np
@@ -12,7 +13,8 @@ from tconcord3d.builder import model_builder
 from tconcord3d.config.config import load_config_data
 from tconcord3d.utils.load_save_util import load_checkpoint
 
-pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+# pkg_path = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..'))
+pkg_path = rospkg.RosPack().get_path('traversability_estimation')
 
 
 def msgify_cloud(cloud, frame, stamp, names):
