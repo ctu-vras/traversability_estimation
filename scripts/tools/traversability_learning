@@ -9,6 +9,24 @@ import os
 from traversability_estimation.utils import show_cloud, normalize, create_model
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from argparse import ArgumentParser
+
+TRAIN_DS_PATH = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-16-37-03_trav/os_cloud_node/destaggered_points/'
+VAL_DS_PATH = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/os_cloud_node/destaggered_points/'
+
+def str2bool(v):
+    return v.lower() in ('1', 'yes', 'true', 't', 'y')
+
+def arg_parser():
+    parser = ArgumentParser()
+    parser.add_argument('--n-epochs', type=int, default=1)
+    parser.add_argument('--learning-rate', type=float, default=1e-3)
+    parser.add_argument('--batch-size', type=int, default=8)
+    parser.add_argument('--visualize', type=str2bool, default=False)
+    parser.add_argument('--train-ds-path', type=str, default=TRAIN_DS_PATH)
+    parser.add_argument('--val-ds-path', type=str, default=VAL_DS_PATH)
+
+    return parser
 
 
 # data augmentation
@@ -128,10 +146,10 @@ class TraversabilityData(Dataset):
             points_proj_shifted[:, shift:, :] = points_proj[:, :-shift, :]
             points_proj = points_proj_shifted
 
-            if visualize:
-                valid = trav != self.ignore_label
-                show_cloud(points_proj.reshape((-1, 3)), label_proj.reshape(-1,),
-                           min=trav[valid].min(), max=trav[valid].max() + 1, colormap=cm.jet)
+        if visualize:
+            valid = trav != self.ignore_label
+            show_cloud(points_proj.reshape((-1, 3)), label_proj.reshape(-1,),
+                       min=trav[valid].min(), max=trav[valid].max() + 1, colormap=cm.jet)
 
         return depth_proj[None], label_proj[None], points_proj.reshape((-1, 3))
     
@@ -156,7 +174,8 @@ class Trainer(object):
 
         self.optimizer = torch.optim.Adam(lr=lr, params=self.model.parameters())
 
-        self.loss_fn = torch.nn.MSELoss()
+        # self.loss_fn = torch.nn.MSELoss(reduction='mean')
+        self.loss_fn = torch.nn.CrossEntropyLoss()
         self.min_loss = np.inf
         self.losses = []
 
@@ -171,12 +190,13 @@ class Trainer(object):
             pred = self.model(depth)['out']
             # loss is computed for the part of the prediction where the label is valid
             valid = label != self.val_ds.ignore_label
-            loss = self.loss_fn(pred[valid], label[valid])
+            loss = self.loss_fn(pred[valid][None], label[valid][None])
             val_loss += loss.item()
         val_loss /= len(self.val_ds)
         return val_loss
 
     def train_epoch(self, vis=False):
+        train_loss = 0.0
         for i, sample in tqdm(enumerate(self.train_dataloader)):
             # get sample from data loader (depth image, traversability label and points for visualization only)
             depth, label, points = sample
@@ -186,7 +206,7 @@ class Trainer(object):
             pred = self.model(depth)['out']
             # loss is computed for the part of the prediction where the label is valid
             valid = label != self.train_ds.ignore_label
-            loss = self.loss_fn(pred[valid], label[valid])
+            loss = self.loss_fn(pred[valid][None], label[valid][None])
 
             # backpropagate gradients and update model params
             self.optimizer.zero_grad()
@@ -196,21 +216,18 @@ class Trainer(object):
             print('Iter: %i, training loss: %f' % (i, loss.item()))
             self.losses.append(loss.item())
 
-            # save better model
-            if self.min_loss > loss.item():
-                self.min_loss = loss.item()
-                best_model_name = '%s_loss_%.3f.pth' % (self.model_arch, self.min_loss)
-                print("Saving Model:", best_model_name)
-                torch.save(self.model, os.path.join(os.path.dirname(__file__), best_model_name))
-
             if vis and i % 100 == 0:
                 visualize(pred, label, depth, ignore_label=self.train_ds.ignore_label)
+
+            train_loss += loss.item()
+        train_loss /= len(self.train_ds)
+        return train_loss
 
     def train(self, n_epochs=1, vis=False):
         for e in range(n_epochs):
             print('Training epoch %i...' % e)
             self.model = self.model.train()
-            self.train_epoch(vis=vis)
+            train_loss = self.train_epoch(vis=vis)
 
             print('Validation epoch %i...'% e)
             self.model = self.model.eval()
@@ -220,6 +237,16 @@ class Trainer(object):
             # decrease learning rate for the next epoch
             self.optimizer.param_groups[0]['lr'] = self.optimizer.param_groups[0]['lr'] / 2.
             print('Decreasing learning rate to: %f' % self.optimizer.param_groups[0]['lr'])
+
+            # save better model
+            if self.min_loss > train_loss:
+                self.min_loss = train_loss
+                best_model_name = '%s_loss_%.3f.pth' % (self.model_arch, self.min_loss)
+                print("Saving Model:", best_model_name)
+                path = os.path.join(os.path.dirname(__file__), 'weights/')
+                if not os.path.exists(path):
+                    os.makedirs(path)
+                torch.save(self.model, os.path.join(path, best_model_name))
 
 
 def visualize(pred, label, depth_range, points=None,
@@ -252,45 +279,55 @@ def visualize(pred, label, depth_range, points=None,
     plt.show()
 
     if points is not None:
-        show_cloud(points[0], pred[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
-        # show_cloud(points[0], label[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+        show_cloud(points, pred[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+        show_cloud(points, label[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
 
 
 def main():
-    path = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34/os_cloud_node/destaggered_points/'
-    assert os.path.exists(path)
-    train_ds = TraversabilityData(path, split='train')
+    args = arg_parser().parse_args()
+    print(args)
+
+    assert os.path.exists(args.train_ds_path)
+    train_ds = TraversabilityData(args.train_ds_path, split='train')
     print('Train dataset have %i samples' % len(train_ds))
 
-    path = '/home/ruslan/data/bags/traversability/husky/husky_2022-09-27-15-01-44/points/'
-    assert os.path.exists(path)
-    val_ds = TraversabilityData(path, split='val')
+    assert os.path.exists(args.val_ds_path)
+    val_ds = TraversabilityData(args.val_ds_path, split='val')
     print('Val dataset have %i samples' % len(val_ds))
 
     # visualize a sample from the data set
-    for i in np.random.choice(range(len(train_ds)), 5):
+    for i in np.random.choice(range(len(train_ds)), 1):
         _ = train_ds.__getitem__(i, visualize=True)
+    for i in np.random.choice(range(len(val_ds)), 1):
+        _ = val_ds.__getitem__(i, visualize=True)
 
-    trainer = Trainer(train_ds, val_ds, batch_size=8, lr=1e-3)
-    trainer.train(n_epochs=5, vis=False)
+    trainer = Trainer(train_ds, val_ds, batch_size=args.batch_size, lr=args.learning_rate)
+    trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
 
     # test the trained model
     device = torch.device('cpu')
-    # model = torch.load('deeplabv3_resnet50_epoch_0_loss_0.236.pth', map_location=device)
+    # model = torch.load('./weights/deeplabv3_resnet50_loss_62568.502.pth', map_location=device)
+    # model = torch.load('./weights/deeplabv3_resnet50_loss_0.060.pth', map_location=device)
     model = trainer.model.to(device)
-    for _ in range(5):
-        sample = next(iter(trainer.train_dataloader))
+    model = model.eval()
+
+    ds = train_ds
+    # ds = val_ds
+    for i in np.random.choice(range(len(ds)), 5):
+        sample = ds[i]
 
         depth, label, points = sample
-        depth = depth.to(device)
-        label = label.to(device)
+        depth = torch.as_tensor(depth[None]).to(device)
+        label = torch.as_tensor(label[None]).to(device)
 
-        pred = model(depth)['out']
+        with torch.no_grad():
+            pred = model(depth)['out']
 
         # visualize traversability
+        valid = label != ds.ignore_label
         # visualize(pred, label, depth, points, min_color=0, max_color=1.1)
         # visualize traversability + obstacles
-        visualize(pred, label, depth, points, min_color=0, max_color=2.1)
+        visualize(pred, label, depth, points, min_color=pred[valid].min(), max_color=pred[valid].max())
 
 
 if __name__ == "__main__":

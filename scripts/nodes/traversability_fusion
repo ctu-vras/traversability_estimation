@@ -7,7 +7,6 @@ from message_filters import ApproximateTimeSynchronizer, Subscriber
 from numpy.lib.recfunctions import structured_to_unstructured, unstructured_to_structured
 import scipy.spatial
 import numpy as np
-import matplotlib.pyplot as plt
 from threading import Lock
 from tf2_ros import Buffer, TransformException, TransformListener
 

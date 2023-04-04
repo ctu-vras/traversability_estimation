@@ -2,9 +2,10 @@
 <package format="2">
   <name>traversability_estimation</name>
   <version>0.0.1</version>
-  <description>Semantic Segmentation of Images for Traversability Estimation</description>
+  <description>Semantic Segmentation of Images and Point Clouds for Traversability Estimation</description>
   <url type="website">https://github.com/RuslanAgishev/traversability_estimation</url>
   <maintainer email="agishrus@fel.cvut.cz">Ruslan Agishev</maintainer>
+  <maintainer email="tpetricek@gmail.com">Tomas Petricek</maintainer>
 
   <license>BSD</license>
 
