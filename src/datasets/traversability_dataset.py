@@ -748,7 +748,7 @@ def images_demo(num_runs=1):
 
 def clouds_save_labels():
     from traversability_estimation.utils import convert_label, convert_color, visualize_imgs, visualize_cloud
-    from traversability_cloud import TraversabilityCloud
+    from traversability_supervised import TraversabilityCloud
     from tqdm import tqdm
 
     label_mapping = {0: 255,
