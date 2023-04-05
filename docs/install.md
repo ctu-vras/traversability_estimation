@@ -26,18 +26,3 @@ please follow the extended proceedure (requires access to another repositories):
   catkin config -DCMAKE_BUILD_TYPE=Release
   catkin build
   ```
-
-Put the [weights](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/)
-to [./config/weights/](./config/weights/) folder:
-
-```bash
-./config/weights/
-  ├── hrnetv2_w48_imagenet_pretrained.pth
-  ├── seg_hrnet_ocr_w48_train_512x1024_sgd_lr1e-2_wd5e-4_bs_12_epoch484/
-  ├── depth_cloud/
-  └── smp/
-      └── se_resnext50_32x4d_352x640_lr1e-4.pth
-```
-
-One may also download datasets to train images and point cloud segmentation models.
-Please, refer to [./docs/rellis.md](./docs/rellis.md) or [./docs/trav_data.md](./docs/trav_data.md) for examples.
