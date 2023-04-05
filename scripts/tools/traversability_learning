@@ -3,7 +3,7 @@
 import numpy as np
 from numpy.lib.recfunctions import structured_to_unstructured
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, ConcatDataset
 from matplotlib import cm
 import os
 from traversability_estimation.utils import show_cloud, normalize, create_model
@@ -11,8 +11,12 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from argparse import ArgumentParser
 
-TRAIN_DS_PATH = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-16-37-03_trav/os_cloud_node/destaggered_points/'
-VAL_DS_PATH = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/os_cloud_node/destaggered_points/'
+TRAIN_DS_PATHS =\
+    ['/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-16-37-03_trav/os_cloud_node/destaggered_points/',
+     '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-30-22_trav/os_cloud_node/destaggered_points/']
+VAL_DS_PATHS =\
+    ['/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/os_cloud_node/destaggered_points/']
+IGNORE_LABEL = 255
 
 def str2bool(v):
     return v.lower() in ('1', 'yes', 'true', 't', 'y')
@@ -23,8 +27,8 @@ def arg_parser():
     parser.add_argument('--learning-rate', type=float, default=1e-3)
     parser.add_argument('--batch-size', type=int, default=8)
     parser.add_argument('--visualize', type=str2bool, default=False)
-    parser.add_argument('--train-ds-path', type=str, default=TRAIN_DS_PATH)
-    parser.add_argument('--val-ds-path', type=str, default=VAL_DS_PATH)
+    parser.add_argument('--train-ds-paths', type=str, nargs='+', default=TRAIN_DS_PATHS)
+    parser.add_argument('--val-ds-paths', type=str, default=VAL_DS_PATHS)
 
     return parser
 
@@ -54,7 +58,7 @@ class TraversabilityData(Dataset):
         self.proj_fov_down = -45
         self.proj_H = 128
         self.proj_W = 1024
-        self.ignore_label = 255
+        self.ignore_label = IGNORE_LABEL
 
     def range_projection(self, points, labels):
         """ Project a point cloud into a sphere.
@@ -166,6 +170,8 @@ class Trainer(object):
         self.val_ds = val_dataset
         self.val_dataloader = DataLoader(self.val_ds, batch_size=1, shuffle=False)
 
+        self.ignore_label = IGNORE_LABEL
+
         self.device = torch.device('cuda:0')
 
         self.model_arch = model_arch
@@ -189,7 +195,7 @@ class Trainer(object):
             # model inference
             pred = self.model(depth)['out']
             # loss is computed for the part of the prediction where the label is valid
-            valid = label != self.val_ds.ignore_label
+            valid = label != self.ignore_label
             loss = self.loss_fn(pred[valid][None], label[valid][None])
             val_loss += loss.item()
         val_loss /= len(self.val_ds)
@@ -205,7 +211,7 @@ class Trainer(object):
             # model inference
             pred = self.model(depth)['out']
             # loss is computed for the part of the prediction where the label is valid
-            valid = label != self.train_ds.ignore_label
+            valid = label != self.ignore_label
             loss = self.loss_fn(pred[valid][None], label[valid][None])
 
             # backpropagate gradients and update model params
@@ -213,7 +219,7 @@ class Trainer(object):
             loss.backward()
             self.optimizer.step()
 
-            print('Iter: %i, training loss: %f' % (i, loss.item()))
+            # print('Iter: %i, training loss: %f' % (i, loss.item()))
             self.losses.append(loss.item())
 
             if vis and i % 100 == 0:
@@ -228,15 +234,16 @@ class Trainer(object):
             print('Training epoch %i...' % e)
             self.model = self.model.train()
             train_loss = self.train_epoch(vis=vis)
+            print('Training loss for epoch %i: %f' % (e, train_loss))
 
             print('Validation epoch %i...'% e)
             self.model = self.model.eval()
             val_loss = self.val_epoch()
-            print('Validation loss: %f' % val_loss)
+            print('Validation loss for epoch %i: %f' % (e, val_loss))
 
             # decrease learning rate for the next epoch
-            self.optimizer.param_groups[0]['lr'] = self.optimizer.param_groups[0]['lr'] / 2.
-            print('Decreasing learning rate to: %f' % self.optimizer.param_groups[0]['lr'])
+            # self.optimizer.param_groups[0]['lr'] = self.optimizer.param_groups[0]['lr'] / 2.
+            # print('Decreasing learning rate to: %f' % self.optimizer.param_groups[0]['lr'])
 
             # save better model
             if self.min_loss > train_loss:
@@ -250,7 +257,7 @@ class Trainer(object):
 
 
 def visualize(pred, label, depth_range, points=None,
-              ignore_label=255, min_color=None, max_color=None):
+              ignore_label=IGNORE_LABEL, min_color=None, max_color=None):
     plt.figure(figsize=(20, 10))
     plt.subplot(4, 1, 1)
     plt.title('Prediction')
@@ -280,33 +287,44 @@ def visualize(pred, label, depth_range, points=None,
 
     if points is not None:
         show_cloud(points, pred[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
-        show_cloud(points, label[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+        # show_cloud(points, label[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
 
 
 def main():
     args = arg_parser().parse_args()
     print(args)
 
-    assert os.path.exists(args.train_ds_path)
-    train_ds = TraversabilityData(args.train_ds_path, split='train')
+    train_datasets = []
+    for path in args.train_ds_paths:
+        assert os.path.exists(path), "Training data set path %s is not found" % path
+        ds = TraversabilityData(path, split='train')
+        print('Dataset from %s have %i samples' % (path, len(ds)))
+        train_datasets.append(ds)
+    train_ds = ConcatDataset(train_datasets)
     print('Train dataset have %i samples' % len(train_ds))
 
-    assert os.path.exists(args.val_ds_path)
-    val_ds = TraversabilityData(args.val_ds_path, split='val')
+    val_datasets = []
+    for path in args.val_ds_paths:
+        assert os.path.exists(path), "Validation data set path %s is not found" % path
+        ds = TraversabilityData(path, split='val')
+        print('Dataset from %s have %i samples' % (path, len(ds)))
+        val_datasets.append(ds)
+    val_ds = ConcatDataset(val_datasets)
     print('Val dataset have %i samples' % len(val_ds))
 
     # visualize a sample from the data set
-    for i in np.random.choice(range(len(train_ds)), 1):
-        _ = train_ds.__getitem__(i, visualize=True)
-    for i in np.random.choice(range(len(val_ds)), 1):
-        _ = val_ds.__getitem__(i, visualize=True)
+    # for i in np.random.choice(range(len(train_ds)), 1):
+    #     _ = train_ds.__getitem__(i, visualize=True)
+    # for i in np.random.choice(range(len(val_ds)), 1):
+    #     _ = val_ds.__getitem__(i, visualize=True)
 
+    # train the model saving the best performing model on validation set
     trainer = Trainer(train_ds, val_ds, batch_size=args.batch_size, lr=args.learning_rate)
     trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
 
     # test the trained model
     device = torch.device('cpu')
-    # model = torch.load('./weights/deeplabv3_resnet50_loss_62568.502.pth', map_location=device)
+    # model = torch.load('./weights/deeplabv3_resnet50_loss_471770.809.pth', map_location=device)
     # model = torch.load('./weights/deeplabv3_resnet50_loss_0.060.pth', map_location=device)
     model = trainer.model.to(device)
     model = model.eval()
@@ -323,10 +341,14 @@ def main():
         with torch.no_grad():
             pred = model(depth)['out']
 
-        # visualize traversability
         valid = label != ds.ignore_label
-        # visualize(pred, label, depth, points, min_color=0, max_color=1.1)
-        # visualize traversability + obstacles
+        print('Predicted traversability range for labeled points: %.3f .. %.3f (mean %3f)' %
+              (torch.min(pred[valid]), torch.max(pred[valid]), torch.mean(pred[valid])))
+        print('Predicted traversability range: %.3f .. %.3f (mean %3f)' %
+              (torch.min(pred), torch.max(pred), torch.mean(pred)))
+
+        # visualize traversability predictions
+        # visualize(pred, label, depth, points, min_color=label[valid].min(), max_color=label[valid].max())
         visualize(pred, label, depth, points, min_color=pred[valid].min(), max_color=pred[valid].max())
 
 
