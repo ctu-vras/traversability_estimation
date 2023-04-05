@@ -82,7 +82,7 @@ def arg_parser():
     parser.add_argument('--ground-topic', type=str, default='{topic}_ground')
     parser.add_argument('--output-period', type=float, default=None)
     parser.add_argument('--visualize', type=str2bool, default=False)
-    parser.add_argument('bag_paths', type=str, nargs='+')
+    parser.add_argument('--bag-paths', type=str, nargs='+')
     return parser
 
 

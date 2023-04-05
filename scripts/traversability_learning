@@ -93,8 +93,12 @@ class Trainer(object):
             # print('Iter: %i, training loss: %f' % (i, loss.item()))
             self.losses.append(loss.item())
 
-            if vis and i % 100 == 0:
-                visualize(pred, label, depth, ignore_label=self.train_ds.ignore_label)
+            if vis and i % 20 == 0:
+                pred_vis = pred[0].squeeze()
+                label_vis = label[0].squeeze()
+                depth_vis = depth[0].squeeze()
+                points_vis = points[0]
+                visualize(pred_vis, label_vis, depth_vis, points_vis, ignore_label=self.ignore_label)
 
             train_loss += loss.item()
         train_loss /= len(self.train_ds)
@@ -129,36 +133,39 @@ class Trainer(object):
 
 def visualize(pred, label, depth_range, points=None,
               ignore_label=IGNORE_LABEL, min_color=None, max_color=None):
+    assert pred.ndim == 2
+    assert label.ndim == 2
+    assert depth_range.ndim == 2
     plt.figure(figsize=(20, 10))
     plt.subplot(4, 1, 1)
     plt.title('Prediction')
     pred_vis = torch.clone(pred)
     pred_vis = normalize(pred_vis.detach().cpu())
-    plt.imshow(pred_vis[0].squeeze())
+    plt.imshow(pred_vis)
 
     plt.subplot(4, 1, 2)
     plt.title('Masked Prediction')
     pred_vis[label == ignore_label] = 0
-    plt.imshow(pred_vis[0].squeeze())
+    plt.imshow(pred_vis)
 
     plt.subplot(4, 1, 3)
     plt.title('Label')
     label_vis = torch.clone(label)
     label_vis = normalize(label_vis.detach().cpu())
     label_vis[label == ignore_label] = 0
-    label_vis = label_vis[0].squeeze()
     plt.imshow(label_vis)
 
     plt.subplot(4, 1, 4)
     plt.title('Range image')
-    depth_vis = normalize(torch.clone(depth_range)[0].squeeze().detach().cpu().numpy())
+    depth_range = torch.clone(depth_range)
+    depth_vis = normalize(depth_range.detach().cpu())
     plt.imshow(depth_vis)
 
     plt.show()
 
     if points is not None:
-        show_cloud(points, pred[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
-        # show_cloud(points, label[0].squeeze().detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+        show_cloud(points, pred.detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
+        # show_cloud(points, label.detach().cpu().numpy().reshape((-1,)), min=min_color, max=max_color)
 
 
 def main():
@@ -191,13 +198,13 @@ def main():
 
     # train the model saving the best performing model on validation set
     trainer = Trainer(train_ds, val_ds, batch_size=args.batch_size, lr=args.learning_rate)
-    trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
+    # trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
 
     # test the trained model
     device = torch.device('cpu')
-    # model = torch.load('./weights/deeplabv3_resnet50_loss_471770.809.pth', map_location=device)
+    model = torch.load('./weights/deeplabv3_resnet50_loss_471770.809.pth', map_location=device)
     # model = torch.load('./weights/deeplabv3_resnet50_loss_0.060.pth', map_location=device)
-    model = trainer.model.to(device)
+    # model = trainer.model.to(device)
     model = model.eval()
 
     ds = train_ds
@@ -212,15 +219,18 @@ def main():
         with torch.no_grad():
             pred = model(depth)['out']
 
-        valid = label != ds.ignore_label
+        valid = label != trainer.ignore_label
         print('Predicted traversability range for labeled points: %.3f .. %.3f (mean %3f)' %
               (torch.min(pred[valid]), torch.max(pred[valid]), torch.mean(pred[valid])))
         print('Predicted traversability range: %.3f .. %.3f (mean %3f)' %
               (torch.min(pred), torch.max(pred), torch.mean(pred)))
 
         # visualize traversability predictions
-        # visualize(pred, label, depth, points, min_color=label[valid].min(), max_color=label[valid].max())
-        visualize(pred, label, depth, points, min_color=pred[valid].min(), max_color=pred[valid].max())
+        pred_vis = pred[0].squeeze()
+        label_vis = label[0].squeeze()
+        depth_vis = depth[0].squeeze()
+        points_vis = points
+        visualize(pred_vis, label_vis, depth_vis, points_vis, min_color=pred[valid].min(), max_color=pred[valid].max())
 
 
 if __name__ == "__main__":

@@ -76,7 +76,7 @@ def arg_parser():
     parser.add_argument('--output-period', type=float, default=None)
     parser.add_argument('--visualize', type=str2bool, default=False)
     parser.add_argument('--save-data', type=str2bool, default=True)
-    parser.add_argument('bag_paths', type=str, nargs='+')
+    parser.add_argument('--bag-paths', type=str, nargs='+')
     parser.add_argument('--z-support', type=str, default=None, help='Z support configuration or empty.')
     return parser
 
