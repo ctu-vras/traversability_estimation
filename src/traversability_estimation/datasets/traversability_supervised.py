@@ -1,7 +1,6 @@
 import os
 import numpy as np
 import open3d as o3d
-from datasets.base_dataset import data_dir
 from segments import SegmentsClient, SegmentsDataset
 from sklearn.model_selection import train_test_split
 
@@ -85,19 +84,3 @@ class TraversabilityCloud(object):
         colors = np.array([self.color_map[label] for label in self.labels[index]])
         point_cloud.colors = o3d.utility.Vector3dVector(colors)
         o3d.visualization.draw_geometries([point_cloud])
-
-
-def main():
-    # directory = "/home/ales/Datasets/points_colored"
-    directory = os.path.join(data_dir, "TraversabilityDataset/supervised/clouds/destaggered_points_colored/")
-    dataset = TraversabilityCloud(directory)
-    print(f"INFO: Initialized dataset split type: {dataset.split}")
-    print(f"INFO: Split contains {len(dataset)} samples.")
-    for i, sample in enumerate(dataset):
-        point_cloud, label = sample
-        print(f"INFO: Sample {i} has shape {point_cloud.shape} and label {label.shape}")
-        dataset.visualize_sample(i)
-
-
-if __name__ == '__main__':
-    main()
