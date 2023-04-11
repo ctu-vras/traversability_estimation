@@ -429,7 +429,7 @@ def position(cloud):
     return x
 
 
-def filter_range(cloud, min, max, log=False):
+def filter_range(cloud, min, max, log=False, return_mask=False):
     """Keep points within range interval."""
     assert isinstance(cloud, np.ndarray), type(cloud)
     assert isinstance(min, (float, int)), min
@@ -450,10 +450,13 @@ def filter_range(cloud, min, max, log=False):
               % (mask.sum() / len(cloud), mask.sum(), len(cloud), min, max))
 
     filtered = cloud[mask]
+    if return_mask:
+        return filtered, mask
+
     return filtered
 
 
-def filter_grid(cloud, grid, keep='first', log=False, rng=default_rng):
+def filter_grid(cloud, grid, keep='first', log=False, rng=default_rng, return_mask=False):
     """Keep single point within each cell. Order is not preserved."""
     assert isinstance(cloud, np.ndarray)
     # assert cloud.dtype.names
@@ -479,6 +482,9 @@ def filter_grid(cloud, grid, keep='first', log=False, rng=default_rng):
               % (len(ind) / len(keys), len(ind), len(keys), grid))
 
     filtered = cloud[ind]
+    if return_mask:
+        return filtered, ind
+
     return filtered
 
 

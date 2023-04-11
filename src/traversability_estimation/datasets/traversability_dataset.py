@@ -2,7 +2,9 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 from numpy.lib.recfunctions import structured_to_unstructured
+from matplotlib import cm
 from .augmentations import horizontal_shift
+from ..utils import show_cloud
 
 
 IGNORE_LABEL = 255

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset, ConcatDataset
 import os
-from traversability_estimation import show_cloud, normalize, create_model
+from traversability_estimation.utils import show_cloud, normalize, create_model
 from traversability_estimation.datasets import TraversabilityDataset
 import matplotlib.pyplot as plt
 from tqdm import tqdm
@@ -28,13 +28,13 @@ def arg_parser():
     parser.add_argument('--visualize', type=str2bool, default=False)
     parser.add_argument('--train-ds-paths', type=str, nargs='+', default=TRAIN_DS_PATHS)
     parser.add_argument('--val-ds-paths', type=str, default=VAL_DS_PATHS)
-
+    parser.add_argument('--device', type=str, default='cpu')
     return parser
 
 
 class Trainer(object):
 
-    def __init__(self, train_dataset, val_dataset, batch_size=2, lr=1e-3, model_arch='deeplabv3_resnet50'):
+    def __init__(self, train_dataset, val_dataset, batch_size=2, lr=1e-3, model_arch='deeplabv3_resnet50', device='cuda:0'):
         self.train_ds = train_dataset
         self.train_dataloader = DataLoader(self.train_ds, batch_size=batch_size, shuffle=True)
 
@@ -43,7 +43,7 @@ class Trainer(object):
 
         self.ignore_label = IGNORE_LABEL
 
-        self.device = torch.device('cuda:0')
+        self.device = torch.device(device)
 
         self.model_arch = model_arch
         self.model = create_model(self.model_arch, n_inputs=1, n_outputs=1)
@@ -51,8 +51,8 @@ class Trainer(object):
 
         self.optimizer = torch.optim.Adam(lr=lr, params=self.model.parameters())
 
-        # self.loss_fn = torch.nn.MSELoss(reduction='mean')
-        self.loss_fn = torch.nn.CrossEntropyLoss()
+        self.loss_fn = torch.nn.MSELoss(reduction='mean')
+        # self.loss_fn = torch.nn.CrossEntropyLoss()
         self.min_loss = np.inf
         self.losses = []
 
@@ -69,7 +69,7 @@ class Trainer(object):
             valid = label != self.ignore_label
             loss = self.loss_fn(pred[valid][None], label[valid][None])
             val_loss += loss.item()
-        val_loss /= len(self.val_ds)
+        val_loss /= len(self.val_dataloader)
         return val_loss
 
     def train_epoch(self, vis=False):
@@ -90,7 +90,7 @@ class Trainer(object):
             loss.backward()
             self.optimizer.step()
 
-            # print('Iter: %i, training loss: %f' % (i, loss.item()))
+            print('Iter: %i, training loss: %f' % (i, loss.item()))
             self.losses.append(loss.item())
 
             if vis and i % 20 == 0:
@@ -101,7 +101,7 @@ class Trainer(object):
                 visualize(pred_vis, label_vis, depth_vis, points_vis, ignore_label=self.ignore_label)
 
             train_loss += loss.item()
-        train_loss /= len(self.train_ds)
+        train_loss /= len(self.train_dataloader)
         return train_loss
 
     def train(self, n_epochs=1, vis=False):
@@ -121,8 +121,8 @@ class Trainer(object):
             # print('Decreasing learning rate to: %f' % self.optimizer.param_groups[0]['lr'])
 
             # save better model
-            if self.min_loss > train_loss:
-                self.min_loss = train_loss
+            if self.min_loss > val_loss:
+                self.min_loss = val_loss
                 best_model_name = '%s_loss_%.3f.pth' % (self.model_arch, self.min_loss)
                 print("Saving Model:", best_model_name)
                 path = os.path.join(os.path.dirname(__file__), 'weights/')
@@ -177,6 +177,10 @@ def main():
         assert os.path.exists(path), "Training data set path %s is not found" % path
         ds = TraversabilityDataset(path, split='train')
         print('Dataset from %s have %i samples' % (path, len(ds)))
+
+        # visualize a sample from the data set
+        # for i in np.random.choice(range(len(ds)), 1):
+        #     _ = ds.__getitem__(i, visualize=True)
         train_datasets.append(ds)
     train_ds = ConcatDataset(train_datasets)
     print('Train dataset have %i samples' % len(train_ds))
@@ -186,29 +190,27 @@ def main():
         assert os.path.exists(path), "Validation data set path %s is not found" % path
         ds = TraversabilityDataset(path, split='val')
         print('Dataset from %s have %i samples' % (path, len(ds)))
+
+        # visualize a sample from the data set
+        # for i in np.random.choice(range(len(ds)), 1):
+        #     _ = ds.__getitem__(i, visualize=True)
         val_datasets.append(ds)
     val_ds = ConcatDataset(val_datasets)
     print('Val dataset have %i samples' % len(val_ds))
 
-    # visualize a sample from the data set
-    # for i in np.random.choice(range(len(train_ds)), 1):
-    #     _ = train_ds.__getitem__(i, visualize=True)
-    # for i in np.random.choice(range(len(val_ds)), 1):
-    #     _ = val_ds.__getitem__(i, visualize=True)
-
     # train the model saving the best performing model on validation set
-    trainer = Trainer(train_ds, val_ds, batch_size=args.batch_size, lr=args.learning_rate)
+    trainer = Trainer(train_ds, val_ds, batch_size=args.batch_size, lr=args.learning_rate, device=args.device)
     # trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
 
     # test the trained model
     device = torch.device('cpu')
-    model = torch.load('./weights/deeplabv3_resnet50_loss_471770.809.pth', map_location=device)
-    # model = torch.load('./weights/deeplabv3_resnet50_loss_0.060.pth', map_location=device)
+    # model = torch.load('./weights/deeplabv3_resnet50_loss_471770.809.pth', map_location=device)
+    model = torch.load('./weights/deeplabv3_resnet50_loss_1.539.pth', map_location=device)
     # model = trainer.model.to(device)
     model = model.eval()
 
-    ds = train_ds
-    # ds = val_ds
+    # ds = train_ds
+    ds = val_ds
     for i in np.random.choice(range(len(ds)), 5):
         sample = ds[i]
 
