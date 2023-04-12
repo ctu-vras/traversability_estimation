@@ -5,7 +5,7 @@ import torch
 from argparse import ArgumentParser
 import datasets
 import os
-from traversability_estimation.utils import visualize_imgs, visualize_cloud
+from traversability_estimation.utils import visualize_imgs
 import open3d as o3d
 
 
@@ -82,9 +82,6 @@ def main():
                        prediction_without_background=color_pred_ign,
                        ground_truth=color_gt,
                        )
-
-        # visualize_cloud(xyz=ds.scan.proj_xyz.reshape((-1, 3)), color=color_pred.reshape((-1, 3)))
-        # visualize_cloud(xyz=ds.scan.proj_xyz.reshape((-1, 3)), color=color_gt.reshape((-1, 3)))
 
         pcd = o3d.geometry.PointCloud()
         xyz = ds.scan.proj_xyz[::ds.lidar_H_step]

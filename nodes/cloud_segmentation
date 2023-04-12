@@ -5,7 +5,7 @@ import cv2
 from datasets.laserscan import SemLaserScan
 from datasets.base_dataset import TRAVERSABILITY_COLOR_MAP, TRAVERSABILITY_LABELS, VOID_VALUE
 from datasets.base_dataset import FLEXIBILITY_COLOR_MAP, FLEXIBILITY_LABELS
-from traversability_estimation.utils import get_label_map, convert_label, visualize_cloud, visualize_imgs
+from traversability_estimation.utils import get_label_map, convert_label
 import rospy
 from sensor_msgs.msg import Image, PointCloud2
 from ros_numpy import msgify, numpify

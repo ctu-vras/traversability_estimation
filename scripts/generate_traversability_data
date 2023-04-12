@@ -36,6 +36,8 @@ LABEL_IGNORE = 255
 G_ACC = 9.80665
 # LABEL_OBSTACLE = round(G_ACC)
 LABEL_OBSTACLE = G_ACC
+MIN_VALID_LABELS = 1000
+MIN_TRAVERSED_PTS = 500
 
 
 def str2bool(v):
@@ -72,6 +74,7 @@ def arg_parser():
     parser.add_argument('--time-step', '-s', type=float, default=0.5)
     parser.add_argument('--output-path', '-o', type=str, default='{dir}/{name}_trav/{topic}/{secs}_{nsecs:09d}.npz')
     parser.add_argument('--output-bag-path', '-O', type=str, default='{dir}/{name}_segmented.bag')
+    parser.add_argument('--output-traj-path', type=str, default='{dir}/{name}_trav/trajectory/{secs}_{nsecs:09d}.npz')
     parser.add_argument('--output-topic', type=str, default='{topic}_segmented')
     parser.add_argument('--output-period', type=float, default=None)
     parser.add_argument('--visualize', type=str2bool, default=False)
@@ -222,7 +225,7 @@ def segment_cloud(robot_model, arr, input_to_robot_tfs, trav_datas,
         labels[valid_ind[mask_traversed]] = traversability[mask_traversed]
         labels[valid_ind[obstacles]] = LABEL_OBSTACLE
 
-    if visualize and (n_traversed_pts > 100):
+    if visualize and (n_traversed_pts > MIN_TRAVERSED_PTS):
         show_cloud(x.T, labels[valid_ind],
                    min=labels[valid_ind[mask_traversed]].min(), max=LABEL_OBSTACLE + 1,
                    colormap=cm.jet)
@@ -236,7 +239,7 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, imu_rate=1
                   discard_model=None, robot_model=None,
                   obstacles_model=None, obstacles_primitives=False, z_support=None,
                   discard_empty=True, distance_horizon=None, time_horizon=None, time_step=None,
-                  output_path=None, output_bag_path=None, output_topic=None, output_period=None,
+                  output_path=None, output_bag_path=None, output_traj_path=None, output_topic=None, output_period=None,
                   visualize=False, save_data=True):
     assert bag_paths, bag_paths
     assert not exclude_times or all(len(t) == 2 for t in exclude_times), exclude_times
@@ -362,10 +365,10 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, imu_rate=1
                     assert cloud_struct.shape == input_struct.shape
 
                     n_valid_labels = (label != LABEL_IGNORE).sum()
-                    if discard_empty and (n_valid_labels < 1000):
+                    if discard_empty and (n_valid_labels < MIN_VALID_LABELS):
                         print('Discarding cloud with not enough valid labels.')
                         continue
-                    elif n_traversed_pts < 100:
+                    elif n_traversed_pts < MIN_TRAVERSED_PTS:
                         print('Discarding cloud with not enough traversed points.')
                         continue
 
@@ -387,6 +390,13 @@ def generate_data(bag_paths=None, cloud_topics=None, imu_topics=None, imu_rate=1
                             segmented_msg = msgify(PointCloud2, cloud_struct)
                             segmented_msg.header = msg.header
                             output_bag.write(t, segmented_msg, stamp)
+
+                        # write robot traversed trajectory
+                        if output_traj_path is not None:
+                            p = output_traj_path.format(**fmt_kwargs)
+                            os.makedirs(os.path.dirname(p), exist_ok=True)
+                            robot_to_input_tfs = [np.linalg.inv(T) for T in input_to_robot_tfs]
+                            np.savez_compressed(p, traj=np.asarray(robot_to_input_tfs))
 
     if output_bag:
         output_bag.close()

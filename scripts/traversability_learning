@@ -11,10 +11,10 @@ from tqdm import tqdm
 from argparse import ArgumentParser
 
 TRAIN_DS_PATHS =\
-    ['/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-16-37-03_trav/os_cloud_node/destaggered_points/',
-     '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-30-22_trav/os_cloud_node/destaggered_points/']
+    ['/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-16-37-03_trav/',
+     '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-30-22_trav/']
 VAL_DS_PATHS =\
-    ['/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/os_cloud_node/destaggered_points/']
+    ['/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/']
 IGNORE_LABEL = 255
 
 def str2bool(v):
@@ -175,7 +175,7 @@ def main():
     train_datasets = []
     for path in args.train_ds_paths:
         assert os.path.exists(path), "Training data set path %s is not found" % path
-        ds = TraversabilityDataset(path, split='train')
+        ds = TraversabilityDataset(path, cloud_topic='os_cloud_node/destaggered_points/', split='train')
         print('Dataset from %s have %i samples' % (path, len(ds)))
 
         # visualize a sample from the data set
@@ -188,7 +188,7 @@ def main():
     val_datasets = []
     for path in args.val_ds_paths:
         assert os.path.exists(path), "Validation data set path %s is not found" % path
-        ds = TraversabilityDataset(path, split='val')
+        ds = TraversabilityDataset(path, cloud_topic='os_cloud_node/destaggered_points/', split='val')
         print('Dataset from %s have %i samples' % (path, len(ds)))
 
         # visualize a sample from the data set
@@ -200,13 +200,13 @@ def main():
 
     # train the model saving the best performing model on validation set
     trainer = Trainer(train_ds, val_ds, batch_size=args.batch_size, lr=args.learning_rate, device=args.device)
-    # trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
+    trainer.train(n_epochs=args.n_epochs, vis=args.visualize)
 
     # test the trained model
     device = torch.device('cpu')
     # model = torch.load('./weights/deeplabv3_resnet50_loss_471770.809.pth', map_location=device)
-    model = torch.load('./weights/deeplabv3_resnet50_loss_1.539.pth', map_location=device)
-    # model = trainer.model.to(device)
+    # model = torch.load('./weights/deeplabv3_resnet50_loss_1.539.pth', map_location=device)
+    model = trainer.model.to(device)
     model = model.eval()
 
     # ds = train_ds

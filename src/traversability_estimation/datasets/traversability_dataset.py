@@ -14,20 +14,29 @@ data_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), '..', '..', 
 class TraversabilityDataset(Dataset):
     """
     Class to wrap semi-supervised traversability data generated using lidar odometry and IMU.
-    Please, have a look at the `generate_traversability_data` script or data generation from bag file.
+    Please, have a look at the `generate_traversability_data` script for data generation from bag file.
     """
 
-    def __init__(self, path, split='train'):
+    def __init__(self, path, cloud_topic='points', split='val'):
         super(Dataset, self).__init__()
         assert split in ['train', 'val']
         self.split = split
         self.path = path
-        self.ids = [f[:-4] for f in os.listdir(path)]
+        self.cloud_path = os.path.join(path, cloud_topic)
+        assert os.path.exists(self.cloud_path)
+        self.traj_path = os.path.join(path, 'trajectory')
+        assert os.path.exists(self.traj_path)
+        self.ids = [f[:-4] for f in os.listdir(self.cloud_path)]
         self.proj_fov_up = 45
         self.proj_fov_down = -45
         self.proj_H = 128
         self.proj_W = 1024
         self.ignore_label = IGNORE_LABEL
+
+    def get_traj(self, i):
+        ind = self.ids[i]
+        traj = np.load(os.path.join(self.traj_path, '%s.npz' % ind))['traj']
+        return traj
 
     def range_projection(self, points, labels):
         """ Project a point cloud into a sphere.
@@ -97,7 +106,7 @@ class TraversabilityDataset(Dataset):
 
     def __getitem__(self, i, visualize=False):
         ind = self.ids[i]
-        cloud = np.load(os.path.join(self.path, '%s.npz' % ind))['cloud']
+        cloud = np.load(os.path.join(self.cloud_path, '%s.npz' % ind))['cloud']
 
         if cloud.ndim == 2:
             cloud = cloud.reshape((-1,))
@@ -119,12 +128,43 @@ class TraversabilityDataset(Dataset):
             points_proj_shifted[:, shift:, :] = points_proj[:, :-shift, :]
             points_proj = points_proj_shifted
 
+        points_proj = points_proj.reshape((-1, 3))
+
         if visualize:
             valid = trav != self.ignore_label
-            show_cloud(points_proj.reshape((-1, 3)), label_proj.reshape(-1, ),
+            show_cloud(points_proj, label_proj.reshape(-1, ),
                        min=trav[valid].min(), max=trav[valid].max() + 1, colormap=cm.jet)
 
-        return depth_proj[None], label_proj[None], points_proj.reshape((-1, 3))
+        return depth_proj[None], label_proj[None], points_proj
 
     def __len__(self):
         return len(self.ids)
+
+
+def demo():
+    from ..utils import show_cloud_plt
+    from ..segmentation import filter_grid, filter_range
+    import matplotlib.pyplot as plt
+
+    path = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/'
+    assert os.path.exists(path)
+    ds = TraversabilityDataset(path, cloud_topic='os_cloud_node/destaggered_points')
+    print(len(ds))
+
+    i = np.random.choice(range(len(ds)))
+    sample = ds[i]
+    depth, label, points = sample
+    traj = ds.get_traj(i)
+
+    points = points.squeeze()
+    traj = traj.squeeze()
+
+    points = filter_range(points, 0.5, 10.0)
+    points = filter_grid(points, 0.1)
+    show_cloud_plt(points, markersize=0.2)
+    plt.plot(traj[:, 0, 3], traj[:, 1, 3], traj[:, 2, 3], 'ro', markersize=1)
+    plt.show()
+
+
+if __name__ == '__main__':
+    demo()
