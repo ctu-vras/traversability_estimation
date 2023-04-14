@@ -40,7 +40,7 @@ class Encoder(Module):
             # the outputs, and then apply maxpooling on the output
             x = block(x)
             blockOutputs.append(x)
-            x = self.pool(x)
+            # x = self.pool(x)
         # return the list containing the intermediate outputs
         return blockOutputs
 
@@ -111,8 +111,21 @@ class TerrainPredictor(Module):
         return map
 
 
+class LinearPredictor(Module):
+    def __init__(self):
+        super().__init__()
+        self.a = torch.nn.Parameter(torch.tensor(1.))
+        self.b = torch.nn.Parameter(torch.tensor(0.))
+
+    def forward(self, x):
+        y = self.a * x + self.b
+        return y
+
+
 def main():
-    height = torch.tensor([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    import matplotlib.pyplot as plt
+
+    height_gt = torch.tensor([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                            [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
                            [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
                            [0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5],
@@ -124,13 +137,39 @@ def main():
                            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
 
     model = TerrainPredictor(encChannels=(1, 2, 4), decChannels=(4, 2))
-    # height = torch.randn((10, 10))
-    height = height[None][None]
+    # model = LinearPredictor()
+    height_init = torch.randn((1, 1, 10, 10))
+    # height_init = torch.as_tensor(0.3 * height_gt - 0.5)[None][None]
 
-    for out in model.encoder(height):
-        print(out.shape)
+    # ground truth
+    height_gt = height_gt[None][None]
 
-    print(model(height).shape)
+    # # check encoder-decoder output shapes
+    # for out in model.encoder(height_init):
+    #     print(out.shape)
+    # print(model(height_init).shape)
+
+    loss_fn = torch.nn.MSELoss()
+    optim = torch.optim.Adam(model.parameters(), lr=0.01)
+    model = model.train()
+
+    for i in range(500):
+        height_pred = model(height_init)
+        loss = loss_fn(height_pred, height_gt)
+
+        optim.zero_grad()
+        loss.backward()
+        optim.step()
+
+        print(loss.item())
+
+    plt.figure()
+    plt.subplot(1, 2, 1)
+    plt.imshow(height_pred.squeeze().detach().cpu().numpy())
+
+    plt.subplot(1, 2, 2)
+    plt.imshow(height_gt.squeeze().detach().cpu().numpy())
+    plt.show()
 
 
 if __name__ == '__main__':

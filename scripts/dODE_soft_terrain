@@ -2,180 +2,40 @@
 
 import matplotlib.pyplot as plt
 import torch
-import torch.nn as nn
 from torchdiffeq import odeint, odeint_adjoint
-# from torchdiffeq import odeint_event
 import torch.optim as optim
 import numpy as np
 import os
-from traversability_estimation.terrain_predictor import TerrainPredictor
+from traversability_estimation.models import TerrainPredictor, LinearPredictor
+from traversability_estimation.models import RigidBodySoftTerrain
 
-
-CREATE_MOVIE = 0
-LEARNING = 1
-VISU = 1
+CREATE_MOVIE = 0  # 1-True, 0-False
+VISU = 1  # 0-no, 1-matplotlib, 2-mayavi
 
 OUTPUT_PATH = '/home/ruslan/workspaces/traversability_ws/src/traversability_estimation/data/output'
-
 
 torch.set_default_dtype(torch.float64)
 
 MAX_ROBOT_WIDTH = 2.0
 MAX_ROBOT_LENGTH = 4.0
 GRID_RES = 0.1
-# ELEVATION = 50
-# CENTER_R = int(np.round(MAX_ROBOT_WIDTH/2/GRID_RES))
-# CENTER_C = int(np.round(MAX_ROBOT_LENGTH/2/GRID_RES))
 
 if VISU == 2:
     from mayavi import mlab
 
-class RigidBodySoftTerrain(nn.Module):
-
-    def __init__(self, height=np.zeros([8, 3]), damping=5.0, elasticity=50.0, mass=10.0, gravity=9.8, adjoint=False):
-        super().__init__()
-        self.gravity = nn.Parameter(torch.as_tensor([gravity]))
-        self.grid_res = 0.1
-        self.t0 = nn.Parameter(torch.tensor([0.0]))
-        self.height = nn.Parameter(torch.tensor(height))
-        self.damping = nn.Parameter(torch.ones_like(self.height) * damping)
-        self.elasticity = nn.Parameter(torch.ones_like(self.height) * elasticity)
-
-        self.init_pos_x = nn.Parameter(torch.tensor([[0.5], [0.5], [1.0]]))
-        self.init_pos_R = nn.Parameter(self.rpy2rot(torch.tensor([0.0]), torch.tensor([0.0]), torch.tensor([0.0*np.pi/2])))
-
-        self.init_vel_x = nn.Parameter(torch.tensor([[2.0], [0.0], [0.0]]))  # linear velocity of cog
-        self.init_vel_omega = nn.Parameter(torch.tensor([[0.0], [0.0], [0.0]]))  # angular (axis-angle) velocity of cog
-
-        # dx = (torch.tensor([0.0]))  # location of points wrt cog
-        # dy = (torch.tensor([0.0]))  # location of points wrt cog
-        # dz = (torch.tensor([0.0]))  # location of points wrt cog
-        dx = (torch.tensor([-0.5, +0.0, +0.5, +0.5, -0.5, +0.0]))  # location of points wrt cog
-        dy = (torch.tensor([-0.3, -0.3, -0.3, +0.3, +0.3, +0.3]))  # location of points wrt cog
-        dz = (torch.tensor([+0.0, +0.0, +0.0, +0.0, +0.0, +0.0]))  # location of points wrt cog
-        self.d = nn.Parameter(torch.stack((dx, dy, dz)))
-        self.f = nn.Parameter(torch.zeros_like(self.d))
-
-        self.mass = nn.Parameter(torch.tensor([mass]))
-        self.odeint = odeint_adjoint if adjoint else odeint
-
-    def forward(self, t, state):
-        pos_x, pos_R, vel_x, vel_omega, f_old = state
-
-        dpos_x = vel_x
-        vel_omega_skew = torch.vstack((torch.hstack([torch.tensor([0]), -vel_omega[2], vel_omega[1]]), torch.hstack([vel_omega[2], torch.tensor([0]), -vel_omega[0]]), torch.hstack([-vel_omega[1], vel_omega[0], torch.tensor([0])])))
-        dpos_R = vel_omega_skew @ pos_R
-        points = pos_R @ self.d + pos_x
-        dpoints = vel_omega_skew @ (points - pos_x) + vel_x
-
-        # interpolate
-        h = self.interp(self.height, points[0:2, :])
-        e = self.interp(self.elasticity, points[0:2, :])  # self.elasticity[idx_points_x, idx_points_y]  # self.interp(self.elasticity, points[0:2, :])
-        d = self.interp(self.damping, points[0:2, :])  # self.damping[idx_points_x, idx_points_y]  # self.interp(self.damping, points[0:2, :])
-
-        # contacts
-        contact = (points[2, :] <= h)
-
-        # Compute terrain + gravity forces
-        z = torch.tile(torch.tensor([[0], [0], [1]]), (1, points.shape[1]))
-        f = (z * (e * (h - points[2, :]) - d * dpoints[2, :])) * contact  # (nh * dpoints).sum(dim=0)
-        fg = self.mass * self.gravity  # * (points[2, :] >= h)
-        f[2, :] = f[2, :] - fg #* (1 - contact.float())
-
-        # Accelerations: linear and angular accelerations computed from forces
-        inertia_inv = 1 * torch.tensor([[0.1, 0, 0], [0, 0.04, 0], [0, 0, 0.04]])
-        dvel_x = torch.stack(((f[0, :].sum() / self.mass).squeeze(), (f[1, :].sum() / self.mass).squeeze(), (f[2, :].sum() / self.mass).squeeze()))
-        dvel_omega = inertia_inv @ torch.cross(self.d, f).sum(dim=1)
-
-        return dpos_x, dpos_R, dvel_x, dvel_omega, f  # _track #torch.zeros_like(self.f)
-
-    def get_initial_state(self):
-        state = (self.init_pos_x, self.init_pos_R, self.init_vel_x, self.init_vel_omega, self.f)
-        return self.t0, state
-
-    def visu(self, x, col='b'):
-        plt.clf()
-        pos_x, pos_R, vel_x, vel_omega = x
-        plt.plot(pos_x[:, 0].detach().numpy(), pos_x[:, 2].detach().numpy(), 'o--', color='k', linewidth=2.0)
-        points = pos_R @ self.d + pos_x
-        # for p in range(4):
-        #     plt.plot(points[:, 0, p].detach().numpy(), points[:, 2, p].detach().numpy(), 'o--', linewidth=2.0)
-        h = self.height[:, 0].detach().numpy().squeeze()
-        # plt.bar(np.linspace(0, h.shape[0]-1, h.shape[0]), h)
-        plt.plot(np.linspace(0, h.shape[0] - 1, h.shape[0]), h, color='b', linewidth=5)
-        plt.axis('equal')
-        plt.grid()
-        cols = ['c', 'r', 'c', 'y']
-        for t in range(points.shape[0]):
-            plt.clf()
-            # plt.bar(np.linspace(0, h.shape[0] - 1, h.shape[0]), h)
-            plt.plot(np.linspace(0, h.shape[0] - 1, h.shape[0]), h, color='b', linewidth=5)
-            plt.axis('equal')
-            plt.grid()
-            for p in range(2):
-                plt.plot([points[t, 0, p].detach().numpy(), points[t, 0, (p+1)%4].detach().numpy()], [points[t, 2, p].detach().numpy(), points[t, 2, (p+1)%4].detach().numpy()], '.-', color=cols[p], linewidth=5.0)
-            plt.pause(0.01)
-
-        # for t in range(tt.shape[0]):
-        #     plt.plot([x1[t].detach().numpy(), x2[t].detach().numpy()], [y1[t].detach().numpy(), y2[t].detach().numpy()], '.-', color=col, linewidth=2.0)
-        #     #plt.pause(0.01)
-
-    def rpy2rot(self, roll, pitch, yaw):
-        tensor_0 = torch.zeros(1)
-        tensor_1 = torch.ones(1)
-
-        RX = torch.stack([
-            torch.stack([tensor_1, tensor_0, tensor_0]),
-            torch.stack([tensor_0, torch.cos(roll), -torch.sin(roll)]),
-            torch.stack([tensor_0, torch.sin(roll), torch.cos(roll)])]).reshape(3, 3)
-
-        RY = torch.stack([
-            torch.stack([torch.cos(pitch), tensor_0, torch.sin(pitch)]),
-            torch.stack([tensor_0, tensor_1, tensor_0]),
-            torch.stack([-torch.sin(pitch), tensor_0, torch.cos(pitch)])]).reshape(3, 3)
-
-        RZ = torch.stack([
-            torch.stack([torch.cos(yaw), -torch.sin(yaw), tensor_0]),
-            torch.stack([torch.sin(yaw), torch.cos(yaw), tensor_0]),
-            torch.stack([tensor_0, tensor_0, tensor_1])]).reshape(3, 3)
-        return RZ @ RY @ RX
-
-    def interp(self, f, pt, mode='bilinear'):
-        # example:
-        # im = torch.rand((4,8)).view(1,1,4,8)
-        # pt = torch.tensor([[2, 2.25, 2.5, 2.75, 3,4],[1.5,1.5,1.5,1.5,1.5,1.5]], dtype=torch.double)
-        H = f.shape[0]
-        W = f.shape[1]
-        WW = (W - 1) / 2
-        HH = (H - 1) / 2
-        pt_r = pt.clone()
-        pt_r[1, ] = (pt[0, :] - HH) / HH
-        pt_r[0, ] = (pt[1, :] - WW) / WW
-        return torch.nn.functional.grid_sample(f.view(1, 1, H, W), pt_r.permute(1, 0).view(1, 1, pt_r.shape[1], pt_r.shape[0]), mode=mode, align_corners=True).squeeze()
-
-
 def main():
-    # height = 1*np.array([[0.0, 0.0, 0.0, 0.0, 0.5],
-    #                      [0.0, 0.0, 0.0, 0.0, 0.5],
-    #                      [0.5, 0.5, 0.0, 0.0, 0.5],
-    #                      [1.0, 1.0, 0.0, 0.0, 0.0],
-    #                      [0.0, 0.0, 0.0, 0.0, 0.0],
-    #                      [0.5, 0.0, 0.0, 0.5, 0.5],
-    #                      [0.5, 0.0, 0.0, 0.5, 0.5],
-    #                      [0.5, 0.5, 0, 0.5, 0.7],
-    #                      [0, 0, 0, 0, 0]])
-    height = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                       [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
-                       [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
-                       [0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5],
-                       [1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0],
-                       [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                       [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
-                       [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
-                       [0.5, 0.5, 0.0, 0.5, 0.7, 0.5, 0.5, 0.0, 0.5, 0.7],
-                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    height_gt = np.array([ [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                           [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
+                           [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
+                           [0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5],
+                           [1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                           [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
+                           [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
+                           [0.5, 0.5, 0.0, 0.5, 0.7, 0.5, 0.5, 0.0, 0.5, 0.7],
+                           [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] ])
 
-    system_true = RigidBodySoftTerrain(height=height, damping=300.0, elasticity=5000.0, mass=20.0)
+    system_true = RigidBodySoftTerrain(height=height_gt, damping=300.0, elasticity=5000.0, mass=20.0)
 
     total_time = 4.0
     number_of_samples = 100
@@ -183,102 +43,85 @@ def main():
     tt = torch.linspace(float(t0), total_time, number_of_samples)
     x_true = odeint(system_true.forward, state, tt, atol=1e-3, rtol=1e-3)
 
-    if not LEARNING:
-        if VISU == 1:
-            system_true.visu(x_true)
-        elif VISU == 2:
-            pos_x, pos_R, vel_x, vel_omega, aux = x_true
-            h = system_true.height.detach().numpy()
-            x_grid, y_grid = np.mgrid[0:system_true.height.shape[0], 0:system_true.height.shape[1]]
-            points = system_true.d.detach().numpy()
-            for t in range(pos_x.shape[0]):
-                _, _, _, _, f = system_true.forward(tt[t], (pos_x[t], pos_R[t], vel_x[t], vel_omega[t], aux[t]))
+    # height_init = np.zeros_like(height_gt)
+    height_init = 0.5 * height_gt + 0.6
 
-                mlab.clf()
-                mlab.plot3d(pos_x[0:(t+1), 0].detach().numpy(), pos_x[0:(t+1), 1].detach().numpy(), pos_x[0:(t+1), 2].detach().numpy(), color=(1, 1, 1), line_width=2.0)
-                mlab.surf(x_grid, y_grid, h, opacity=0.5, representation='wireframe', line_width=5.0)
-                mlab.surf(x_grid, y_grid, h, color=(0.5, 0.5, 1.0), opacity=0.5, representation='surface')
-                cog = pos_x[t].detach().numpy()
-                rot = pos_R[t].detach().numpy()
-                d = rot @ points
-                mlab.points3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], scale_factor=0.25)
-                mlab.quiver3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], f[0].detach().numpy(), f[1].detach().numpy(), f[2].detach().numpy(), scale_factor=0.005)
-                #robot.plot_robot_Rt([], pos_R[t].detach().numpy(), pos_x[t].detach().numpy())
-                mlab.view(azimuth=150-t, elevation=80, distance=12.0)
-                # mlab.show()
-                if CREATE_MOVIE:
-                    mlab.savefig(filename=OUTPUT_PATH + '{:04d}_frame'.format(t) + '.png', magnification=1.0)
-                #else:
-                #    mlab.show()
-    else:
-        system = RigidBodySoftTerrain(height=np.zeros_like(height), damping=300.0, elasticity=5000.0, mass=20.0)
+    # terrain_predictor = TerrainPredictor(encChannels=(1, 2, 4), decChannels=(4, 2))
+    terrain_predictor = LinearPredictor()
 
-        optimizer = optim.Adam([system.height], lr=0.1)
+    system = RigidBodySoftTerrain(height=height_init, terrain_predictor=terrain_predictor,
+                                  damping=300.0, elasticity=5000.0, mass=20.0)
 
-        x_true_x, x_true_R, x_true_v, x_true_omega = x_true[0].detach(), x_true[1].detach(), x_true[2].detach(), x_true[3].detach()
-        k, time, sample_length = 0, 0, 10
-        for i in range(60):
-            optimizer.zero_grad()
-            loss = torch.zeros(1)
-            for time in range(int(number_of_samples / sample_length)):
-                s = (x_true[0][time * sample_length].detach(), x_true[1][time * sample_length].detach(), x_true[2][time * sample_length].detach(), x_true[3][time * sample_length].detach(), x_true[4][time * sample_length].detach())
-                x = odeint(system.forward, s, tt[time * sample_length:(time + 1) * sample_length], atol=1e-3, rtol=1e-3)
-                loss += ((x[0] - x_true_x[time * sample_length:(time + 1) * sample_length]) ** 2).sum() #+ 0.0*((x[1] - x_true_R)**2).sum() + 0.01*((x[2] - x_true_v)**2).sum() + 0.01*((x[3] - x_true_omega)**2).sum()
-            loss.backward()
-            optimizer.step()
-            print('loss=%.3f' % loss.item())
-            print('height map mean:', system.height.mean().item())
-            # print('mean elastisity: %.3f' % system.elasticity.mean().item())
-            # print('mean damping: %.3f' % system.damping.mean().item())
+    optimizer = optim.Adam(system.terrain_predictor.parameters(), lr=0.02)
 
-            if i % 10 == 0:
-                x = odeint(system.forward, state, tt, atol=1e-3, rtol=1e-3)
-                pos_x, pos_R, vel_x, vel_omega, aux = x
-                x_grid, y_grid = np.mgrid[0:system.height.shape[0], 0:system.height.shape[1]]
-                h = system.height.detach().numpy()
-                #h = system.height[0, :].detach().numpy().squeeze()
-                points = system.d.detach().numpy()
-                if VISU == 1:
+    x_true_x, x_true_R, x_true_v, x_true_omega = x_true[0].detach(), x_true[1].detach(), x_true[2].detach(), x_true[3].detach()
+    k, time, sample_length = 0, 0, 10
+    for i in range(100):
+        optimizer.zero_grad()
+
+        loss = torch.zeros(1)
+        for time in range(int(number_of_samples / sample_length)):
+            s = (x_true[0][time * sample_length].detach(), x_true[1][time * sample_length].detach(), x_true[2][time * sample_length].detach(), x_true[3][time * sample_length].detach(), x_true[4][time * sample_length].detach())
+            x = odeint(system.forward, s, tt[time * sample_length:(time + 1) * sample_length], atol=1e-3, rtol=1e-3)
+            loss += ((x[0] - x_true_x[time * sample_length:(time + 1) * sample_length]) ** 2).sum()
+
+        loss.backward()
+        optimizer.step()
+
+        print('loss=%.3f' % loss.item())
+        print('height map mean:', system.height.mean().item())
+        # print('mean elastisity: %.3f' % system.elasticity.mean().item())
+        # print('mean damping: %.3f' % system.damping.mean().item())
+
+        if i % 10 == 0:
+            x = odeint(system.forward, state, tt, atol=1e-3, rtol=1e-3)
+            pos_x, pos_R, vel_x, vel_omega, aux = x
+            x_grid, y_grid = np.mgrid[0:system.height.shape[0], 0:system.height.shape[1]]
+            h = system.height.detach().numpy()
+            # h = system.height[0, :].detach().numpy().squeeze()
+            points = system.d.detach().numpy()
+            if VISU == 1:
+                plt.clf()
+                points = pos_R @ system.d + pos_x
+                cols = ['c', 'k', 'c', 'y']
+                for t in range(points.shape[0]):
                     plt.clf()
-                    points = pos_R @ system.d + pos_x
-                    cols = ['c', 'k', 'c', 'y']
-                    for t in range(points.shape[0]):
-                        plt.clf()
-                        plt.plot(pos_x[:, 0].detach().numpy(), pos_x[:, 2].detach().numpy(), 'o--', color='r', linewidth=2.0)
-                        plt.plot(x_true_x[:, 0].numpy(), x_true_x[:, 2].detach().numpy(), 'o--', color='b', linewidth=2.0)
-                        # plt.bar(np.linspace(0, h.shape[0] - 1, h.shape[0]), h)
-                        plt.axis('equal')
-                        plt.grid()
-                        plt.title('loss = ' + str(loss.detach().numpy()))
-                        for cog in range(2):
-                            plt.plot([points[t, 0, cog].detach().numpy(), points[t, 0, (cog + 1) % 4].detach().numpy()],
-                                     [points[t, 2, cog].detach().numpy(), points[t, 2, (cog + 1) % 4].detach().numpy()], '.-',
-                                     color=cols[cog], linewidth=5.0)
-                        plt.pause(0.01)
-                        if CREATE_MOVIE:
-                            plt.savefig(OUTPUT_PATH + '{:04d}_frame'.format(k * points.shape[0] + t) + '.png')
-                elif VISU == 2:
-                    for t in range(pos_x.shape[0]):
-                        _, _, _, _, f = system.forward(tt[t], (pos_x[t], pos_R[t], vel_x[t], vel_omega[t], aux[t]))
-                        mlab.clf()
-                        #mlab.barchart(np.tile(h, (3, 1)).transpose(), opacity=0.1)
-                        #robot.plot_robot_Rt([], pos_R[t].detach().numpy(), pos_x[t].detach().numpy())
-                        mlab.surf(x_grid, y_grid, h, opacity=0.5, representation='wireframe', line_width=5.0)
-                        mlab.surf(x_grid, y_grid, h, color=(0.5, 0.5, 1.0), opacity=0.5, representation='surface')
-                        cog = pos_x[t].detach().numpy()
-                        rot = pos_R[t].detach().numpy()
-                        d = rot @ points
-                        mlab.plot3d(x_true_x[:, 0].numpy(), x_true_x[:, 1].detach().numpy(), x_true_x[:, 2].detach().numpy(), color=(0, 0, 1), line_width=2.0)
-                        mlab.plot3d(pos_x[:, 0].detach().numpy(), pos_x[:, 1].detach().numpy(), pos_x[:, 2].detach().numpy(), color=(1, 0, 0), line_width=2.0)
-                        mlab.points3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], scale_factor=0.25)
-                        mlab.quiver3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], f[0].detach().numpy(), f[1].detach().numpy(), f[2].detach().numpy(), scale_factor=0.002)
+                    plt.plot(pos_x[:, 0].detach().numpy(), pos_x[:, 2].detach().numpy(), 'o--', color='r', linewidth=2.0)
+                    plt.plot(x_true_x[:, 0].numpy(), x_true_x[:, 2].detach().numpy(), 'o--', color='b', linewidth=2.0)
+                    # plt.bar(np.linspace(0, h.shape[0] - 1, h.shape[0]), h)
+                    plt.axis('equal')
+                    plt.grid()
+                    plt.title('loss = ' + str(loss.detach().numpy()))
+                    for cog in range(2):
+                        plt.plot([points[t, 0, cog].detach().numpy(), points[t, 0, (cog + 1) % 4].detach().numpy()],
+                                 [points[t, 2, cog].detach().numpy(), points[t, 2, (cog + 1) % 4].detach().numpy()], '.-',
+                                 color=cols[cog], linewidth=5.0)
+                    plt.pause(0.01)
+                    if CREATE_MOVIE:
+                        plt.savefig(OUTPUT_PATH + '{:04d}_frame'.format(k * points.shape[0] + t) + '.png')
+            elif VISU == 2:
+                for t in range(pos_x.shape[0]):
+                    _, _, _, _, f = system.forward(tt[t], (pos_x[t], pos_R[t], vel_x[t], vel_omega[t], aux[t]))
+                    mlab.clf()
+                    #mlab.barchart(np.tile(h, (3, 1)).transpose(), opacity=0.1)
+                    #robot.plot_robot_Rt([], pos_R[t].detach().numpy(), pos_x[t].detach().numpy())
+                    mlab.surf(x_grid, y_grid, h, opacity=0.5, representation='wireframe', line_width=5.0)
+                    mlab.surf(x_grid, y_grid, h, color=(0.5, 0.5, 1.0), opacity=0.5, representation='surface')
+                    cog = pos_x[t].detach().numpy()
+                    rot = pos_R[t].detach().numpy()
+                    d = rot @ points
+                    mlab.plot3d(x_true_x[:, 0].numpy(), x_true_x[:, 1].detach().numpy(), x_true_x[:, 2].detach().numpy(), color=(0, 0, 1), line_width=2.0)
+                    mlab.plot3d(pos_x[:, 0].detach().numpy(), pos_x[:, 1].detach().numpy(), pos_x[:, 2].detach().numpy(), color=(1, 0, 0), line_width=2.0)
+                    mlab.points3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], scale_factor=0.25)
+                    mlab.quiver3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], f[0].detach().numpy(), f[1].detach().numpy(), f[2].detach().numpy(), scale_factor=0.002)
 
-                        mlab.view(azimuth=(150 - (k * pos_x.shape[0] + t)), elevation=80, distance=12.0)
-                        mlab.title('loss = ' + str(loss.detach().numpy()))
+                    mlab.view(azimuth=(150 - (k * pos_x.shape[0] + t)), elevation=80, distance=12.0)
+                    mlab.title('loss = ' + str(loss.detach().numpy()))
 
-                        if CREATE_MOVIE:
-                            mlab.savefig(filename=OUTPUT_PATH + '{:04d}_frame'.format(k * pos_x.shape[0] + t) + '.png', magnification=1.0)
-                k = k + 1
+                    if VISU == 2:
+                        mlab.savefig(filename=OUTPUT_PATH + '{:04d}_frame'.format(k * pos_x.shape[0] + t) + '.png', magnification=1.0)
+
+            k = k + 1
 
     if CREATE_MOVIE:
         fr = number_of_samples / total_time
