@@ -114,8 +114,8 @@ class TerrainPredictor(Module):
 class LinearPredictor(Module):
     def __init__(self):
         super().__init__()
-        self.a = torch.nn.Parameter(torch.tensor(1.))
-        self.b = torch.nn.Parameter(torch.tensor(0.))
+        self.a = torch.nn.Parameter(torch.randn(1))
+        self.b = torch.nn.Parameter(torch.randn(1))
 
     def forward(self, x):
         y = self.a * x + self.b
@@ -153,6 +153,7 @@ def main():
     optim = torch.optim.Adam(model.parameters(), lr=0.01)
     model = model.train()
 
+    losses = []
     for i in range(500):
         height_pred = model(height_init)
         loss = loss_fn(height_pred, height_gt)
@@ -162,13 +163,20 @@ def main():
         optim.step()
 
         print(loss.item())
+        losses.append(loss.item())
 
-    plt.figure()
-    plt.subplot(1, 2, 1)
+    plt.figure(figsize=(15, 5))
+    plt.subplot(1, 3, 1)
+    plt.title('Prediction')
     plt.imshow(height_pred.squeeze().detach().cpu().numpy())
 
-    plt.subplot(1, 2, 2)
+    plt.subplot(1, 3, 2)
+    plt.title('GT')
     plt.imshow(height_gt.squeeze().detach().cpu().numpy())
+
+    plt.subplot(1, 3, 3)
+    plt.title('Loss')
+    plt.plot(losses)
     plt.show()
 
 
