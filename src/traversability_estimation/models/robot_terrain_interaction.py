@@ -23,6 +23,10 @@ class RigidBodySoftTerrain(nn.Module):
         self.t0 = nn.Parameter(torch.tensor([0.0]))
         self.height0 = torch.tensor(height, device=device)
         self.height = torch.tensor(height, device=device)
+        # Height map is a learnable parameter if there is no terrain prediction model.
+        # Otherwise, if it is provided, its network parameters are being learned.
+        if terrain_predictor is None:
+            self.height = nn.Parameter(self.height)
         self.damping = nn.Parameter(torch.ones_like(self.height) * damping)
         self.elasticity = nn.Parameter(torch.ones_like(self.height) * elasticity)
 

@@ -3,7 +3,7 @@ from torch.nn import Conv2d
 from torch.nn import MaxPool2d
 from torch.nn import Module
 from torch.nn import ModuleList
-from torch.nn import ReLU
+from torch.nn import ReLU, LeakyReLU
 from torchvision.transforms import CenterCrop
 from torch.nn import functional as F
 import torch
@@ -14,7 +14,8 @@ class Block(Module):
         super().__init__()
         # store the convolution and RELU layers
         self.conv1 = Conv2d(inChannels, outChannels, 2)
-        self.relu = ReLU()
+        self.relu = LeakyReLU()
+        # self.relu = ReLU()
         self.conv2 = Conv2d(outChannels, outChannels, 2)
 
     def forward(self, x):
@@ -124,6 +125,7 @@ class LinearPredictor(Module):
 
 def main():
     import matplotlib.pyplot as plt
+    from ..utils import plot_grad_flow
 
     height_gt = torch.tensor([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
                            [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
@@ -135,48 +137,56 @@ def main():
                            [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
                            [0.5, 0.5, 0.0, 0.5, 0.7, 0.5, 0.5, 0.0, 0.5, 0.7],
                            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
-
-    model = TerrainPredictor(encChannels=(1, 2, 4), decChannels=(4, 2))
-    # model = LinearPredictor()
-    height_init = torch.randn((1, 1, 10, 10))
-    # height_init = torch.as_tensor(0.3 * height_gt - 0.5)[None][None]
-
     # ground truth
-    height_gt = height_gt[None][None]
+    H, W = 10, 10
+    # height_gt = height_gt[None][None]
+    height_gt = torch.randn((1, 1, H, W))
 
-    # # check encoder-decoder output shapes
-    # for out in model.encoder(height_init):
-    #     print(out.shape)
-    # print(model(height_init).shape)
+    model = TerrainPredictor(encChannels=(1, 2, 4), decChannels=(4, 2), retainDim=False)
+    # model = LinearPredictor()
+    # height_init = torch.randn((1, 1, H, W))
+    height_init = torch.as_tensor(0.3 * height_gt - 0.5)
+
+    # check encoder-decoder output shapes
+    for out in model.encoder(height_init):
+        print(out.shape)
+    print(model(height_init).shape)
 
     loss_fn = torch.nn.MSELoss()
-    optim = torch.optim.Adam(model.parameters(), lr=0.01)
+    optim = torch.optim.Adam(model.parameters(), lr=0.02)
     model = model.train()
 
     losses = []
-    for i in range(500):
+    for i in range(1000):
         height_pred = model(height_init)
         loss = loss_fn(height_pred, height_gt)
 
         optim.zero_grad()
         loss.backward()
+        # plot_grad_flow(model.named_parameters())
+        # plt.draw()
+        # plt.pause(0.01)
         optim.step()
 
-        print(loss.item())
+        # print(loss.item())
         losses.append(loss.item())
 
-    plt.figure(figsize=(15, 5))
-    plt.subplot(1, 3, 1)
+    plt.figure(figsize=(20, 5))
+    plt.subplot(1, 4, 1)
     plt.title('Prediction')
     plt.imshow(height_pred.squeeze().detach().cpu().numpy())
 
-    plt.subplot(1, 3, 2)
+    plt.subplot(1, 4, 2)
     plt.title('GT')
     plt.imshow(height_gt.squeeze().detach().cpu().numpy())
 
-    plt.subplot(1, 3, 3)
+    plt.subplot(1, 4, 3)
     plt.title('Loss')
     plt.plot(losses)
+    plt.grid()
+
+    plt.subplot(1, 4, 4)
+    plot_grad_flow(model.named_parameters())
     plt.show()
 
 

@@ -1,62 +1,123 @@
 #!/usr/bin/env python
 
-import matplotlib.pyplot as plt
 import torch
 from torchdiffeq import odeint, odeint_adjoint
 import torch.optim as optim
 import numpy as np
-import os
 from traversability_estimation.models import TerrainPredictor, LinearPredictor
 from traversability_estimation.models import RigidBodySoftTerrain
+from traversability_estimation.utils import plot_grad_flow
+from traversability_estimation.datasets import TraversabilityDataset
+from traversability_estimation.segmentation import filter_grid, filter_range
+import matplotlib.pyplot as plt
+import os
 
-CREATE_MOVIE = 0  # 1-True, 0-False
-VISU = 1  # 0-no, 1-matplotlib, 2-mayavi
-
-OUTPUT_PATH = '/home/ruslan/workspaces/traversability_ws/src/traversability_estimation/data/output'
 
 torch.set_default_dtype(torch.float64)
 
+VISU = 1  # 0-no, 1-matplotlib
 MAX_ROBOT_WIDTH = 2.0
 MAX_ROBOT_LENGTH = 4.0
 GRID_RES = 0.1
 
-if VISU == 2:
-    from mayavi import mlab
+
+def define_rti_model(height_map, terrain_predictor=None, device=torch.device('cpu')):
+    system = RigidBodySoftTerrain(height=height_map,
+                                  terrain_predictor=terrain_predictor,
+                                  damping=300.0, elasticity=5000.0, mass=10.0,
+                                  init_pos_x=[0.5, 0.5, 1.0], device=device)
+    return system
+
+
+def get_height_map(path=None, i=None, vis=False, grid_res=0.1, min_dist=0.1, max_dist=10.0, h_max=0.8):
+    # Load traversability data
+    if path is None:
+        # path = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-18-34_trav/'
+        # path = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-16-37-03_trav/'
+        path = '/home/ruslan/data/bags/traversability/marv/ugv_2022-08-12-15-30-22_trav/'
+    assert os.path.exists(path)
+    ds = TraversabilityDataset(path, cloud_topic='os_cloud_node/destaggered_points')
+    print('Dataset contains %i samples' % len(ds))
+
+    # Choose data sample
+    if i is None:
+        i = np.random.choice(range(len(ds)))
+    sample = ds[i]
+    depth, label, points = sample
+    # visualize a sample from the data set
+    # _ = ds.__getitem__(i, visualize=True)
+    print('%i-th sample contains range image of shape: %s, its label of shape: %s, point cloud of shape: %s' %
+          (i, depth.shape, label.shape, points.shape))
+
+    # Filter point cloud and its label
+    points_filtered = points.copy()
+
+    _, mask = filter_range(points, min_dist, max_dist, return_mask=True)
+    points_filtered = points_filtered[mask]
+
+    _, mask = filter_grid(points_filtered, grid_res, return_mask=True)
+    points_filtered = points_filtered[mask]
+
+    # remove points which are above the robot
+    mask = points_filtered[:, 2] <= h_max
+    points_filtered_hm = points_filtered[mask]
+
+    # Create height map and add labels to traversed cells
+    H = W = round(2 * max_dist / grid_res)
+    height_map = np.full((H, W), 0.0)
+    print('Height map shape:', height_map.shape)
+    ids = (points_filtered_hm[:, :2] - points_filtered_hm[:, :2].min(axis=0)) // grid_res
+    ids = np.asarray(ids, dtype=int)
+    for i, (idx, idy) in enumerate(ids):
+        height_map[idx, idy] = points_filtered_hm[i, 2]
+
+    if vis:
+        from mayavi import mlab
+        # visualization: height map, point cloud, trajectory
+        x_grid, y_grid = np.mgrid[-H//2:H//2, -W//2:W//2] * grid_res
+        # mlab.points3d(points_filtered[:, 0], points_filtered[:, 1], points_filtered[:, 2],
+        #               scale_factor=0.1, colormap="copper")
+        mlab.points3d(points_filtered_hm[:, 0], points_filtered_hm[:, 1], points_filtered_hm[:, 2],
+                      scale_factor=0.1, colormap="copper")
+        mlab.surf(x_grid, y_grid, height_map, opacity=0.5, representation='wireframe', line_width=2.0)
+        mlab.surf(x_grid, y_grid, height_map, color=(0.5, 0.5, 1.0), opacity=0.5, representation='surface')
+        mlab.show()
+
+    return height_map
+
 
 def main():
-    device = torch.device('cuda:0')
-    # device = torch.device('cpu')
-    lr = 0.008
+    # device = torch.device('cuda:0')
+    device = torch.device('cpu')
+    lr = 0.01
     n_iters = 200
 
     """ Create ground truth height map and initial one """
-    height_gt = np.array([ [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                           [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
-                           [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
-                           [0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5],
-                           [1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0],
-                           [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                           [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
-                           [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
-                           [0.5, 0.5, 0.0, 0.5, 0.7, 0.5, 0.5, 0.0, 0.5, 0.7],
-                           [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] ])
+    # height_gt = np.array([[0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    #                       [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
+    #                       [0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5],
+    #                       [0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5],
+    #                       [1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0],
+    #                       [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    #                       [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
+    #                       [0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5],
+    #                       [0.5, 0.5, 0.0, 0.5, 0.7, 0.5, 0.5, 0.0, 0.5, 0.7],
+    #                       [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    # height_gt = np.random.random((10, 10))
+    height_gt = get_height_map(vis=True, grid_res=1.0, min_dist=0.0, max_dist=5.0, h_max=1.0)
 
-    # height_init = np.zeros_like(height_gt)
+    height_init = np.random.random(height_gt.shape)
     # height_init = 0.5 * height_gt - 0.2
-    height_init = height_gt * 0.9
+    # height_init = height_gt * 0.9
+    # height_init = np.zeros_like(height_gt)
 
     """ Create robot-terrain interaction models (ground truth and initial one to train) """
-    system_true = RigidBodySoftTerrain(height=height_gt,
-                                       damping=300.0, elasticity=5000.0, mass=20.0,
-                                       init_pos_x=[0.5, 0.5, 0.2], device=device)
+    system_true = define_rti_model(height_gt, device=device)
 
     # terrain predictor model used inside the robot-terrain interaction pipeline
     terrain_predictor = TerrainPredictor(encChannels=(1, 2, 4), decChannels=(4, 2))  # CNN
     # terrain_predictor = LinearPredictor()  # simple linear model
-
-    system = RigidBodySoftTerrain(height=height_init, terrain_predictor=terrain_predictor,
-                                  damping=300.0, elasticity=5000.0, mass=20.0,
-                                  init_pos_x=[0.5, 0.5, 0.2], device=device)
+    system = define_rti_model(height_init, terrain_predictor, device=device)
 
     # put models with their params to device
     system_true = system_true.to(device)
@@ -64,100 +125,81 @@ def main():
 
     # create optimizer
     optimizer = optim.Adam(system.terrain_predictor.parameters(), lr=lr)
+    # optimizer = optim.Adam([system.height], lr=lr)
 
     # set-up ground truth trajectory
     total_time = 4.0
-    number_of_samples = 20
+    number_of_samples = 24
     t0, state = system_true.get_initial_state()
     tt = torch.linspace(float(t0), total_time, number_of_samples, device=t0.device)
     x_true = odeint(system_true.forward, state, tt, atol=1e-3, rtol=1e-3)
 
-    x_true_x, x_true_R, x_true_v, x_true_omega = x_true[0].detach(), x_true[1].detach(), x_true[2].detach(), x_true[3].detach()
-    k, time, sample_length = 0, 0, 10
+    x_true_x, x_true_R, x_true_v = x_true[0].detach(), x_true[1].detach(), x_true[2].detach()
+    x_true_omega, x_true_f = x_true[3].detach(), x_true[4].detach()
+
+    k, time, sample_length = 0, 0, 6
 
     """ Training loop """
     losses = []
+    plt.figure(figsize=(24, 8))
     for i in range(n_iters):
         optimizer.zero_grad()
 
         loss = torch.zeros(1).to(device)
         for time in range(int(number_of_samples / sample_length)):
-            s = (x_true[0][time * sample_length].detach(), x_true[1][time * sample_length].detach(), x_true[2][time * sample_length].detach(), x_true[3][time * sample_length].detach(), x_true[4][time * sample_length].detach())
+            s = (x_true_x[time * sample_length], x_true_R[time * sample_length], x_true_v[time * sample_length],
+                 x_true_omega[time * sample_length], x_true_f[time * sample_length])
             x = odeint(system.forward, s, tt[time * sample_length:(time + 1) * sample_length], atol=1e-3, rtol=1e-3)
             loss += ((x[0] - x_true_x[time * sample_length:(time + 1) * sample_length]) ** 2).sum()
         losses.append(loss.item())
-
         loss.backward()
-        optimizer.step()
-
-        # # change learning rate if loss does not change much
-        # if len(losses) > 2:
-        #     if np.abs(losses[-2] - losses[-1]) < 0.01:
-        #         optimizer.param_groups[0]['lr'] /= 2.
-        #         print('Changing learning rate to: %f' % optimizer.param_groups[0]['lr'])
 
         print('iter=%i, loss=%.3f' % (i, loss.item()))
         # print('%s' % ', '.join([str(p) for p in system.terrain_predictor.parameters()]))
-        # print('height map mean:', system.height.mean().item())
-        # print('mean elastisity: %.3f' % system.elasticity.mean().item())
-        # print('mean damping: %.3f' % system.damping.mean().item())
 
         """ Visualization """
-        if VISU and i % 10 == 0:
-            x = odeint(system.forward, state, tt, atol=1e-3, rtol=1e-3)
-            pos_x, pos_R, vel_x, vel_omega, aux = x
-            x_grid, y_grid = np.mgrid[0:system.height.shape[0], 0:system.height.shape[1]]
-            h = system.height.detach()
-            # h = system.height[0, :].detach().cpu().squeeze()
-            points = system.d.detach()
-            if VISU == 1:
-                plt.clf()
+        if VISU:
+            plt.subplot(1, 3, 1)
+            # plt.cla()
+            plot_grad_flow(system.terrain_predictor.named_parameters(), max_grad_vis=None)
+
+            plt.subplot(1, 3, 2)
+            plt.cla()
+            plt.title('Loss')
+            plt.grid()
+            plt.plot(losses)
+
+            if i % 10 == 0:
+                plt.subplot(1, 3, 3)
+                x = odeint(system.forward, state, tt, atol=1e-3, rtol=1e-3)
+                pos_x, pos_R, vel_x, vel_omega, aux = x
+                h = system.height[:, 0].detach().cpu().squeeze()
+                h_gt = system_true.height[:, 0].detach().cpu().squeeze()
+
                 points = pos_R @ system.d + pos_x
                 cols = ['c', 'k', 'c', 'y']
                 for t in range(points.shape[0]):
-                    plt.clf()
+                    plt.cla()
                     plt.plot(pos_x[:, 0].detach().cpu(), pos_x[:, 2].detach().cpu(), 'o--', color='r', linewidth=0.5)
                     plt.plot(x_true_x[:, 0].detach().cpu(), x_true_x[:, 2].detach().cpu(), 'o--', color='b', linewidth=0.5)
-                    # plt.bar(np.linspace(0, h.shape[0] - 1, h.shape[0]), h)
-                    plt.axis('equal')
-                    plt.grid()
-                    plt.title('loss = ' + str(loss.detach()))
                     for cog in range(2):
                         plt.plot([points[t, 0, cog].detach().cpu(), points[t, 0, (cog + 1) % 4].detach().cpu()],
                                  [points[t, 2, cog].detach().cpu(), points[t, 2, (cog + 1) % 4].detach().cpu()], '.-',
                                  color=cols[cog], linewidth=5.0)
-                    plt.pause(0.01)
-                    if CREATE_MOVIE:
-                        plt.savefig(OUTPUT_PATH + '{:04d}_frame'.format(k * points.shape[0] + t) + '.png')
-            elif VISU == 2:
-                for t in range(pos_x.shape[0]):
-                    _, _, _, _, f = system.forward(tt[t], (pos_x[t], pos_R[t], vel_x[t], vel_omega[t], aux[t]))
-                    mlab.clf()
-                    # mlab.barchart(np.tile(h, (3, 1)).transpose(), opacity=0.1)
-                    # robot.plot_robot_Rt([], pos_R[t].detach().cpu(), pos_x[t].detach().cpu())
-                    mlab.surf(x_grid, y_grid, h, opacity=0.5, representation='wireframe', line_width=5.0)
-                    mlab.surf(x_grid, y_grid, h, color=(0.5, 0.5, 1.0), opacity=0.5, representation='surface')
-                    cog = pos_x[t].detach().cpu()
-                    rot = pos_R[t].detach().cpu()
-                    d = rot @ points
-                    mlab.plot3d(x_true_x[:, 0].cpu(), x_true_x[:, 1].detach().cpu(), x_true_x[:, 2].detach().cpu(), color=(0, 0, 1), line_width=2.0)
-                    mlab.plot3d(pos_x[:, 0].detach().cpu(), pos_x[:, 1].detach().cpu(), pos_x[:, 2].detach().cpu(), color=(1, 0, 0), line_width=2.0)
-                    mlab.points3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], scale_factor=0.25)
-                    mlab.quiver3d(cog[0] + d[0, :], cog[1] + d[1, :], cog[2] + d[2, :], f[0].detach().cpu(), f[1].detach().cpu(), f[2].detach().cpu(), scale_factor=0.002)
+                    plt.bar(np.linspace(0, h_gt.shape[0] - 1, h_gt.shape[0]), h_gt, alpha=0.4, lw=1, color="c")
+                    plt.bar(np.linspace(0, h.shape[0] - 1, h.shape[0]), h, alpha=0.5, lw=1, color="b")
+                    plt.axis('equal')
+                    plt.grid()
+                    plt.title('loss = ' + str(loss.item()))
+                    plt.pause(0.001)
 
-                    mlab.view(azimuth=(150 - (k * pos_x.shape[0] + t)), elevation=80, distance=12.0)
-                    mlab.title('loss = ' + str(loss.detach().cpu()))
-
-                    if VISU == 2:
-                        mlab.savefig(filename=OUTPUT_PATH + '{:04d}_frame'.format(k * pos_x.shape[0] + t) + '.png', magnification=1.0)
-
+            plt.draw()
+            plt.pause(0.01)
             k = k + 1
 
-    if CREATE_MOVIE:
-        fr = number_of_samples / total_time
-        os.system('rm ' + OUTPUT_PATH + 'output.mp4')
-        os.system('ffmpeg -r ' + str(fr) + ' -i ' + OUTPUT_PATH + '%04d_frame.png -c:v libx264 -crf 5 -pix_fmt yuv420p ' + OUTPUT_PATH + 'output.mp4')
-        # -vf "crop=1700:1000:100:200"
+        optimizer.step()
+
+    plt.show()
 
 
 if __name__ == '__main__':
