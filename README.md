@@ -45,6 +45,8 @@ The depth image is an input for semantic segmentation network (2D-convolutions b
 The network predicts semantic label for each pixel in the depth image.
 The labels are futher used to output segmented point cloud.
 
+![](./docs/semantic_traversability_pipeline.png)
+
 #### Topics:
 
 - `cloud_in`: input point cloud to subscribe to
