@@ -196,3 +196,21 @@ Look at [traversability_fusion](./scripts/traversability_fusion) for more detail
         roslaunch traversability_estimation color_pc_bagfile_demo.launch
         ```
 
+### Citation
+
+Please, cite the paper if you find the package relevant to your research:
+
+[Trajectory Optimization using Learned Robot-Terrain Interaction Model in Exploration of Large Subterranean Environments](https://ieeexplore.ieee.org/document/9699042).
+
+```
+@ARTICLE{9699042,
+  author={Agishev, Ruslan and Petříček, Tomáš and Zimmermann, Karel},
+  journal={IEEE Robotics and Automation Letters},
+  title={Trajectory Optimization Using Learned Robot-Terrain Interaction Model in Exploration of Large Subterranean Environments},
+  year={2022},
+  volume={7},
+  number={2},
+  pages={3365-3371},
+  doi={10.1109/LRA.2022.3147332}
+}
+```
