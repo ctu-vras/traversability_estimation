@@ -50,7 +50,7 @@ class CloudSegmentor:
 
         self.model_weights = rospy.get_param('~weights')
         self.model_path = os.path.join(pkg_path, "config/weights/", "depth_cloud/%s" % self.model_weights)
-        assert os.path.exists(self.model_path)
+        # assert os.path.exists(self.model_path)
 
         self.model = self.load_model()
         rospy.loginfo('Loaded cloud segmentation model: %s', self.model_weights)
@@ -124,6 +124,12 @@ class CloudSegmentor:
         return color
 
     def load_model(self):
+        if not os.path.exists(self.model_path):
+            url = 'http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/weights/depth_cloud/'
+            path = os.path.abspath(os.path.join(self.model_path, os.pardir))
+            print('Downloading model weights by running:')
+            print('wget %s/%s -P %s' % (url, self.model_weights, path))
+            os.system('wget %s/%s -P %s' % (url, self.model_weights, path))
         model = torch.load(self.model_path, map_location=self.device)
         model = model.eval()
         return model
