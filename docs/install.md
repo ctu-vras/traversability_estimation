@@ -1,6 +1,9 @@
 ## Installation
 
-Prerequisite: install [ROS](http://wiki.ros.org/ROS/Installation).
+Prerequisite: 
+- install [ROS](http://wiki.ros.org/ROS/Installation).
+- install [PyTorch](https://pytorch.org).
+  - install [torchvision](https://pytorch.org/vision/stable/index.html).
 
 If you want to use only semantic cloud segmentation node just build the package in a catkin workspace, for example:
 
@@ -8,8 +11,10 @@ If you want to use only semantic cloud segmentation node just build the package 
 mkdir -p ~/catkin_ws/src
 cd ~/catkin_ws/src
 git clone https://github.com/ctu-vras/traversability_estimation
+git clone https://github.com/ctu-vras/cloud_proc
 cd ~/catkin_ws/
-catkin build traversability_estimation
+rosdep install --from-paths /catkin_ws --ignore-src --rosdistro noetic -y
+catkin build
 ```
 
 In case you would like to run geometric cloud segmentation, traversability fusion or image segementation to point cloud projection nodes,

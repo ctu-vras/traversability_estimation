@@ -16,6 +16,7 @@
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>ros_numpy</depend>
 
   <build_depend>message_generation</build_depend>
   <build_export_depend>message_generation</build_export_depend>
