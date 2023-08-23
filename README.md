@@ -35,7 +35,7 @@ Output is a set of semantic labels for each input RGB image.
 - `legend [bool]` - if legend for segmentation is required
 - `image_transport [str]` - 'compressed' or 'raw' if input image topic is compressed
 
-Look at [segmentation_inferece](./scripts/segmentation_inference) for more details.
+Look at [segmentation_inferece](./scripts/nodes/segmentation_inference) for more details.
 
 ### Point Cloud Semantic Segmentation Node
 
@@ -67,7 +67,7 @@ The labels are futher used to output segmented point cloud.
 - `clou_out`: topic name to publish segmented cloud to
 - `debug`: whether to publish debug information (for example range image): may slow down the node performance.
 
-Look at [cloud_segmentation](./scripts/cloud_segmentation) for more details.
+Look at [cloud_segmentation](./scripts/nodes/cloud_segmentation) for more details.
 
 ### Datasets
 
@@ -135,7 +135,7 @@ Please, have a look at the T-Concord3D project repository for more details about
 - `cloud_in`: topic name to subscribe to (point cloud being segmented)
 - `clou_out`: topic name to publish segmented cloud to
 
-Look at [cloud_segmentation_tconcord3d](./scripts/cloud_segmentation_tconcord3d) for more details.
+Look at [cloud_segmentation_tconcord3d](./scripts/nodes/cloud_segmentation_tconcord3d) for more details.
 
 ### Geometric Traversability Node
 
@@ -172,7 +172,7 @@ a model learned from the data was used (semantic traversability estimation).
 - `semantic_cost_offset`: value to add to semantic traversability cost (in the range it's being utilized)
 - `timeout`: time to wait for the target frame to become available (when looking for transformation between geometric and semantic clouds frames)
 
-Look at [traversability_fusion](./scripts/traversability_fusion) for more details.
+Look at [traversability_fusion](./scripts/nodes/traversability_fusion) for more details.
 
 ### Demos
 
