@@ -69,7 +69,7 @@ The labels are futher used to output segmented point cloud.
 
 Look at [cloud_segmentation](./scripts/nodes/cloud_segmentation) for more details.
 
-### Datasets
+### Data
 
 - For **images** semantic segmentation we provide wrappers for the following datasets:
   
@@ -82,6 +82,10 @@ Look at [cloud_segmentation](./scripts/nodes/cloud_segmentation) for more detail
   - [Rellis3DClouds](https://unmannedlab.github.io/research/RELLIS-3D)
   - [SeamanticKITTI](http://semantic-kitti.org/) and [SemanticUSL](https://unmannedlab.github.io/semanticusl)
   - [TraversabilityClouds](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/supervised/clouds/) and [FlexibilityClouds](http://subtdata.felk.cvut.cz/robingas/data/traversability_estimation/TraversabilityDataset/self_supervised/clouds/)
+
+Bag-file sequences are available at:
+[http://subtdata.felk.cvut.cz/robingas/data/](http://subtdata.felk.cvut.cz/robingas/data/).
+Please, refer to the [monoforce](https://github.com/ctu-vras/monoforce) package for more details.
 
 ### Models Training
 
@@ -200,11 +204,9 @@ Look at [traversability_fusion](./scripts/nodes/traversability_fusion) for more 
 
 ### Citation
 
-Please, cite the paper if you find the package relevant to your research:
+Please, cite the papers if you find the package relevant to your research:
 
-[Trajectory Optimization using Learned Robot-Terrain Interaction Model in Exploration of Large Subterranean Environments](https://ieeexplore.ieee.org/document/9699042).
-
-```
+```bibtex
 @ARTICLE{9699042,
   author={Agishev, Ruslan and Petříček, Tomáš and Zimmermann, Karel},
   journal={IEEE Robotics and Automation Letters},
@@ -214,5 +216,14 @@ Please, cite the paper if you find the package relevant to your research:
   number={2},
   pages={3365-3371},
   doi={10.1109/LRA.2022.3147332}
+}
+```
+
+```bibtex
+@article{agishev2023monoforce,
+  title={MonoForce: Self-supervised learning of physics-aware grey-box model for predicting the robot-terrain interaction},
+  author={Agishev, Ruslan and Zimmermann, Karel and Pecka, Martin and Svoboda, Tom{\'a}{\v{s}}},
+  journal={arXiv preprint arXiv:2309.09007},
+  year={2023}
 }
 ```
