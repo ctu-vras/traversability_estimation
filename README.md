@@ -220,12 +220,14 @@ Please, cite the papers if you find the package relevant to your research:
 ```
 
 ```bibtex
-@article{agishev2023monoforce,
-    title={MonoForce: Self-supervised Learning of Physics-aware Model for Predicting Robot-terrain Interaction},
+@inproceedings{agishev2024monoforce,
+    title={MonoForce: Self-supervised Learning of Physics-informed Model for Predicting Robot-terrain Interaction},
     author={Ruslan Agishev and Karel Zimmermann and Vladimír Kubelka and Martin Pecka and Tomáš Svoboda},
-    year={2023},
+    booktitle={IEEE/RSJ International Conference on Intelligent Robots and Systems - IROS},
+    year={2024},
     eprint={2309.09007},
     archivePrefix={arXiv},
-    primaryClass={cs.RO}
+    primaryClass={cs.RO},
+    url={https://arxiv.org/abs/2309.09007},
 }
 ```
